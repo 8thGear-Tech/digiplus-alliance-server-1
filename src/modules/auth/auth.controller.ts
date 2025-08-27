@@ -108,8 +108,8 @@ export class AuthController {
       expires: cookieExpiresAt,
     });
 
-    console.log('Cookie set on response');
-    console.log('Refresh token value:', refreshToken);
+    // console.log('Cookie set on response');
+    // console.log('Refresh token value:', refreshToken);
     return response;
   }
 

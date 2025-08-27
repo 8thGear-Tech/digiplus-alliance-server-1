@@ -27,6 +27,11 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
       inject: [getModelToken(DatabaseModelNames.BUSINESS_OWNER)],
     },
     {
+      provide: Repositories.AdminRepository,
+      useFactory: (adminModel) => new BaseRepository(adminModel),
+      inject: [getModelToken(DatabaseModelNames.ADMIN)],
+    },
+    {
       provide: Repositories.RefreshTokenRepository,
       useFactory: (businessOwnerModel) =>
         new BaseRepository(businessOwnerModel),

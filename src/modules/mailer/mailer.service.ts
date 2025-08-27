@@ -78,14 +78,12 @@ export class MailerService {
 
     if (payload.replyTo) sendSmtpEmail.replyTo = payload.replyTo;
 
-    // Personalization
     sendSmtpEmail.messageVersions = payload.messageVersions.map((version) => ({
       to: version.to,
       headers: version.headers,
       params: version.params,
     }));
 
-    // Default body (must exist at root)
     sendSmtpEmail.htmlContent = payload.messageVersions[0].htmlContent;
     sendSmtpEmail.textContent = payload.messageVersions[0].textContent;
     sendSmtpEmail.subject = payload.subject;
@@ -95,7 +93,6 @@ export class MailerService {
         await this.brevoApiInstance.sendTransacEmail(sendSmtpEmail);
       return result;
     } catch (error) {
-      // console.error('Brevo bulk email error:', error);
       throw error;
     }
   }

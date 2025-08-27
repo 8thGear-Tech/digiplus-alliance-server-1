@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -20,7 +21,7 @@ export class SignupReqDto {
   last_name: string;
 
   @ApiProperty({ description: 'business name', example: 'DigiPlus Alliance' })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   business_name: string;
 
