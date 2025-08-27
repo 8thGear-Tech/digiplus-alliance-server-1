@@ -45,19 +45,19 @@ export const BusinessProfileSchema = new Schema<BusinessProfile>(
     },
     company_address: {
       type: String,
-      required: true,
+      // required: true,
     },
     city: {
       type: String,
-      required: true,
+      // required: true,
     },
     state: {
       type: String,
-      required: true,
+      // required: true,
     },
     country: {
       type: String,
-      required: true,
+      // required: true,
     },
     logo_url: {
       type: String,

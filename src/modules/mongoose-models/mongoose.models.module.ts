@@ -5,6 +5,7 @@ import { UserSchema } from '../user/user.schema';
 import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema';
 import { RefreshTokenSchema } from '../auth/schemas/refresh-token.schema';
 import { TokenSchema } from '../token/token.schema';
+import { AdminProfileSchema } from '../profile/schemas/admin.schema';
 
 @Module({
   imports: [
@@ -13,6 +14,10 @@ import { TokenSchema } from '../token/token.schema';
       {
         name: DatabaseModelNames.BUSINESS_OWNER,
         schema: BusinessProfileSchema,
+      },
+      {
+        name: DatabaseModelNames.ADMIN,
+        schema: AdminProfileSchema,
       },
       { name: DatabaseModelNames.REFRESH_TOKEN, schema: RefreshTokenSchema },
       { name: DatabaseModelNames.TOKEN, schema: TokenSchema },

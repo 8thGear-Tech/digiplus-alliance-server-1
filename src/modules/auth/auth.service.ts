@@ -29,6 +29,7 @@ import { BusinessProfile } from '../profile/schemas/business.owner.schema';
 import { LogoutResDto } from './dtos/logout.dto';
 import { RefreshToken } from './schemas/refresh-token.schema';
 import { ConfigService } from '@nestjs/config';
+import { AdminProfile } from '../profile/schemas/admin.schema';
 
 @Injectable()
 export class AuthService {
@@ -66,11 +67,15 @@ export class AuthService {
     private readonly tokenQueryService: TokenQueryService,
     @Inject(Repositories.BusinessOwnerRepository)
     private readonly businessProfileRepository: BaseRepository<BusinessProfile>,
+    @Inject(Repositories.AdminRepository)
+    private readonly adminProfileRepository: BaseRepository<AdminProfile>,
 
     @Inject(Repositories.RefreshTokenRepository)
     private readonly refreshTokenRepository: BaseRepository<RefreshToken>,
     private readonly configService: ConfigService,
   ) {}
+
+  // In auth.service.ts
 
   async signup(signupReqDto: SignupReqDto): Promise<SignupResDto> {
     const { first_name, last_name, business_name, role, password } =
@@ -99,9 +104,8 @@ export class AuthService {
       last_name,
       business_name,
       email,
-      role,
+      role: role as UserTypes,
       password: hashedPassword,
-
       is_verified: false,
       profile_picture: '',
       is_in_recovery: false,
@@ -109,6 +113,32 @@ export class AuthService {
 
     const createUser = await this.userRepository.create(userPayload);
 
+    console.log('Role from DTO:', role);
+    console.log('Admin enum value:', UserTypes.admin);
+
+    // Add the business profile creation logic here
+    if (role === UserTypes.business_owner) {
+      try {
+        await this.businessProfileRepository.create({
+          user_id: createUser._id,
+          business_name: signupReqDto.business_name,
+          email: signupReqDto.email,
+        });
+        console.log('Business profile created successfully.');
+      } catch (error) {
+        console.error('Failed to create business profile:', error);
+      }
+    } else if (role === UserTypes.admin) {
+      try {
+        await this.adminProfileRepository.create({
+          user_id: createUser._id,
+          email: signupReqDto.email,
+        });
+        console.log('Admin profile created successfully.');
+      } catch (error) {
+        console.error('Failed to create admin profile:', error);
+      }
+    }
     await this.tokenQueryService.create({
       value: token,
       type: 'registration',
@@ -215,9 +245,6 @@ export class AuthService {
     return Math.floor(Math.random() * (OTP_MAX - OTP_MIN + 1)) + OTP_MIN;
   }
 
-  /**
-   * Generate verification Link
-   */
   async generateVerificationLink(
     code: string,
     email: string,
@@ -243,6 +270,12 @@ export class AuthService {
     const user = await this.userRepository.findOne({ email });
     if (!user) {
       throw UnauthorizedException.UNAUTHORIZED_ACCESS('Invalid credentials');
+    }
+
+    if (!user.is_verified) {
+      throw UnauthorizedException.UNAUTHORIZED_ACCESS(
+        'Account not verified. Please check your email.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);

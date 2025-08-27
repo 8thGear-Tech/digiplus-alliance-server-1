@@ -1,15 +1,14 @@
-import mongoose, { Schema, Document, Model, Types } from 'mongoose';
+import { Schema, Document, Types } from 'mongoose';
 import { UserTypes } from 'src/shared/enums';
-import { Identifier } from 'src/shared/types';
 
 export interface User extends Document {
   _id: Types.ObjectId;
   email: string;
   password: string;
-  role: string;
+  role: UserTypes;
   first_name: string;
   last_name: string;
-  business_name: string;
+  business_name?: string; // Corrected: Made optional in the interface
   profile_picture?: string;
   is_verified: boolean;
   locked_until?: Date | null;
@@ -39,13 +38,12 @@ export const UserSchema: Schema<User> = new Schema<User>(
     },
     business_name: {
       type: String,
-      required: true,
+      // Corrected: Removed `required: true` to make it optional
     },
     first_name: {
       type: String,
       required: true,
     },
-
     last_name: {
       type: String,
       required: true,

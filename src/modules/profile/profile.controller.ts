@@ -14,8 +14,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ProfileService } from './profile.service';
-import { CreateBusinessOwnerProfileDto } from './dtos/business-owner.dto';
-import { UpdateProfileDto } from './dtos/update-profile.dto';
+import { BusinessOwnerProfileBaseDto } from './dtos/business-owner.dto';
+import { AdminProfileBaseDto } from './dtos/admin.dto';
+import { UpdateBusinessProfileDto } from './dtos/update-business-profile.dto';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -23,10 +24,12 @@ import {
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { ProfileResDto } from './dtos/profile.res.dto';
+import { BusinessProfileResDto } from './dtos/business-profile.res.dto';
+import { AdminProfileResDto } from './dtos/admin-profile.res.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';
+import { UpdateAdminProfileDto } from './dtos/update-admin-profile.dto';
 
 @ApiBearerAuth()
 @ApiTags('Profile')
@@ -36,7 +39,7 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @ApiOkResponse({
-    type: ProfileResDto,
+    type: BusinessProfileResDto,
   })
   @HttpCode(200)
   @Get('business')
@@ -45,31 +48,30 @@ export class ProfileController {
     return await this.profileService.getBusinessProfile(user._id);
   }
 
-  @ApiOkResponse({
-    type: ProfileResDto,
-  })
-  @HttpCode(201)
-  @Post('business')
-  async createBusinessProfile(
-    @GetUser() user,
-    @Body(ValidationPipe) businessProfile: CreateBusinessOwnerProfileDto,
-  ) {
-    return await this.profileService.createBusinessProfile({
-      ...businessProfile,
-      userId: user._id,
-      email: user.email,
-      role: user.role,
-    });
-  }
+  // @ApiOkResponse({
+  //   type: BusinessProfileResDto,
+  // })
+  // @HttpCode(200)
+  // @Patch('business')
+  // async updateCoorporateProfile(
+  //   @GetUser() user,
+  //   @Body(ValidationPipe) businessProfile: BusinessOwnerProfileBaseDto,
+  // ) {
+  //   return await this.profileService.updateBusinessProfile({
+  //     ...businessProfile,
+  //     userId: user._id,
+  //   });
+  // }
 
+  // In profile.controller.ts
   @ApiOkResponse({
-    type: ProfileResDto,
+    type: BusinessProfileResDto,
   })
   @HttpCode(200)
   @Patch('business')
-  async updateCoorporateProfile(
+  async updateBusinessProfile(
     @GetUser() user,
-    @Body(ValidationPipe) businessProfile: CreateBusinessOwnerProfileDto,
+    @Body(ValidationPipe) businessProfile: UpdateBusinessProfileDto, // Corrected DTO
   ) {
     return await this.profileService.updateBusinessProfile({
       ...businessProfile,
@@ -77,9 +79,35 @@ export class ProfileController {
     });
   }
 
+  // New endpoint for admins
+  @ApiOkResponse({
+    type: AdminProfileResDto, // You will need to create a ProfileResDto for admins as well
+  })
+  @HttpCode(200)
+  @Get('admin')
+  async getAdminProfile(@GetUser() user) {
+    return await this.profileService.getAdminProfile(user._id);
+  }
+
+  // New endpoint for admins
+  @ApiOkResponse({
+    type: AdminProfileResDto,
+  })
+  @HttpCode(200)
+  @Patch('admin')
+  async updateAdminProfile(
+    @GetUser() user,
+    @Body(ValidationPipe) adminProfile: UpdateAdminProfileDto,
+  ) {
+    return await this.profileService.updateAdminProfile({
+      ...adminProfile,
+      userId: user._id,
+    });
+  }
+
   @HttpCode(201)
   @ApiOkResponse({
-    type: ProfileResDto,
+    type: AdminProfileResDto,
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

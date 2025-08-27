@@ -27,7 +27,7 @@ export enum UserTypes {
 export enum Repositories {
   UserRepository = 'UserRepository',
   BusinessOwnerRepository = 'BusinessOwnerRepository',
-  // AdminRepository = 'AdminRepository',
+  AdminRepository = 'AdminRepository',
   // NotificationRepository = 'NotificationRepository',
   RefreshTokenRepository = 'RefreshTokenRepository',
   TokenRepository = 'TokenRepository',

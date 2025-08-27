@@ -1,8 +1,7 @@
-import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
-import { IsEmpty, IsNotEmpty, IsOptional } from 'class-validator';
-import { Types } from 'mongoose';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional } from 'class-validator';
 
-export class CreateBusinessOwnerProfileDto {
+export class BusinessOwnerProfileBaseDto {
   @ApiProperty({
     type: String,
     description: 'The name of the organization',

@@ -72,11 +72,6 @@ export class BaseRepository<T> {
     return documents.map((doc) => doc as T);
   }
 
-  // async update(filter: FilterQuery<T>, update: UpdateQuery<T>): Promise<T | null> {
-  //   return await this.model.findOneAndUpdate(filter, update, { new: true });
-  // }
-
-  //added this new lines
   async update(
     filter: FilterQuery<T>,
     update: UpdateQuery<T>,
