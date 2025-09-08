@@ -1,16 +1,8 @@
 import { Module } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { BaseRepository } from './base.repository';
-import {
-  DatabaseCollectionNames,
-  DatabaseModelNames,
-  Repositories,
-} from 'src/shared/enums';
-
-import { TokenSchema } from '../token/token.schema';
+import { DatabaseModelNames, Repositories } from 'src/shared/enums';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
-import { UserSchema } from '../user/user.schema';
-import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema';
 
 @Module({
   imports: [MongooseModelsModule],
@@ -33,33 +25,47 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
     },
     {
       provide: Repositories.RefreshTokenRepository,
-      useFactory: (businessOwnerModel) =>
-        new BaseRepository(businessOwnerModel),
+      useFactory: (refreshTokenModel) => new BaseRepository(refreshTokenModel),
       inject: [getModelToken(DatabaseModelNames.REFRESH_TOKEN)],
     },
-
     {
       provide: Repositories.TokenRepository,
       useFactory: (tokenModel) => new BaseRepository(tokenModel),
       inject: [getModelToken(DatabaseModelNames.TOKEN)],
     },
     {
-      provide: DatabaseModelNames.USER,
-      useValue: UserSchema,
+      provide: Repositories.AssessmentRepository,
+      useFactory: (assessmentModel) => new BaseRepository(assessmentModel),
+      inject: [getModelToken(DatabaseModelNames.ASSESSMENT)],
     },
     {
-      provide: DatabaseModelNames.BUSINESS_OWNER,
-      useValue: BusinessProfileSchema,
+      provide: Repositories.AssessmentModuleRepository,
+      useFactory: (assessmentModuleModel) =>
+        new BaseRepository(assessmentModuleModel),
+      inject: [getModelToken(DatabaseModelNames.ASSESSMENT_MODULE)],
     },
     {
-      provide: DatabaseModelNames.REFRESH_TOKEN,
-      useValue: TokenSchema,
+      provide: Repositories.QuestionRepository,
+      useFactory: (questionModel) => new BaseRepository(questionModel),
+      inject: [getModelToken(DatabaseModelNames.QUESTION)],
     },
     {
-      provide: DatabaseModelNames.TOKEN,
-      useValue: TokenSchema,
+      provide: Repositories.UserAssessmentRepository,
+      useFactory: (userAssessmentModel) =>
+        new BaseRepository(userAssessmentModel),
+      inject: [getModelToken(DatabaseModelNames.USER_ASSESSMENT)],
     },
   ],
-  exports: [...Object.values(Repositories)],
+  exports: [
+    Repositories.UserRepository,
+    Repositories.BusinessOwnerRepository,
+    Repositories.AdminRepository,
+    Repositories.RefreshTokenRepository,
+    Repositories.TokenRepository,
+    Repositories.AssessmentRepository,
+    Repositories.AssessmentModuleRepository, // Temporarily comment this out
+    Repositories.QuestionRepository,
+    Repositories.UserAssessmentRepository,
+  ],
 })
 export class RepositoryModule {}

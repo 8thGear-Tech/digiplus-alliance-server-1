@@ -8,6 +8,9 @@ import {
 } from './exceptions.interface';
 
 export class BadRequestException extends HttpException {
+  static BAD_REQUEST(arg0: string) {
+      throw new Error('Method not implemented.');
+  }
   @ApiProperty({
     enum: ExceptionConstants.BadRequestCodes,
     description: 'A unique code identifying the error.',

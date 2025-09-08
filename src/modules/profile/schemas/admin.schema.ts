@@ -1,4 +1,4 @@
-import { Schema, model, Document, Types } from 'mongoose';
+import { Schema, Document, Types } from 'mongoose';
 import { DatabaseModelNames } from 'src/shared/enums';
 
 export interface AdminProfile extends Document {

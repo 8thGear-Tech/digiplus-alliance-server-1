@@ -24,6 +24,7 @@ import {
 } from './filters';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { AssessmentModule } from './modules/assessment/assessment.module';
 import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.module';
 import { ProfileModule } from './modules/profile/profile.module';
 
@@ -95,8 +96,10 @@ dotenv.config();
     ScheduleModule.forRoot(),
     AuthModule,
     UserModule,
+    AssessmentModule,
     MongooseModelsModule,
     ProfileModule,
+    AssessmentModule,
   ],
   controllers: [AppController],
   providers: [

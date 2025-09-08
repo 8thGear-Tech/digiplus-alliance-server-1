@@ -1,7 +1,14 @@
-import { QueryOptions, UpdateWriteOpResult } from 'mongoose';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { QueryOptions, Types, UpdateWriteOpResult } from 'mongoose';
 import { Model, FilterQuery, UpdateQuery } from 'mongoose';
 
 export class BaseRepository<T> {
+  async find(
+    filter: FilterQuery<T> = {},
+    options?: QueryOptions,
+  ): Promise<T[]> {
+    return this.model.find(filter, null, options).exec();
+  }
   constructor(private readonly model: Model<T>) {}
 
   async findAll(
