@@ -108,14 +108,12 @@ export class AuthController {
       expires: cookieExpiresAt,
     });
 
-    // console.log('Cookie set on response');
-    // console.log('Refresh token value:', refreshToken);
     return response;
   }
 
   // POST /auth/logout
   @ApiBearerAuth()
-  @UseGuards(JwtUserAuthGuard)
+  // @UseGuards(JwtUserAuthGuard)
   @ApiOkResponse({
     type: LogoutResDto,
   })
@@ -128,10 +126,6 @@ export class AuthController {
     const accessToken = req.headers.authorization?.split(' ')[1];
 
     const refreshToken = req.cookies?.[COOKIE_NAME];
-
-    // if (!accessToken || !refreshToken) {
-    //   throw new Error('Access token or refresh token missing for logout.');
-    // }
 
     if (!accessToken) {
       throw new Error('Access token missing from Authorization header.');
