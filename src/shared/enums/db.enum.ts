@@ -3,6 +3,7 @@ export enum DatabaseCollectionNames {
   TOKEN = 'tokens',
   ADMIN = 'admin',
   BUSINESS_OWNER = 'business_owner',
+  BLOG = 'blogs',
 }
 
 export enum DatabaseModelNames {
@@ -12,6 +13,7 @@ export enum DatabaseModelNames {
   NOTIFICATION = 'Notification',
   REFRESH_TOKEN = 'RefreshToken',
   TOKEN = 'Token',
+  BLOG = 'Blog',
 }
 
 export enum TokenTypes {
@@ -31,6 +33,7 @@ export enum Repositories {
   // NotificationRepository = 'NotificationRepository',
   RefreshTokenRepository = 'RefreshTokenRepository',
   TokenRepository = 'TokenRepository',
+  BlogRepository = 'BlogRepository',
 }
 
 export enum NotificationTypes {

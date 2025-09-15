@@ -11,6 +11,7 @@ import { TokenSchema } from '../token/token.schema';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
 import { UserSchema } from '../user/user.schema';
 import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema';
+import { BlogSchema } from '../admin/blog/blog.schema';
 
 @Module({
   imports: [MongooseModelsModule],
@@ -44,6 +45,11 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
       inject: [getModelToken(DatabaseModelNames.TOKEN)],
     },
     {
+      provide: Repositories.BlogRepository,
+      useFactory: (blogModel) => new BaseRepository(blogModel),
+      inject: [getModelToken(DatabaseModelNames.BLOG)],
+    },
+    {
       provide: DatabaseModelNames.USER,
       useValue: UserSchema,
     },
@@ -58,6 +64,10 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
     {
       provide: DatabaseModelNames.TOKEN,
       useValue: TokenSchema,
+    },
+    {
+      provide: DatabaseModelNames.BLOG,
+      useValue: BlogSchema,
     },
   ],
   exports: [...Object.values(Repositories)],

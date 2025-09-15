@@ -6,6 +6,7 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
 import { RefreshTokenSchema } from '../auth/schemas/refresh-token.schema';
 import { TokenSchema } from '../token/token.schema';
 import { AdminProfileSchema } from '../profile/schemas/admin.schema';
+import { BlogSchema } from '../admin/blog/blog.schema';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminProfileSchema } from '../profile/schemas/admin.schema';
       },
       { name: DatabaseModelNames.REFRESH_TOKEN, schema: RefreshTokenSchema },
       { name: DatabaseModelNames.TOKEN, schema: TokenSchema },
+      { name: DatabaseModelNames.BLOG, schema: BlogSchema },
     ]),
   ],
   exports: [MongooseModule],

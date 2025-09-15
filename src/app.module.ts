@@ -26,6 +26,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { BlogModule } from './modules/admin/blog/blog.module';
 
 dotenv.config();
 @Module({
@@ -97,6 +98,7 @@ dotenv.config();
     UserModule,
     MongooseModelsModule,
     ProfileModule,
+    BlogModule,
   ],
   controllers: [AppController],
   providers: [
