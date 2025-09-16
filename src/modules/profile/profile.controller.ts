@@ -48,22 +48,6 @@ export class ProfileController {
     return await this.profileService.getBusinessProfile(user._id);
   }
 
-  // @ApiOkResponse({
-  //   type: BusinessProfileResDto,
-  // })
-  // @HttpCode(200)
-  // @Patch('business')
-  // async updateCoorporateProfile(
-  //   @GetUser() user,
-  //   @Body(ValidationPipe) businessProfile: BusinessOwnerProfileBaseDto,
-  // ) {
-  //   return await this.profileService.updateBusinessProfile({
-  //     ...businessProfile,
-  //     userId: user._id,
-  //   });
-  // }
-
-  // In profile.controller.ts
   @ApiOkResponse({
     type: BusinessProfileResDto,
   })
@@ -81,7 +65,7 @@ export class ProfileController {
 
   // New endpoint for admins
   @ApiOkResponse({
-    type: AdminProfileResDto, // You will need to create a ProfileResDto for admins as well
+    type: AdminProfileResDto, 
   })
   @HttpCode(200)
   @Get('admin')
