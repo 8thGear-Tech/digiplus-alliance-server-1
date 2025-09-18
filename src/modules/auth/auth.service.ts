@@ -92,12 +92,14 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, saltOrRounds);
     const token = this.generateCode().toString();
 
-    const verificationLink = await this.generateVerificationLink(
-      token,
-      email,
-      'registration',
-      'auth/verification',
-    );
+    const { fullToken, verificationLink: generatedLink } =
+      await this.generateVerificationLink(
+        token,
+        email,
+        'registration',
+        // 'auth/verification',
+        '/',
+      );
 
     const userPayload: Partial<User> = {
       first_name,
@@ -140,14 +142,14 @@ export class AuthService {
       }
     }
     await this.tokenQueryService.create({
-      value: token,
+      value: fullToken.trim(), // normalize
       type: 'registration',
-      userType: role,
+      userType: role as UserTypes,
       userId: createUser._id,
       expiresIn: new Date(Date.now() + Constants.tokenExpiry),
     });
 
-    const mailBody = registrationEmail(createUser, verificationLink);
+    const mailBody = registrationEmail(createUser, generatedLink);
 
     await this.mailService.sendMail({
       to: email,
@@ -165,6 +167,7 @@ export class AuthService {
   async verifyEmail(
     verifyAccountDto: VerifyAccountDto,
   ): Promise<SignupResDto & { resetToken?: string }> {
+    console.log('🛠 verifyEmail called with DTO:', verifyAccountDto);
     let verificationCode: string = '',
       verificationFor: string = '',
       email: string = '';
@@ -196,12 +199,23 @@ export class AuthService {
       throw UnauthorizedException.UNAUTHORIZED_ACCESS('Invalid credentials');
     }
 
+    const receivedToken = verifyAccountDto.token;
+    console.log('📥 Raw token from email:', verifyAccountDto.token);
+    console.log('📥 Decoded token:', receivedToken);
+
     const findToken = await this.tokenQueryService.findToken({
       userId: user._id,
       type: verificationFor,
-      value: verificationCode,
+      // value: verificationCode,
+      value: receivedToken,
       userType: user.role,
     });
+
+    // console.log('DB token:', findToken?.value);
+    // console.log('Received token:', receivedToken);
+    // console.log('Match:', findToken?.value === receivedToken);
+    console.log('💾 Token in DB:', findToken?.value);
+    console.log('🔍 Match result:', findToken?.value === receivedToken);
 
     if (!findToken) {
       throw UnauthorizedException.UNAUTHORIZED_ACCESS(
@@ -250,7 +264,7 @@ export class AuthService {
     email: string,
     verificationFor: string,
     linkFor?: string,
-  ): Promise<string> {
+  ): Promise<{ fullToken: string; verificationLink: string }> {
     const token = await this.jwtService.signAsync(
       { code, email, verificationFor },
       {
@@ -260,7 +274,10 @@ export class AuthService {
 
     const baseUrl = process.env.CLIENT_URL;
     const url = linkFor ? `${baseUrl}/${linkFor}` : `${baseUrl}`;
-    return `${url}?token=${token}`;
+    const verificationLink = `${url}?token=${token}`;
+
+    // Return both the full JWT and the final link
+    return { fullToken: token, verificationLink };
   }
 
   async login(loginReqDto: LoginReqDto): Promise<LoginResDto> {
@@ -272,11 +289,11 @@ export class AuthService {
       throw UnauthorizedException.UNAUTHORIZED_ACCESS('Invalid credentials');
     }
 
-    if (!user.is_verified) {
-      throw UnauthorizedException.UNAUTHORIZED_ACCESS(
-        'Account not verified. Please check your email.',
-      );
-    }
+    // if (!user.is_verified) {
+    //   throw UnauthorizedException.UNAUTHORIZED_ACCESS(
+    //     'Account not verified. Please check your email.',
+    //   );
+    // }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -449,7 +466,7 @@ export class AuthService {
     }
 
     const token = this.generateCode().toString();
-    const verificationLink = await this.generateVerificationLink(
+    const { fullToken, verificationLink } = await this.generateVerificationLink(
       token,
       email,
       'registration',
@@ -470,7 +487,7 @@ export class AuthService {
       } else {
         await this.tokenQueryService.updateToken({
           _id: findToken._id,
-          value: token,
+          value: fullToken,
           expiresIn: new Date(Date.now() + Constants.tokenExpiry),
           userId: user._id,
           type: 'registration',
@@ -492,7 +509,7 @@ export class AuthService {
       }
     } else {
       await this.tokenQueryService.create({
-        value: token,
+        value: fullToken,
         type: 'registration',
         userType: user.role,
         userId: user._id,

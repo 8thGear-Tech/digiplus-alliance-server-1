@@ -90,8 +90,7 @@ export class AuthController {
     @Body(ValidationPipe) loginReqDto: LoginReqDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { refreshToken, ...response } =
-      await this.authService.login(loginReqDto);
+    const loginResponse = await this.authService.login(loginReqDto);
 
     const refreshTokenExpiryInMs = convertJwtExpiryToMs(
       Constants.refreshTokenExpiry,
@@ -99,17 +98,40 @@ export class AuthController {
 
     const cookieExpiresAt = new Date(Date.now() + refreshTokenExpiryInMs);
 
-    res.cookie(COOKIE_NAME, refreshToken, {
+    res.cookie(COOKIE_NAME, loginResponse.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-
       path: '/',
       expires: cookieExpiresAt,
     });
 
-    return response;
+    return loginResponse;
   }
+  // async login(
+  //   @Body(ValidationPipe) loginReqDto: LoginReqDto,
+  //   @Res({ passthrough: true }) res: Response,
+  // ) {
+  //   const { refreshToken, ...response } =
+  //     await this.authService.login(loginReqDto);
+
+  //   const refreshTokenExpiryInMs = convertJwtExpiryToMs(
+  //     Constants.refreshTokenExpiry,
+  //   );
+
+  //   const cookieExpiresAt = new Date(Date.now() + refreshTokenExpiryInMs);
+
+  //   res.cookie(COOKIE_NAME, refreshToken, {
+  //     httpOnly: true,
+  //     secure: process.env.NODE_ENV === 'production',
+  //     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+
+  //     path: '/',
+  //     expires: cookieExpiresAt,
+  //   });
+
+  //   return response;
+  // }
 
   // POST /auth/logout
   @ApiBearerAuth()
@@ -173,7 +195,7 @@ export class AuthController {
     type: SignupResDto,
   })
   @HttpCode(200)
-  @Get('request-verification')
+  @Post('request-verification')
   async requestVerificationLink(@GetUser() user) {
     if (!user || !user.email) {
       throw new Error('User not found or email not provided');
