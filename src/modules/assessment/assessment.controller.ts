@@ -10,8 +10,8 @@ import {
   Param,
   UseGuards,
   Request,
-  Put,
-  Delete,
+  // Put,
+  // Delete,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -46,8 +46,9 @@ export class AssessmentController {
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
   @ApiOperation({
-    summary:
-      'Create complete assessment with modules and questions (Admin only)',
+    summary: 'Create Assessment with Questions',
+    description:
+      'Create a comprehensive assessment with modules and questions of different types. Each question type has specific requirements and properties.',
   })
   @ApiBody({
     type: CreateAssessmentDto,
@@ -331,32 +332,30 @@ export class AssessmentController {
           ],
         },
       },
-      'Complete Assessment Example': {
-        summary: 'Complete Assessment with Mixed Question Types',
-        description: 'Full assessment example with all question types',
+      'Complete Points-Based Assessment': {
+        summary: 'Complete Assessment with Service Recommendations',
+        description:
+          'Full example showing point-based scoring for service recommendations',
         value: {
-          title: 'Comprehensive Digital Maturity Assessment',
+          title: 'Digital Maturity Assessment with Service Recommendations',
           description:
-            'Complete evaluation of your digital transformation readiness',
-          instruction: 'Please answer all questions honestly and thoroughly',
+            'Comprehensive evaluation with personalized service suggestions',
+          instruction:
+            'Answer all questions to receive personalized service recommendations',
           modules: [
             {
-              temp_id: 'intro-module',
-              title: 'Introduction',
-              description: 'Welcome and overview',
-              order: 1,
-            },
-            {
               temp_id: 'skills-module',
-              title: 'Digital Skills',
-              description: 'Current digital capabilities',
-              order: 2,
+              title: 'Digital Skills Assessment',
+              description: 'Evaluate current capabilities',
+              order: 1,
+              max_points: 25,
             },
             {
               temp_id: 'tools-module',
-              title: 'Current Tools',
-              description: 'Existing digital infrastructure',
-              order: 3,
+              title: 'Current Tools Usage',
+              description: 'Assess existing digital infrastructure',
+              order: 2,
+              max_points: 30,
             },
           ],
           questions: [
@@ -365,50 +364,135 @@ export class AssessmentController {
               question: 'Welcome',
               welcome_title: 'Digital Maturity Assessment',
               welcome_message:
-                'This assessment will help evaluate your digital readiness and provide recommendations.',
-              button_text: 'Start Assessment',
+                'This assessment will recommend the best services for your digital transformation journey.',
               step: 1,
-              module_ref: 'intro-module',
-            },
-            {
-              type: 'module_title',
-              question: 'Skills Module Introduction',
-              module_title: 'Digital Skills Assessment',
-              module_description: 'Evaluate your current digital capabilities',
-              step: 2,
               module_ref: 'skills-module',
             },
             {
               type: 'multiple_choice',
-              question: 'What is your overall digital skill level?',
+              question: 'What is your current digital skill level?',
               options: [
-                { id: 'opt-1', text: 'Beginner', value: 1 },
-                { id: 'opt-2', text: 'Intermediate', value: 2 },
-                { id: 'opt-3', text: 'Advanced', value: 3 },
+                {
+                  id: 'skill-1',
+                  text: 'Beginner - Learning basics',
+                  points: 2,
+                  points_description: 'Needs comprehensive support',
+                },
+                {
+                  id: 'skill-2',
+                  text: 'Intermediate - Comfortable with tools',
+                  points: 5,
+                  points_description: 'Ready for moderate solutions',
+                },
+                {
+                  id: 'skill-3',
+                  text: 'Advanced - Leading digital initiatives',
+                  points: 8,
+                  points_description: 'Suitable for complex implementations',
+                },
               ],
-              is_required: true,
-              step: 3,
+              max_points: 8,
+              scoring_categories: ['digital_literacy', 'leadership_readiness'],
+              step: 2,
               module_ref: 'skills-module',
             },
             {
               type: 'checkbox',
-              question: 'Which tools do you use?',
+              question: 'Which tools do you currently use?',
               options: [
-                { id: 'opt-1', text: 'Microsoft Office', value: 1 },
-                { id: 'opt-2', text: 'Google Workspace', value: 1 },
-                { id: 'opt-3', text: 'CRM Software', value: 1 },
+                {
+                  id: 'tool-1',
+                  text: 'Basic Office Tools',
+                  points: 2,
+                  points_description: 'Foundation tools',
+                },
+                {
+                  id: 'tool-2',
+                  text: 'CRM Systems',
+                  points: 4,
+                  points_description: 'Customer management',
+                },
+                {
+                  id: 'tool-3',
+                  text: 'Advanced Analytics',
+                  points: 6,
+                  points_description: 'Data-driven insights',
+                },
               ],
-              min_selections: 1,
-              step: 4,
+              scoring_method: 'sum',
+              max_points: 12,
+              scoring_categories: ['tool_adoption', 'data_maturity'],
+              step: 3,
               module_ref: 'tools-module',
             },
             {
-              type: 'short_text',
-              question: 'Business name?',
-              placeholder: 'Enter business name',
-              max_length: 100,
-              step: 5,
+              type: 'multiple_choice_grid',
+              question: 'Rate your digital maturity in each area',
+              grid_columns: [
+                {
+                  id: 'maturity-1',
+                  text: 'Basic',
+                  points: 1,
+                  points_description: 'Getting started',
+                },
+                {
+                  id: 'maturity-2',
+                  text: 'Intermediate',
+                  points: 3,
+                  points_description: 'Making progress',
+                },
+                {
+                  id: 'maturity-3',
+                  text: 'Advanced',
+                  points: 5,
+                  points_description: 'Leading edge',
+                },
+              ],
+              grid_rows: [
+                {
+                  id: 'area-1',
+                  text: 'Customer Management',
+                  weight: 1.5,
+                },
+                {
+                  id: 'area-2',
+                  text: 'Data Analytics',
+                  weight: 1.2,
+                },
+              ],
+              max_points: 15,
+              scoring_categories: ['process_maturity', 'analytics_readiness'],
+              step: 4,
               module_ref: 'tools-module',
+            },
+          ],
+          service_recommendations: [
+            {
+              service_id: 'basic_package',
+              service_name: 'Digital Foundation Package',
+              description: 'Essential tools and training for digital beginners',
+              min_points: 0,
+              max_points: 15,
+              categories: ['digital_literacy', 'basic_tools'],
+              priority: 1,
+            },
+            {
+              service_id: 'intermediate_package',
+              service_name: 'Digital Growth Package',
+              description: 'Integrated solutions for growing businesses',
+              min_points: 16,
+              max_points: 30,
+              categories: ['tool_adoption', 'process_optimization'],
+              priority: 2,
+            },
+            {
+              service_id: 'advanced_package',
+              service_name: 'Digital Leadership Package',
+              description: 'Advanced analytics and AI-powered solutions',
+              min_points: 31,
+              max_points: 50,
+              categories: ['data_maturity', 'innovation_leadership'],
+              priority: 3,
             },
           ],
           is_active: true,
@@ -463,26 +547,26 @@ export class AssessmentController {
     return this.assessmentService.getAssessmentById(id);
   }
 
-  @Put('questions/:questionId')
-  @UseGuards(RolesGuard)
-  @Roles(UserTypes.admin)
-  @ApiOperation({ summary: 'Update question (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Question updated successfully' })
-  async updateQuestion(
-    @Param('questionId') questionId: string,
-    @Body() updateData: any,
-  ): Promise<any> {
-    return this.assessmentService.updateQuestion(questionId, updateData);
-  }
+  // @Put('questions/:questionId')
+  // @UseGuards(RolesGuard)
+  // @Roles(UserTypes.admin)
+  // @ApiOperation({ summary: 'Update question (Admin only)' })
+  // @ApiResponse({ status: 200, description: 'Question updated successfully' })
+  // async updateQuestion(
+  //   @Param('questionId') questionId: string,
+  //   @Body() updateData: any,
+  // ): Promise<any> {
+  //   return this.assessmentService.updateQuestion(questionId, updateData);
+  // }
 
-  @Delete('questions/:questionId')
-  @UseGuards(RolesGuard)
-  @Roles(UserTypes.admin)
-  @ApiOperation({ summary: 'Delete question (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Question deleted successfully' })
-  async deleteQuestion(@Param('questionId') questionId: string): Promise<any> {
-    return this.assessmentService.deleteQuestion(questionId);
-  }
+  // @Delete('questions/:questionId')
+  // @UseGuards(RolesGuard)
+  // @Roles(UserTypes.admin)
+  // @ApiOperation({ summary: 'Delete question (Admin only)' })
+  // @ApiResponse({ status: 200, description: 'Question deleted successfully' })
+  // async deleteQuestion(@Param('questionId') questionId: string): Promise<any> {
+  //   return this.assessmentService.deleteQuestion(questionId);
+  // }
 
   // User Routes
   //   @Post('submit')

@@ -55,6 +55,12 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
         new BaseRepository(userAssessmentModel),
       inject: [getModelToken(DatabaseModelNames.USER_ASSESSMENT)],
     },
+    {
+      provide: Repositories.ServiceRecommendationRepository,
+      useFactory: (serviceRecommendationModel) =>
+        new BaseRepository(serviceRecommendationModel),
+      inject: [getModelToken(DatabaseModelNames.SERVICE_RECOMMENDATION)],
+    },
   ],
   exports: [
     Repositories.UserRepository,
@@ -66,6 +72,7 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
     Repositories.AssessmentModuleRepository, // Temporarily comment this out
     Repositories.QuestionRepository,
     Repositories.UserAssessmentRepository,
+    Repositories.ServiceRecommendationRepository,
   ],
 })
 export class RepositoryModule {}

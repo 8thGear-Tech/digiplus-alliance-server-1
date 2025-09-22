@@ -5,6 +5,7 @@ import { Model, FilterQuery, UpdateQuery } from 'mongoose';
 export class BaseRepository<T> {
   async find(
     filter: FilterQuery<T> = {},
+    p0?: null,
     options?: QueryOptions,
   ): Promise<T[]> {
     return this.model.find(filter, null, options).exec();

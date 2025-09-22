@@ -7,8 +7,8 @@ import {
   ValidateNested,
   IsNumber,
   IsEnum,
-  // MinLength,
-  // MaxLength,
+  Min,
+  // Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
@@ -41,10 +41,14 @@ export class BaseQuestionDto {
   @IsNumber()
   step: number;
 
-  @ApiProperty({ example: 10, default: 0 })
+  @ApiProperty({
+    example: 10,
+    default: 0,
+    description: 'Maximum points possible for this question',
+  })
   @IsOptional()
   @IsNumber()
-  required_score?: number;
+  max_points?: number;
 
   @ApiProperty({
     example: 'module-1',
@@ -57,6 +61,17 @@ export class BaseQuestionDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiProperty({
+    example: ['digital_literacy', 'business_tools'],
+    required: false,
+    description:
+      'Categories this question contributes to for service recommendations',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  scoring_categories?: string[];
 }
 
 // Welcome Screen DTO
@@ -109,7 +124,7 @@ export class CreateModuleTitleDto extends BaseQuestionDto {
   module_description?: string;
 }
 
-// Option DTO for questions with options
+// Enhanced Option DTO with points
 export class QuestionOptionDto {
   @ApiProperty({ example: 'opt-1' })
   @IsString()
@@ -119,10 +134,22 @@ export class QuestionOptionDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 10, required: false })
-  @IsOptional()
+  @ApiProperty({
+    example: 2,
+    description: 'Points awarded when this option is selected',
+  })
   @IsNumber()
-  value?: number;
+  @Min(0)
+  points: number;
+
+  @ApiProperty({
+    example: 'Basic understanding, requires significant support',
+    required: false,
+    description: 'Optional description of what this points level means',
+  })
+  @IsOptional()
+  @IsString()
+  points_description?: string;
 }
 
 // Multiple Choice Question DTO
@@ -134,18 +161,31 @@ export class CreateMultipleChoiceQuestionDto extends BaseQuestionDto {
   @ApiProperty({
     type: [QuestionOptionDto],
     example: [
-      { id: 'opt-1', text: 'Beginner - Basic computer skills', value: 1 },
+      {
+        id: 'opt-1',
+        text: 'Beginner - Basic computer skills',
+        points: 1,
+        points_description:
+          'Needs comprehensive digital transformation support',
+      },
       {
         id: 'opt-2',
         text: 'Intermediate - Comfortable with most tools',
-        value: 2,
+        points: 3,
+        points_description: 'Ready for intermediate digital solutions',
       },
       {
         id: 'opt-3',
         text: 'Advanced - Proficient with complex tools',
-        value: 3,
+        points: 5,
+        points_description: 'Can implement advanced digital strategies',
       },
-      { id: 'opt-4', text: 'Expert - Can teach others', value: 4 },
+      {
+        id: 'opt-4',
+        text: 'Expert - Can teach others',
+        points: 7,
+        points_description: 'Suitable for leadership in digital transformation',
+      },
     ],
   })
   @IsArray()
@@ -163,16 +203,42 @@ export class CreateCheckboxQuestionDto extends BaseQuestionDto {
   @ApiProperty({
     type: [QuestionOptionDto],
     example: [
-      { id: 'opt-1', text: 'Microsoft Office Suite', value: 1 },
-      { id: 'opt-2', text: 'Google Workspace', value: 1 },
+      {
+        id: 'opt-1',
+        text: 'Microsoft Office Suite',
+        points: 2,
+        points_description: 'Basic productivity tools',
+      },
+      {
+        id: 'opt-2',
+        text: 'Google Workspace',
+        points: 2,
+        points_description: 'Cloud-based collaboration tools',
+      },
       {
         id: 'opt-3',
         text: 'Project Management Tools (Trello, Asana)',
-        value: 1,
+        points: 3,
+        points_description: 'Advanced organization and workflow tools',
       },
-      { id: 'opt-4', text: 'CRM Software', value: 1 },
-      { id: 'opt-5', text: 'Social Media Management Tools', value: 1 },
-      { id: 'opt-6', text: 'Video Conferencing Tools', value: 1 },
+      {
+        id: 'opt-4',
+        text: 'CRM Software',
+        points: 4,
+        points_description: 'Customer relationship management systems',
+      },
+      {
+        id: 'opt-5',
+        text: 'Social Media Management Tools',
+        points: 3,
+        points_description: 'Digital marketing automation',
+      },
+      {
+        id: 'opt-6',
+        text: 'Video Conferencing Tools',
+        points: 2,
+        points_description: 'Remote communication platforms',
+      },
     ],
   })
   @IsArray()
@@ -197,9 +263,19 @@ export class CreateCheckboxQuestionDto extends BaseQuestionDto {
   @IsOptional()
   @IsNumber()
   max_selections?: number;
+
+  @ApiProperty({
+    example: 'sum',
+    enum: ['sum', 'average', 'max'],
+    default: 'sum',
+    description: 'How to calculate points when multiple options are selected',
+  })
+  @IsOptional()
+  @IsString()
+  scoring_method?: 'sum' | 'average' | 'max';
 }
 
-// Short Text Question DTO
+// Short Text Question DTO - Text questions can have points based on response analysis
 export class CreateShortTextQuestionDto extends BaseQuestionDto {
   @ApiProperty({ enum: [QuestionType.SHORT_TEXT] })
   @IsEnum([QuestionType.SHORT_TEXT])
@@ -227,6 +303,15 @@ export class CreateShortTextQuestionDto extends BaseQuestionDto {
   @IsOptional()
   @IsNumber()
   min_length?: number;
+
+  @ApiProperty({
+    example: 5,
+    required: false,
+    description: 'Default points awarded for completing this text question',
+  })
+  @IsOptional()
+  @IsNumber()
+  completion_points?: number;
 }
 
 // Long Text Question DTO
@@ -270,6 +355,29 @@ export class CreateLongTextQuestionDto extends BaseQuestionDto {
   @IsOptional()
   @IsNumber()
   rows?: number;
+
+  @ApiProperty({
+    example: 10,
+    required: false,
+    description: 'Points awarded for completing this long text question',
+  })
+  @IsOptional()
+  @IsNumber()
+  completion_points?: number;
+
+  @ApiProperty({
+    type: 'array',
+    example: [
+      { keyword: 'automation', points: 3 },
+      { keyword: 'AI', points: 5 },
+      { keyword: 'cloud', points: 4 },
+    ],
+    required: false,
+    description: 'Bonus points awarded for mentioning specific keywords',
+  })
+  @IsOptional()
+  @IsArray()
+  keyword_scoring?: { keyword: string; points: number }[];
 }
 
 // Dropdown Question DTO
@@ -281,14 +389,54 @@ export class CreateDropdownQuestionDto extends BaseQuestionDto {
   @ApiProperty({
     type: [QuestionOptionDto],
     example: [
-      { id: 'opt-1', text: 'Technology', value: 1 },
-      { id: 'opt-2', text: 'Healthcare', value: 2 },
-      { id: 'opt-3', text: 'Education', value: 3 },
-      { id: 'opt-4', text: 'Finance', value: 4 },
-      { id: 'opt-5', text: 'Manufacturing', value: 5 },
-      { id: 'opt-6', text: 'Retail', value: 6 },
-      { id: 'opt-7', text: 'Agriculture', value: 7 },
-      { id: 'opt-8', text: 'Other', value: 8 },
+      {
+        id: 'opt-1',
+        text: 'Technology & Software',
+        points: 5,
+        points_description: 'High digital readiness expected',
+      },
+      {
+        id: 'opt-2',
+        text: 'Healthcare & Medical',
+        points: 3,
+        points_description: 'Moderate digital adoption',
+      },
+      {
+        id: 'opt-3',
+        text: 'Education & Training',
+        points: 4,
+        points_description: 'Growing digital transformation needs',
+      },
+      {
+        id: 'opt-4',
+        text: 'Finance & Banking',
+        points: 5,
+        points_description: 'High digital security and compliance needs',
+      },
+      {
+        id: 'opt-5',
+        text: 'Manufacturing',
+        points: 2,
+        points_description: 'Traditional industry with emerging digital needs',
+      },
+      {
+        id: 'opt-6',
+        text: 'Retail & E-commerce',
+        points: 4,
+        points_description: 'Digital-first industry requirements',
+      },
+      {
+        id: 'opt-7',
+        text: 'Agriculture',
+        points: 1,
+        points_description: 'Early-stage digital transformation sector',
+      },
+      {
+        id: 'opt-8',
+        text: 'Other',
+        points: 3,
+        points_description: 'General digital transformation approach',
+      },
     ],
   })
   @IsArray()
@@ -302,7 +450,7 @@ export class CreateDropdownQuestionDto extends BaseQuestionDto {
   placeholder?: string;
 }
 
-// Grid Question DTO
+// Enhanced Grid Column DTO with points
 export class GridColumnDto {
   @ApiProperty({ example: 'col-1' })
   @IsString()
@@ -312,10 +460,22 @@ export class GridColumnDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 5, required: false })
-  @IsOptional()
+  @ApiProperty({
+    example: 5,
+    description: 'Points awarded when this column is selected',
+  })
   @IsNumber()
-  value?: number;
+  @Min(0)
+  points: number;
+
+  @ApiProperty({
+    example: 'Excellent digital maturity',
+    required: false,
+    description: 'Description of what this points level represents',
+  })
+  @IsOptional()
+  @IsString()
+  points_description?: string;
 }
 
 export class GridRowDto {
@@ -326,6 +486,16 @@ export class GridRowDto {
   @ApiProperty({ example: 'I am comfortable using digital tools' })
   @IsString()
   text: string;
+
+  @ApiProperty({
+    example: 2,
+    required: false,
+    description: 'Weight multiplier for this row (default: 1)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  weight?: number;
 }
 
 export class CreateMultipleChoiceGridQuestionDto extends BaseQuestionDto {
@@ -336,11 +506,36 @@ export class CreateMultipleChoiceGridQuestionDto extends BaseQuestionDto {
   @ApiProperty({
     type: [GridColumnDto],
     example: [
-      { id: 'col-1', text: 'Never', value: 1 },
-      { id: 'col-2', text: 'Rarely', value: 2 },
-      { id: 'col-3', text: 'Sometimes', value: 3 },
-      { id: 'col-4', text: 'Often', value: 4 },
-      { id: 'col-5', text: 'Always', value: 5 },
+      {
+        id: 'col-1',
+        text: 'Not Digitized',
+        points: 1,
+        points_description: 'Manual processes only',
+      },
+      {
+        id: 'col-2',
+        text: 'Basic Digital Tools',
+        points: 2,
+        points_description: 'Simple digital tools in use',
+      },
+      {
+        id: 'col-3',
+        text: 'Integrated Systems',
+        points: 4,
+        points_description: 'Connected digital systems',
+      },
+      {
+        id: 'col-4',
+        text: 'Advanced Analytics',
+        points: 6,
+        points_description: 'Data-driven decision making',
+      },
+      {
+        id: 'col-5',
+        text: 'AI-Powered Optimization',
+        points: 8,
+        points_description: 'Cutting-edge digital transformation',
+      },
     ],
   })
   @IsArray()
@@ -351,16 +546,69 @@ export class CreateMultipleChoiceGridQuestionDto extends BaseQuestionDto {
   @ApiProperty({
     type: [GridRowDto],
     example: [
-      { id: 'row-1', text: 'I use digital tools for customer communication' },
-      { id: 'row-2', text: 'I use digital tools for inventory management' },
-      { id: 'row-3', text: 'I use digital tools for financial tracking' },
-      { id: 'row-4', text: 'I use digital tools for marketing' },
+      {
+        id: 'row-1',
+        text: 'Customer relationship management',
+        weight: 1.5,
+      },
+      {
+        id: 'row-2',
+        text: 'Sales and marketing processes',
+        weight: 1.2,
+      },
+      {
+        id: 'row-3',
+        text: 'Financial management and reporting',
+        weight: 1.3,
+      },
+      {
+        id: 'row-4',
+        text: 'Inventory and supply chain management',
+        weight: 1.0,
+      },
     ],
   })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => GridRowDto)
   grid_rows: GridRowDto[];
+}
+
+// Service Recommendation DTO
+export class ServiceRecommendationDto {
+  @ApiProperty({ example: 'basic_digital_transformation' })
+  @IsString()
+  service_id: string;
+
+  @ApiProperty({ example: 'Basic Digital Transformation Package' })
+  @IsString()
+  service_name: string;
+
+  @ApiProperty({
+    example: 'Perfect for businesses just starting their digital journey',
+  })
+  @IsString()
+  description: string;
+
+  @ApiProperty({ example: 15 })
+  @IsNumber()
+  min_points: number;
+
+  @ApiProperty({ example: 35 })
+  @IsNumber()
+  max_points: number;
+
+  @ApiProperty({
+    example: ['digital_literacy', 'basic_tools'],
+    description: 'Categories this service addresses',
+  })
+  @IsArray()
+  @IsString({ each: true })
+  categories: string[];
+
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  priority: number;
 }
 
 // Union type for all question DTOs
@@ -395,9 +643,18 @@ export class CreateModuleDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
   order: number;
+
+  @ApiProperty({
+    example: 50,
+    required: false,
+    description: 'Maximum points possible in this module',
+  })
+  @IsOptional()
+  @IsNumber()
+  max_points?: number;
 }
 
-// Assessment DTO
+// Enhanced Assessment DTO with service recommendations
 export class CreateAssessmentDto {
   @ApiProperty({ example: 'Digital Maturity Assessment' })
   @IsString()
@@ -424,31 +681,36 @@ export class CreateAssessmentDto {
 
   @ApiProperty({
     type: 'array',
-    description: 'Array of questions with different types',
+    description: 'Array of questions with different types and point values',
     example: [
-      {
-        type: 'welcome_screen',
-        question: 'Welcome to Digital Assessment',
-        welcome_title: 'Digital Maturity Assessment',
-        welcome_message:
-          'This assessment will help evaluate your digital readiness.',
-        step: 1,
-        module_ref: 'module-1',
-      },
       {
         type: 'multiple_choice',
         question: 'What is your experience level?',
         options: [
-          { id: 'opt-1', text: 'Beginner', value: 1 },
-          { id: 'opt-2', text: 'Intermediate', value: 2 },
+          { id: 'opt-1', text: 'Beginner', points: 1 },
+          { id: 'opt-2', text: 'Intermediate', points: 3 },
+          { id: 'opt-3', text: 'Advanced', points: 5 },
         ],
-        step: 2,
+        max_points: 5,
+        scoring_categories: ['digital_literacy'],
+        step: 1,
         module_ref: 'module-1',
       },
     ],
   })
   @IsArray()
   questions: CreateQuestionDto[];
+
+  @ApiProperty({
+    type: [ServiceRecommendationDto],
+    required: false,
+    description: 'Service recommendations based on point ranges',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ServiceRecommendationDto)
+  service_recommendations?: ServiceRecommendationDto[];
 
   @ApiProperty({ default: true })
   @IsOptional()
@@ -469,235 +731,6 @@ export class CreateAssessmentResDto {
     assessment: any;
     modules: any[];
     questions: any[];
+    service_recommendations?: any[];
   };
-}
-
-// Example request bodies for Swagger documentation
-export class WelcomeScreenExample {
-  @ApiProperty({
-    example: {
-      type: 'welcome_screen',
-      question: 'Welcome Screen',
-      welcome_title: 'Digital Maturity Assessment',
-      welcome_message:
-        'Welcome! This comprehensive assessment will help us understand your current digital capabilities and provide personalized recommendations for your business growth. The assessment takes approximately 10-15 minutes to complete.',
-      button_text: 'Start Assessment',
-      step: 1,
-      module_ref: 'intro-module',
-      is_active: true,
-    },
-  })
-  example: CreateWelcomeScreenDto;
-}
-
-export class ModuleTitleExample {
-  @ApiProperty({
-    example: {
-      type: 'module_title',
-      question: 'Module Introduction',
-      module_title: 'Digital Skills & Tools',
-      module_description:
-        'In this section, we will assess your familiarity and comfort level with various digital tools and technologies.',
-      step: 2,
-      module_ref: 'module-1',
-      is_active: true,
-    },
-  })
-  example: CreateModuleTitleDto;
-}
-
-export class MultipleChoiceExample {
-  @ApiProperty({
-    example: {
-      type: 'multiple_choice',
-      question: 'What best describes your current level of digital tool usage?',
-      description:
-        'Select the option that most accurately reflects your current situation',
-      instruction: 'Choose only one option',
-      options: [
-        {
-          id: 'opt-1',
-          text: 'Minimal - I use basic tools like email and web browsing',
-          value: 1,
-        },
-        {
-          id: 'opt-2',
-          text: 'Basic - I use office applications and some online tools',
-          value: 2,
-        },
-        {
-          id: 'opt-3',
-          text: 'Intermediate - I use various digital tools for business operations',
-          value: 3,
-        },
-        {
-          id: 'opt-4',
-          text: 'Advanced - I integrate multiple digital solutions effectively',
-          value: 4,
-        },
-        {
-          id: 'opt-5',
-          text: 'Expert - I lead digital transformation initiatives',
-          value: 5,
-        },
-      ],
-      is_required: true,
-      step: 3,
-      required_score: 0,
-      module_ref: 'module-1',
-    },
-  })
-  example: CreateMultipleChoiceQuestionDto;
-}
-
-export class CheckboxExample {
-  @ApiProperty({
-    example: {
-      type: 'checkbox',
-      question:
-        'Which digital tools do you currently use in your business? (Select all that apply)',
-      description: 'Check all the tools you actively use',
-      instruction: 'You can select multiple options',
-      options: [
-        {
-          id: 'opt-1',
-          text: 'Email marketing tools (Mailchimp, Constant Contact)',
-          value: 1,
-        },
-        {
-          id: 'opt-2',
-          text: 'Social media management (Hootsuite, Buffer)',
-          value: 1,
-        },
-        {
-          id: 'opt-3',
-          text: 'Customer relationship management (CRM)',
-          value: 1,
-        },
-        {
-          id: 'opt-4',
-          text: 'E-commerce platforms (Shopify, WooCommerce)',
-          value: 1,
-        },
-        {
-          id: 'opt-5',
-          text: 'Accounting software (QuickBooks, Xero)',
-          value: 1,
-        },
-        {
-          id: 'opt-6',
-          text: 'Project management tools (Trello, Asana)',
-          value: 1,
-        },
-        { id: 'opt-7', text: 'Video conferencing (Zoom, Teams)', value: 1 },
-        {
-          id: 'opt-8',
-          text: 'Cloud storage (Google Drive, Dropbox)',
-          value: 1,
-        },
-      ],
-      min_selections: 1,
-      max_selections: 8,
-      step: 4,
-      module_ref: 'module-1',
-    },
-  })
-  example: CreateCheckboxQuestionDto;
-}
-
-export class ShortTextExample {
-  @ApiProperty({
-    example: {
-      type: 'short_text',
-      question: 'What is the name of your business?',
-      description: 'Please enter your business or organization name',
-      placeholder: 'e.g., ABC Marketing Solutions',
-      max_length: 100,
-      min_length: 2,
-      is_required: true,
-      step: 5,
-      module_ref: 'module-1',
-    },
-  })
-  example: CreateShortTextQuestionDto;
-}
-
-export class LongTextExample {
-  @ApiProperty({
-    example: {
-      type: 'long_text',
-      question: 'Describe your biggest challenges with digital transformation',
-      description:
-        'Please provide specific examples and explain how these challenges impact your business',
-      instruction: 'Write at least 3-4 sentences with specific examples',
-      placeholder:
-        'e.g., Our team struggles with adopting new software because of limited training time and resistance to change. We also face budget constraints when investing in new technologies...',
-      max_length: 1000,
-      min_length: 50,
-      rows: 5,
-      is_required: true,
-      step: 6,
-      module_ref: 'module-2',
-    },
-  })
-  example: CreateLongTextQuestionDto;
-}
-
-export class DropdownExample {
-  @ApiProperty({
-    example: {
-      type: 'dropdown',
-      question: 'What industry does your business primarily operate in?',
-      description: 'Select the industry that best matches your business',
-      placeholder: 'Select your industry',
-      options: [
-        { id: 'opt-1', text: 'Technology & Software', value: 1 },
-        { id: 'opt-2', text: 'Healthcare & Medical', value: 2 },
-        { id: 'opt-3', text: 'Education & Training', value: 3 },
-        { id: 'opt-4', text: 'Finance & Banking', value: 4 },
-        { id: 'opt-5', text: 'Manufacturing', value: 5 },
-        { id: 'opt-6', text: 'Retail & E-commerce', value: 6 },
-        { id: 'opt-7', text: 'Professional Services', value: 7 },
-        { id: 'opt-8', text: 'Agriculture', value: 8 },
-        { id: 'opt-9', text: 'Construction', value: 9 },
-        { id: 'opt-10', text: 'Other', value: 10 },
-      ],
-      is_required: true,
-      step: 7,
-      module_ref: 'module-2',
-    },
-  })
-  example: CreateDropdownQuestionDto;
-}
-
-export class MultipleChoiceGridExample {
-  @ApiProperty({
-    example: {
-      type: 'multiple_choice_grid',
-      question:
-        'For each business area below, how would you rate your current digital maturity?',
-      description:
-        'Rate each area based on your current digital adoption and effectiveness',
-      instruction: 'Select one option for each row',
-      grid_columns: [
-        { id: 'col-1', text: 'Not Digitized', value: 1 },
-        { id: 'col-2', text: 'Basic Digital Tools', value: 2 },
-        { id: 'col-3', text: 'Integrated Systems', value: 3 },
-        { id: 'col-4', text: 'Advanced Analytics', value: 4 },
-        { id: 'col-5', text: 'AI-Powered Optimization', value: 5 },
-      ],
-      grid_rows: [
-        { id: 'row-1', text: 'Customer relationship management' },
-        { id: 'row-2', text: 'Sales and marketing processes' },
-        { id: 'row-3', text: 'Financial management and reporting' },
-        { id: 'row-4', text: 'Inventory and supply chain management' },
-        { id: 'row-5', text: 'Employee communication and collaboration' },
-        { id: 'row-6', text: 'Data analysis and decision making' },
-      ],
-      is_required: true,
-      step: 8,
-      module_ref: 'module-3',
-    },
-  })
-  example: CreateMultipleChoiceGridQuestionDto;
 }
