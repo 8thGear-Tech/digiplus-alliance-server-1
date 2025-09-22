@@ -8,6 +8,7 @@ export enum DatabaseCollectionNames {
   QUESTION = 'questions',
   USER_ASSESSMENT = 'user_assessments',
   ServiceRecommendationRepository = 'ServiceRecommendationRepository',
+  BLOG = 'blogs',
 }
 
 export enum DatabaseModelNames {
@@ -22,6 +23,7 @@ export enum DatabaseModelNames {
   QUESTION = 'Question',
   USER_ASSESSMENT = 'UserAssessment',
   SERVICE_RECOMMENDATION = 'ServiceRecommendation',
+  BLOG = 'Blog',
 }
 
 export enum TokenTypes {
@@ -46,6 +48,7 @@ export enum Repositories {
   QuestionRepository = 'QuestionRepository',
   UserAssessmentRepository = 'UserAssessmentRepository',
   ServiceRecommendationRepository = 'ServiceRecommendationRepository',
+  BlogRepository = 'BlogRepository',
 }
 
 export enum NotificationTypes {

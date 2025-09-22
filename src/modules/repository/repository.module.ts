@@ -3,6 +3,9 @@ import { getModelToken } from '@nestjs/mongoose';
 import { BaseRepository } from './base.repository';
 import { DatabaseModelNames, Repositories } from 'src/shared/enums';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
+import { UserSchema } from '../user/user.schema';
+// import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema';
+import { BlogSchema } from '../admin/blog/blog.schema';
 
 @Module({
   imports: [MongooseModelsModule],
@@ -39,6 +42,15 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
       inject: [getModelToken(DatabaseModelNames.ASSESSMENT)],
     },
     {
+      provide: Repositories.BlogRepository,
+      useFactory: (blogModel) => new BaseRepository(blogModel),
+      inject: [getModelToken(DatabaseModelNames.BLOG)],
+    },
+    {
+      provide: DatabaseModelNames.USER,
+      useValue: UserSchema,
+    },
+    {
       provide: Repositories.AssessmentModuleRepository,
       useFactory: (assessmentModuleModel) =>
         new BaseRepository(assessmentModuleModel),
@@ -61,6 +73,10 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
         new BaseRepository(serviceRecommendationModel),
       inject: [getModelToken(DatabaseModelNames.SERVICE_RECOMMENDATION)],
     },
+    {
+      provide: DatabaseModelNames.BLOG,
+      useValue: BlogSchema,
+    },
   ],
   exports: [
     Repositories.UserRepository,
@@ -69,7 +85,7 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
     Repositories.RefreshTokenRepository,
     Repositories.TokenRepository,
     Repositories.AssessmentRepository,
-    Repositories.AssessmentModuleRepository, // Temporarily comment this out
+    Repositories.AssessmentModuleRepository,
     Repositories.QuestionRepository,
     Repositories.UserAssessmentRepository,
     Repositories.ServiceRecommendationRepository,

@@ -11,6 +11,7 @@ import { AssessmentSchema } from '../assessment/schemas/assessment.schema';
 import { AssessmentModuleSchema } from '../assessment/schemas/assessment-module.schema';
 import { UserAssessmentSchema } from '../assessment/schemas/user-assessment.schema';
 import { ServiceRecommendationSchema } from '../assessment/schemas/service-recommendation.schema';
+import { BlogSchema } from '../admin/blog/blog.schema';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ServiceRecommendationSchema } from '../assessment/schemas/service-recom
         name: DatabaseModelNames.SERVICE_RECOMMENDATION,
         schema: ServiceRecommendationSchema,
       },
+      { name: DatabaseModelNames.BLOG, schema: BlogSchema },
     ]),
   ],
   exports: [MongooseModule],
