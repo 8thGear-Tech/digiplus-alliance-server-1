@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { Module, ValidationError, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Cron, ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
@@ -24,8 +25,10 @@ import {
 } from './filters';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { AssessmentModule } from './modules/assessment/assessment.module';
 import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { BlogModule } from './modules/admin/blog/blog.module';
 
 dotenv.config();
 @Module({
@@ -95,8 +98,11 @@ dotenv.config();
     ScheduleModule.forRoot(),
     AuthModule,
     UserModule,
+    AssessmentModule,
     MongooseModelsModule,
     ProfileModule,
+    AssessmentModule,
+    BlogModule,
   ],
   controllers: [AppController],
   providers: [
