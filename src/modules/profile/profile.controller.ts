@@ -25,6 +25,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { BusinessProfileResDto } from './dtos/business-profile.res.dto';
+// import { AdminProfileResDto } from './dtos/admin-profile.res.dto';
 import { AdminProfileResDto } from './dtos/admin-profile.res.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -65,7 +66,7 @@ export class ProfileController {
 
   // New endpoint for admins
   @ApiOkResponse({
-    type: AdminProfileResDto, 
+    type: AdminProfileResDto,
   })
   @HttpCode(200)
   @Get('admin')
