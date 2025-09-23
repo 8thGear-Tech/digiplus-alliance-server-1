@@ -6,6 +6,11 @@ import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema'
 import { RefreshTokenSchema } from '../auth/schemas/refresh-token.schema';
 import { TokenSchema } from '../token/token.schema';
 import { AdminProfileSchema } from '../profile/schemas/admin.schema';
+import { QuestionSchema } from '../assessment/schemas/question.schema';
+import { AssessmentSchema } from '../assessment/schemas/assessment.schema';
+import { AssessmentModuleSchema } from '../assessment/schemas/assessment-module.schema';
+import { UserAssessmentSchema } from '../assessment/schemas/user-assessment.schema';
+import { ServiceRecommendationSchema } from '../assessment/schemas/service-recommendation.schema';
 import { BlogSchema } from '../admin/blog/blog.schema';
 
 @Module({
@@ -22,6 +27,20 @@ import { BlogSchema } from '../admin/blog/blog.schema';
       },
       { name: DatabaseModelNames.REFRESH_TOKEN, schema: RefreshTokenSchema },
       { name: DatabaseModelNames.TOKEN, schema: TokenSchema },
+      { name: DatabaseModelNames.QUESTION, schema: QuestionSchema },
+      { name: DatabaseModelNames.ASSESSMENT, schema: AssessmentSchema },
+      {
+        name: DatabaseModelNames.ASSESSMENT_MODULE,
+        schema: AssessmentModuleSchema,
+      },
+      {
+        name: DatabaseModelNames.USER_ASSESSMENT,
+        schema: UserAssessmentSchema,
+      },
+      {
+        name: DatabaseModelNames.SERVICE_RECOMMENDATION,
+        schema: ServiceRecommendationSchema,
+      },
       { name: DatabaseModelNames.BLOG, schema: BlogSchema },
     ]),
   ],

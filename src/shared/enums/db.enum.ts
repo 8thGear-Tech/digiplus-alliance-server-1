@@ -3,6 +3,11 @@ export enum DatabaseCollectionNames {
   TOKEN = 'tokens',
   ADMIN = 'admin',
   BUSINESS_OWNER = 'business_owner',
+  ASSESSMENT = 'assessments',
+  ASSESSMENT_MODULE = 'assessment_modules',
+  QUESTION = 'questions',
+  USER_ASSESSMENT = 'user_assessments',
+  ServiceRecommendationRepository = 'ServiceRecommendationRepository',
   BLOG = 'blogs',
 }
 
@@ -13,6 +18,11 @@ export enum DatabaseModelNames {
   NOTIFICATION = 'Notification',
   REFRESH_TOKEN = 'RefreshToken',
   TOKEN = 'Token',
+  ASSESSMENT = 'Assessment',
+  ASSESSMENT_MODULE = 'AssessmentModule',
+  QUESTION = 'Question',
+  USER_ASSESSMENT = 'UserAssessment',
+  SERVICE_RECOMMENDATION = 'ServiceRecommendation',
   BLOG = 'Blog',
 }
 
@@ -33,6 +43,11 @@ export enum Repositories {
   // NotificationRepository = 'NotificationRepository',
   RefreshTokenRepository = 'RefreshTokenRepository',
   TokenRepository = 'TokenRepository',
+  AssessmentRepository = 'AssessmentRepository',
+  AssessmentModuleRepository = 'AssessmentModuleRepository',
+  QuestionRepository = 'QuestionRepository',
+  UserAssessmentRepository = 'UserAssessmentRepository',
+  ServiceRecommendationRepository = 'ServiceRecommendationRepository',
   BlogRepository = 'BlogRepository',
 }
 

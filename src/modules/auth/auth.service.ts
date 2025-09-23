@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import * as bcrypt from 'bcryptjs';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -383,9 +385,7 @@ export class AuthService {
   ): Promise<LogoutResDto> {
     try {
       if (refreshToken) {
-        const decodedRefreshToken = this.jwtService.decode(
-          refreshToken,
-        ) as JwtUserPayload;
+        const decodedRefreshToken = this.jwtService.decode(refreshToken);
         if (decodedRefreshToken) {
           const foundRefreshToken = await this.refreshTokenRepository.findOne({
             token: refreshToken,
@@ -412,9 +412,7 @@ export class AuthService {
   async refreshToken(refreshToken: string): Promise<string> {
     try {
       // Verify the refresh token is valid and not expired
-      const decoded = (await this.jwtService.verifyAsync(
-        refreshToken,
-      )) as JwtUserPayload;
+      const decoded = await this.jwtService.verifyAsync(refreshToken);
 
       if (!decoded || !decoded.user) {
         throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
