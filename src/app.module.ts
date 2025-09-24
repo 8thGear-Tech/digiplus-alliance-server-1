@@ -29,6 +29,7 @@ import { AssessmentModule } from './modules/assessment/assessment.module';
 import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { BlogModule } from './modules/admin/blog/blog.module';
+import { ApplicationModule } from './modules/admin/application/application.module';
 
 dotenv.config();
 @Module({
@@ -103,11 +104,12 @@ dotenv.config();
     ProfileModule,
     AssessmentModule,
     BlogModule,
+    ApplicationModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_FILTER, useClass: ValidationExceptionFilter },
     { provide: APP_FILTER, useClass: BadRequestExceptionFilter },
     { provide: APP_FILTER, useClass: UnauthorizedExceptionFilter },

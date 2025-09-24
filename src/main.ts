@@ -1,10 +1,11 @@
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
 import { ConfigService } from '@nestjs/config';
 import { MongoExceptionFilter } from './filters/mongo-exception.filter';
+import { ValidationError } from 'class-validator';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,15 +17,11 @@ async function bootstrap() {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
-      exceptionFactory: (errors) => {
-        const messages = errors.map((err) =>
-          Object.values(err.constraints ?? {}).join(', '),
-        );
-        return new Error(messages.join(' - '));
-      },
     }),
   );
+
   app.useGlobalFilters(new MongoExceptionFilter());
+
   const configService = app.get(ConfigService);
 
   const port = configService.get<number>('PORT') || 3000;
@@ -33,6 +30,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'https://digplus.africa',
+      'https://digiplus-alliance-client.vercel.app/',
       'http:127.0.0.1:5500',
     ],
     credentials: true,
