@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ApplicationForm } from './schemas/application-form.schema';
-import { Submission } from './schemas/submission.schema';
-import { GetApplicationsDto } from './dtos/get-applications.dto';
+import { ApplicationForm } from '../schemas/application-form.schema';
+import { Submission } from '../schemas/submission.schema';
+import { GetApplicationsDto } from '../dtos/get-applications.dto';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
-} from './dtos/application-form.dto';
-import { QuestionValidationService } from './services/question-validation.service';
+} from '../dtos/application-form.dto';
+import { QuestionValidationService } from './question-validation.service';
 
 @Injectable()
 export class AdminApplicationService {
@@ -287,6 +287,7 @@ export class AdminApplicationService {
 
     return updatedForm;
   }
+  //
 
   async getApplicationList(dto: GetApplicationsDto): Promise<Submission[]> {
     const filter: any = {};

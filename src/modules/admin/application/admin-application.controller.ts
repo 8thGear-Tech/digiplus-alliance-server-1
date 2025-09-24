@@ -16,7 +16,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
-import { AdminApplicationService } from './admin-application.service';
+import { AdminApplicationService } from './services/admin-application.service';
 import { Submission } from './schemas/submission.schema';
 import {
   CreateApplicationFormDto,
