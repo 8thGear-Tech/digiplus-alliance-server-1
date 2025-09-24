@@ -77,6 +77,12 @@ import { BlogSchema } from '../admin/blog/blog.schema';
       provide: DatabaseModelNames.BLOG,
       useValue: BlogSchema,
     },
+    {
+      provide: Repositories.ApplicationFormRepository,
+      useFactory: (applicationFormModel) =>
+        new BaseRepository(applicationFormModel),
+      inject: [getModelToken(DatabaseModelNames.APPLICATION_FORM)],
+    },
   ],
   exports: [
     Repositories.UserRepository,
@@ -89,6 +95,8 @@ import { BlogSchema } from '../admin/blog/blog.schema';
     Repositories.QuestionRepository,
     Repositories.UserAssessmentRepository,
     Repositories.ServiceRecommendationRepository,
+    Repositories.BlogRepository,
+    Repositories.ApplicationFormRepository,
   ],
 })
 export class RepositoryModule {}

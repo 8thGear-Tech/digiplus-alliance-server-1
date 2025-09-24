@@ -24,6 +24,7 @@ export enum DatabaseModelNames {
   USER_ASSESSMENT = 'UserAssessment',
   SERVICE_RECOMMENDATION = 'ServiceRecommendation',
   BLOG = 'Blog',
+  APPLICATION_FORM = 'ApplicationForm',
 }
 
 export enum TokenTypes {
@@ -45,6 +46,28 @@ export enum ServicesTypes {
   innovation_and_co_creation_labs = 'Innovation & Co-creation Labs',
 }
 
+export enum QuestionType {
+  welcome_screen = 'welcome_screen',
+  multiple_choice = 'multiple_choice',
+  checkbox = 'checkbox',
+  short_text = 'short_text',
+  long_text = 'long_text',
+  dropdown = 'dropdown',
+  multiple_choice_grid = 'multiple_choice_grid',
+  file_upload = 'file_upload',
+}
+
+export enum ValidationRule {
+  NONE = 'none',
+  EMAIL = 'email',
+  PHONE = 'phone',
+  URL = 'url',
+  NUMBER_ONLY = 'number_only',
+  ALPHABETS_ONLY = 'alphabets_only',
+  MIN_LENGTH = 'min_length',
+  MAX_LENGTH = 'max_length',
+}
+
 export enum Repositories {
   UserRepository = 'UserRepository',
   BusinessOwnerRepository = 'BusinessOwnerRepository',
@@ -58,6 +81,7 @@ export enum Repositories {
   UserAssessmentRepository = 'UserAssessmentRepository',
   ServiceRecommendationRepository = 'ServiceRecommendationRepository',
   BlogRepository = 'BlogRepository',
+  ApplicationFormRepository = 'ApplicationFormRepository',
 }
 
 export enum NotificationTypes {
