@@ -93,7 +93,7 @@ export class UserApplicationController {
     description: 'The selected service was not found.',
   })
   async submitApplication(
-    @Param('slug') slug: string, //
+    @Param('slug') slug: string,
     @Body() submissionDto: SubmissionDto,
     @Req() req: any,
   ): Promise<UserSubmission> {
@@ -116,7 +116,7 @@ export class UserApplicationController {
     schema: {
       example: [
         {
-          id: '654c6a654c6a4654c6a654c6a',
+          id: 'student-admission-form', // Updated example to use slug
           welcome_title: 'Student Admission Form',
           welcome_description: 'This form is for new student admissions.',
         },
@@ -137,8 +137,6 @@ export class UserApplicationController {
     return this.userApplicationService.getLiveFormsList();
   }
 
-  //
-  // New endpoint to get the user's submissions
   @Get('submissions')
   @ApiOperation({
     summary: 'Get a list of all submissions for the authenticated user',
@@ -149,13 +147,13 @@ export class UserApplicationController {
     type: [UserSubmission],
   })
   async getUserSubmissions(@Req() req: any): Promise<UserSubmission[]> {
-    // Correctly get the user ID from the JWT payload
     const userId = req.user._id;
     return this.userApplicationService.getUserSubmissions(userId);
   }
 
-  @Get(':formId/questions')
-  @ApiOperation({ summary: 'Get questions for a specific form by ID' })
+  // UPDATED: Endpoint to use slug instead of formId
+  @Get(':slug/questions')
+  @ApiOperation({ summary: 'Get questions for a specific form by slug' })
   @ApiResponse({
     status: 200,
     description: 'Questions retrieved successfully.',
@@ -175,29 +173,7 @@ export class UserApplicationController {
             step: 1,
             module_ref: 'contact-module',
           },
-          {
-            type: 'short_text',
-            question: 'First Name?',
-            data_key: 'firstname',
-            is_required: true,
-            step: 2,
-            module_ref: 'contact-module',
-          },
-          {
-            type: 'short_text',
-            question: 'Last Name?',
-            data_key: 'lastname',
-            is_required: true,
-            step: 3,
-            module_ref: 'contact-module',
-          },
-          {
-            type: 'long_text',
-            question: 'Reason for applying',
-            data_key: 'reasonforapplying',
-            is_required: false,
-            step: 4,
-          },
+          // ... (other questions)
         ],
         isLive: true,
       },
@@ -205,11 +181,12 @@ export class UserApplicationController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Application form with the provided ID not found.',
+    description:
+      'Application form with the provided slug not found or is not live.',
   })
   async getFormQuestions(
-    @Param('formId') formId: string,
+    @Param('slug') slug: string,
   ): Promise<ApplicationForm> {
-    return this.userApplicationService.getFormById(formId);
+    return this.userApplicationService.getFormBySlug(slug);
   }
 }

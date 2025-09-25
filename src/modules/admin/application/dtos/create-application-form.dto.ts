@@ -13,18 +13,6 @@ import { Transform, Type } from 'class-transformer';
 import { QuestionType, ValidationRule } from 'src/shared/enums';
 import { Types } from 'mongoose';
 
-function customSlugify(text: string): string {
-  if (!text) return '';
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-// DTO for a single module
 export class ModuleDto {
   @ApiProperty({
     example: 'Business Information',
@@ -101,7 +89,6 @@ export class GridRowDto {
   text: string;
 }
 
-// Single unified question DTO that handles all question types
 export class QuestionDto {
   @ApiProperty({
     type: String,
@@ -110,7 +97,7 @@ export class QuestionDto {
     required: false,
   })
   @IsOptional()
-  _id?: Types.ObjectId; // Make sure to add the correct type
+  _id?: Types.ObjectId;
 
   @ApiProperty({
     enum: QuestionType,
@@ -127,52 +114,6 @@ export class QuestionDto {
   })
   @IsNotEmpty()
   @IsString()
-  @Transform(({ value, obj }) => {
-    // Auto-detect validation rules based on question text
-    if (obj && typeof value === 'string') {
-      const questionLower = value.toLowerCase();
-
-      // Auto-detect email questions
-      if (
-        questionLower.includes('email') ||
-        questionLower.includes('e-mail') ||
-        questionLower.includes('email address')
-      ) {
-        obj.auto_validation = ValidationRule.EMAIL;
-      }
-
-      // Auto-detect phone questions
-      else if (
-        questionLower.includes('phone') ||
-        questionLower.includes('telephone') ||
-        questionLower.includes('mobile') ||
-        questionLower.includes('contact number')
-      ) {
-        obj.auto_validation = ValidationRule.PHONE;
-      }
-
-      // Auto-detect URL questions
-      else if (
-        questionLower.includes('website') ||
-        questionLower.includes('url') ||
-        questionLower.includes('link') ||
-        questionLower.includes('portfolio')
-      ) {
-        obj.auto_validation = ValidationRule.URL;
-      }
-
-      // Auto-detect age/number questions
-      else if (
-        questionLower.includes('age') ||
-        questionLower.includes('years') ||
-        questionLower.includes('number of')
-      ) {
-        obj.auto_validation = ValidationRule.NUMBER_ONLY;
-      }
-    }
-
-    return value;
-  })
   question: string;
 
   @ApiProperty({
@@ -327,17 +268,18 @@ export class QuestionDto {
   })
   @IsOptional()
   @IsString()
-  @Transform(({ value, obj }) => {
-    // If the admin provides a data_key, use it.
-    if (value) {
-      return customSlugify(value);
-    }
-    // Otherwise, generate it from the question text.
-    if (obj.question) {
-      return customSlugify(obj.question);
-    }
-    return undefined;
-  })
+  //   @Transform(({ value, obj }) => {
+  //     // If the admin provides a data_key, use it.
+  //     if (value) {
+  //       return customSlugify(value);
+  //     }
+  //     // Otherwise, generate it from the question text.
+  //     if (obj.question) {
+  //       return customSlugify(obj.question);
+  //     }
+  //     return undefined;
+  //   }
+  // )
   data_key?: string;
 }
 

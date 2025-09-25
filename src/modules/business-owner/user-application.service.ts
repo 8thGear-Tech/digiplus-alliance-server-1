@@ -11,11 +11,11 @@ import { ApplicationForm } from '../admin/application/schemas/application-form.s
 import { FormListItemDto } from './form-list-item.dto';
 import { Service } from '../admin/services/schemas/service.schema';
 
-// Define a type for the data returned by the query
 type FormProjection = {
   _id: string;
   welcome_title: string;
   welcome_description?: string;
+  slug?: string;
 };
 
 @Injectable()
@@ -25,31 +25,33 @@ export class UserApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(UserSubmission.name)
     private submissionModel: Model<UserSubmission>,
-    @InjectModel(Service.name) // Add the Service model here
+    @InjectModel(Service.name)
     private serviceModel: Model<Service>,
   ) {}
 
   async getLiveFormsList(): Promise<FormListItemDto[]> {
     const forms = await this.applicationFormModel
       .find({ isLive: true })
-      .select('_id welcome_title welcome_description')
+      .select('slug welcome_title welcome_description')
       .exec();
 
     return forms.map((form) => {
       const projectedForm = form.toObject() as FormProjection;
+      if (!projectedForm.slug) {
+        throw new Error('Form is missing a required slug.');
+      }
       return {
-        id: projectedForm._id,
+        id: projectedForm.slug, // Use slug here
         welcome_title: projectedForm.welcome_title,
         welcome_description: projectedForm.welcome_description || '',
       };
     });
   }
 
-  async getFormById(formId: string): Promise<ApplicationForm> {
-    // Find the form by ID and ensure it is live
+  async getFormBySlug(slug: string): Promise<ApplicationForm> {
     const form = await this.applicationFormModel
       .findOne({
-        _id: formId,
+        slug: slug,
         isLive: true,
       })
       .exec();
@@ -60,42 +62,6 @@ export class UserApplicationService {
 
     return form;
   }
-
-  // async submitApplication(
-  //   submissionDto: SubmissionDto,
-  //   userId: string,
-  // ): Promise<UserSubmission> {
-  //   const { responses, service } = submissionDto;
-
-  //   console.log('Attempting to save new submission with data:', {
-  //     responses,
-  //     service,
-  //     userId,
-  //   });
-
-  //   // Find the service document to get its serviceType
-  //   const selectedService = await this.serviceModel.findOne({ name: service });
-
-  //   if (!selectedService) {
-  //     throw new NotFoundException('Selected service not found.');
-  //   }
-
-  //   const newSubmission = new this.submissionModel({
-  //     responses,
-  //     service,
-  //     userId: userId,
-  //     serviceType: selectedService.serviceType,
-  //   });
-
-  //   try {
-  //     const savedSubmission = await newSubmission.save();
-  //     console.log('Submission saved successfully:', savedSubmission);
-  //     return savedSubmission;
-  //   } catch (error) {
-  //     console.error('Failed to save submission:', error.message);
-  //     throw error;
-  //   }
-  // }
 
   async submitApplication(
     slug: string,
