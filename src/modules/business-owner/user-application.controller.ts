@@ -38,7 +38,7 @@ export class UserApplicationController {
     private readonly userApplicationService: UserApplicationService,
   ) {}
 
-  @Post('submit')
+  @Post(':slug/submit')
   @UseGuards(RolesGuard)
   @Roles(UserTypes.business_owner)
   @ApiOperation({ summary: 'Submit a new application form' })
@@ -93,17 +93,17 @@ export class UserApplicationController {
     description: 'The selected service was not found.',
   })
   async submitApplication(
+    @Param('slug') slug: string, //
     @Body() submissionDto: SubmissionDto,
     @Req() req: any,
   ): Promise<UserSubmission> {
     console.log('Authenticated user object:', req.user);
     const userId = req.user._id;
-    // Pass the userId from the authenticated request to the service
+
     return this.userApplicationService.submitApplication(
+      slug,
       submissionDto,
       userId,
-      //   req.user.userId,
-      // Change req.user.userId to req.user._id
     );
   }
 

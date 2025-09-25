@@ -13,6 +13,4 @@ export class GetFormQuestionsDto {
   @IsArray()
   @IsString({ each: true })
   formIds?: string[];
-
-  // You can add more filtering options here, such as date ranges, etc.
 }

@@ -7,9 +7,10 @@ import {
   ApplicationFormSchema,
 } from './schemas/application-form.schema';
 import {
-  AdminSubmission,
-  AdminSubmissionSchema,
-} from './schemas/admin-submission.schema';
+  UserSubmission,
+  UserSubmissionSchema,
+} from 'src/modules/business-owner/user-submission.schema';
+
 import { QuestionValidationService } from './services/question-validation.service';
 import { QuestionDataKeyService } from './services/question-data-key.service';
 
@@ -17,7 +18,7 @@ import { QuestionDataKeyService } from './services/question-data-key.service';
   imports: [
     MongooseModule.forFeature([
       { name: ApplicationForm.name, schema: ApplicationFormSchema },
-      { name: AdminSubmission.name, schema: AdminSubmissionSchema },
+      { name: UserSubmission.name, schema: UserSubmissionSchema },
     ]),
   ],
   controllers: [AdminApplicationController],

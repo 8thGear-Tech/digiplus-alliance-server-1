@@ -13,7 +13,6 @@ import { Transform, Type } from 'class-transformer';
 import { QuestionType, ValidationRule } from 'src/shared/enums';
 import { Types } from 'mongoose';
 
-// Paste the customSlugify function here or import it from a utility file
 function customSlugify(text: string): string {
   if (!text) return '';
   return text
@@ -378,6 +377,15 @@ export class CreateApplicationFormDto {
   @IsOptional()
   @IsString()
   welcome_instruction?: string;
+
+  @ApiProperty({
+    example: 'welcome-to-our-assessment',
+    description: 'A unique slug for the form.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  slug?: string;
 
   @ApiProperty({
     type: [ModuleDto],

@@ -7,12 +7,17 @@ import {
   ApplicationForm,
   ApplicationFormSchema,
 } from '../admin/application/schemas/application-form.schema';
+import {
+  Service,
+  ServiceSchema,
+} from '../admin/services/schemas/service.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: UserSubmission.name, schema: UserSubmissionSchema },
       { name: ApplicationForm.name, schema: ApplicationFormSchema },
+      { name: Service.name, schema: ServiceSchema },
     ]),
   ],
   controllers: [UserApplicationController],

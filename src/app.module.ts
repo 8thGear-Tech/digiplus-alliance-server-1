@@ -16,7 +16,7 @@ import * as dotenv from 'dotenv';
 
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import {
-  AllExceptionsFilter,
+  // AllExceptionsFilter,
   BadRequestExceptionFilter,
   ForbiddenExceptionFilter,
   NotFoundExceptionFilter,
@@ -31,6 +31,7 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { BlogModule } from './modules/admin/blog/blog.module';
 import { ApplicationModule } from './modules/admin/application/application.module';
 import { UserApplicationModule } from './modules/business-owner/user-application.module';
+import { ServicesModule } from './modules/admin/services/services.module';
 
 dotenv.config();
 @Module({
@@ -107,6 +108,7 @@ dotenv.config();
     BlogModule,
     ApplicationModule,
     UserApplicationModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [

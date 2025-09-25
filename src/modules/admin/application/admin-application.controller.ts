@@ -17,7 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
-import { AdminSubmission } from './schemas/admin-submission.schema';
+import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
@@ -106,8 +106,6 @@ export class AdminApplicationController {
         description:
           'An example of a form that uses checkbox questions for multiple selections.',
         value: {
-          //   title: 'Internship Application',
-          //   description: 'Form to apply for a software engineering internship.',
           modules: [
             {
               temp_id: 'skills-module',
@@ -288,6 +286,16 @@ export class AdminApplicationController {
   async createForm(
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
+    if (!dto.slug && dto.welcome_title) {
+      // You'll need to import or create a slugify function
+      const slugify = (text: string) =>
+        text
+          .toLowerCase()
+          .replace(/ /g, '-')
+          .replace(/[^\w-]+/g, '');
+      dto.slug = slugify(dto.welcome_title);
+    }
+
     if (dto.questions && dto.questions.length > 0) {
       dto.questions.forEach((question) => {
         // Always generate the data_key using the service
@@ -318,7 +326,7 @@ export class AdminApplicationController {
   @ApiResponse({
     status: 200,
     description: 'List of submissions retrieved successfully.',
-    type: [AdminSubmission],
+    type: [UserSubmission],
   })
   @ApiResponse({
     status: 404,
@@ -326,7 +334,7 @@ export class AdminApplicationController {
   })
   async getApplicationList(
     @Query() dto: GetApplicationsDto,
-  ): Promise<AdminSubmission[]> {
+  ): Promise<UserSubmission[]> {
     return this.adminApplicationService.getApplicationList(dto);
   }
 
@@ -408,7 +416,7 @@ export class AdminApplicationController {
   async updateApplicationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
-  ): Promise<AdminSubmission> {
+  ): Promise<UserSubmission> {
     return this.adminApplicationService.updateApplicationStatus(
       id,
       status as ApplicationStatus,
@@ -449,7 +457,7 @@ export class AdminApplicationController {
   async updatePaymentStatus(
     @Param('id') id: string,
     @Body('paymentStatus') paymentStatus: string,
-  ): Promise<AdminSubmission> {
+  ): Promise<UserSubmission> {
     return this.adminApplicationService.updatePaymentStatus(
       id,
       paymentStatus as PaymentStatus,
@@ -470,9 +478,7 @@ export class AdminApplicationController {
   async validateInput(
     @Body() dto: { questionId: string; value: string; formId: string },
   ) {
-    // This would be useful for real-time validation on the frontend
-    const form = await this.adminApplicationService.getApplicationList({}); // You'd need to get the specific form
-    // Implementation depends on your specific needs
+    const form = await this.adminApplicationService.getApplicationList({});
     return { isValid: true, errors: [] };
   }
 }

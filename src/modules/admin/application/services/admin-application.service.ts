@@ -5,7 +5,6 @@ import {
   ApplicationForm,
   EmbeddedQuestion,
 } from '../schemas/application-form.schema';
-import { AdminSubmission } from '../schemas/admin-submission.schema';
 import { GetApplicationsDto } from '../dtos/get-applications.dto';
 import {
   CreateApplicationFormDto,
@@ -15,55 +14,29 @@ import { QuestionValidationService } from './question-validation.service';
 import { QuestionDataKeyService } from './question-data-key.service';
 import { GetFormQuestionsDto } from '../dtos/get-form-questions.dto';
 import { ApplicationStatus, PaymentStatus } from 'src/shared/enums';
+import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 
 @Injectable()
 export class AdminApplicationService {
   constructor(
     @InjectModel(ApplicationForm.name)
     private applicationFormModel: Model<ApplicationForm>,
-    @InjectModel(AdminSubmission.name)
-    private submissionModel: Model<AdminSubmission>,
+    @InjectModel(UserSubmission.name)
+    private submissionModel: Model<UserSubmission>,
     private questionValidationService: QuestionValidationService, // Inject the service
     private questionDataKeyService: QuestionDataKeyService,
   ) {}
 
   private transformSubmissionsForList(submissions: any[]): any[] {
     return submissions.map((submission) => {
-      // Locate the required questions by their stable data_key
-      const questions = submission.formId.questions;
+      const firstName = submission.responses['firstname'] || 'N/A';
+      const lastName = submission.responses['lastname'] || '';
+      const email = submission.responses['email'] || 'N/A';
+      const paymentStatus =
+        submission.responses['payment_status'] || 'Not Paid';
 
-      const firstNameQuestion = questions.find(
-        (q) => q.data_key === 'first_name',
-      );
-      const lastNameQuestion = questions.find(
-        (q) => q.data_key === 'last_name',
-      );
-      const emailQuestion = questions.find((q) => q.data_key === 'email');
-      const paymentStatusQuestion = questions.find(
-        (q) => q.data_key === 'payment_status',
-      );
+      const name = `${firstName} ${lastName}`.trim();
 
-      // Find the corresponding answers using the question's _id
-      const findAnswer = (question) => {
-        if (!question) return null;
-        return submission.answers.find((ans) =>
-          ans.questionId.equals(question._id),
-        );
-      };
-
-      const firstNameAnswer = findAnswer(firstNameQuestion);
-      const lastNameAnswer = findAnswer(lastNameQuestion);
-      const emailAnswer = findAnswer(emailQuestion);
-      const paymentStatusAnswer = findAnswer(paymentStatusQuestion);
-
-      // Combine the first name and last name
-      const name =
-        `${firstNameAnswer?.answer || ''} ${lastNameAnswer?.answer || ''}`.trim() ||
-        'N/A';
-      const email = emailAnswer?.answer || 'N/A';
-      const paymentStatus = paymentStatusAnswer?.answer || 'Not Paid';
-
-      // Return the transformed object
       return {
         _id: submission._id,
         name,
@@ -75,6 +48,54 @@ export class AdminApplicationService {
       };
     });
   }
+  // private transformSubmissionsForList(submissions: any[]): any[] {
+  //   return submissions.map((submission) => {
+  //     // Locate the required questions by their stable data_key
+  //     const questions = submission.formId.questions;
+
+  //     const firstNameQuestion = questions.find(
+  //       (q) => q.data_key === 'first_name',
+  //     );
+  //     const lastNameQuestion = questions.find(
+  //       (q) => q.data_key === 'last_name',
+  //     );
+  //     const emailQuestion = questions.find((q) => q.data_key === 'email');
+  //     const paymentStatusQuestion = questions.find(
+  //       (q) => q.data_key === 'payment_status',
+  //     );
+
+  //     // Find the corresponding answers using the question's _id
+  //     const findAnswer = (question) => {
+  //       if (!question) return null;
+  //       return submission.answers.find((ans) =>
+  //         ans.questionId.equals(question._id),
+  //       );
+  //     };
+
+  //     const firstNameAnswer = findAnswer(firstNameQuestion);
+  //     const lastNameAnswer = findAnswer(lastNameQuestion);
+  //     const emailAnswer = findAnswer(emailQuestion);
+  //     const paymentStatusAnswer = findAnswer(paymentStatusQuestion);
+
+  //     // Combine the first name and last name
+  //     const name =
+  //       `${firstNameAnswer?.answer || ''} ${lastNameAnswer?.answer || ''}`.trim() ||
+  //       'N/A';
+  //     const email = emailAnswer?.answer || 'N/A';
+  //     const paymentStatus = paymentStatusAnswer?.answer || 'Not Paid';
+
+  //     // Return the transformed object
+  //     return {
+  //       _id: submission._id,
+  //       name,
+  //       email,
+  //       'Service/training type': submission.serviceType,
+  //       status: submission.status,
+  //       timestamp: new Date(submission.createdAt).toLocaleString(),
+  //       'Payment Stat': paymentStatus,
+  //     };
+  //   });
+  // }
 
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
     const processedQuestions =
@@ -162,7 +183,7 @@ export class AdminApplicationService {
       throw new NotFoundException('Application form not found.');
     }
 
-    // ... (top-level fields and modules processing remain the same)
+    Object.assign(form, dto);
 
     if (dto.questions) {
       const incomingQuestionIds = new Set(
@@ -233,16 +254,12 @@ export class AdminApplicationService {
   async getApplicationList(dto: GetApplicationsDto): Promise<any[]> {
     const filter: any = {};
     if (dto.serviceType) {
-      filter.serviceType = dto.serviceType;
+      filter.serviceType = new RegExp(dto.serviceType.trim(), 'i');
     }
 
-    // 1. Fetch submissions and populate the related form
     const submissions = await this.submissionModel
       .find(filter)
-      .populate({
-        path: 'formId',
-        select: 'questions', // We only need the questions from the form
-      })
+
       .exec();
 
     if (submissions.length === 0) {
@@ -251,14 +268,13 @@ export class AdminApplicationService {
       );
     }
 
-    // 2. Transform the data
     return this.transformSubmissionsForList(submissions);
   }
 
   async updateApplicationStatus(
     id: string,
     status: ApplicationStatus,
-  ): Promise<AdminSubmission> {
+  ): Promise<UserSubmission> {
     const updated = await this.submissionModel.findByIdAndUpdate(
       id,
       { status },
@@ -275,7 +291,7 @@ export class AdminApplicationService {
   async updatePaymentStatus(
     id: string,
     paymentStatus: PaymentStatus,
-  ): Promise<AdminSubmission> {
+  ): Promise<UserSubmission> {
     const updated = await this.submissionModel.findByIdAndUpdate(
       id,
       { payment_status: paymentStatus },
@@ -289,7 +305,6 @@ export class AdminApplicationService {
     return updated;
   }
 
-  // New method to get validation rules for a specific form (useful for frontend)
   async getFormValidationRules(formId: string): Promise<any> {
     const form = await this.applicationFormModel.findById(formId);
     if (!form) {

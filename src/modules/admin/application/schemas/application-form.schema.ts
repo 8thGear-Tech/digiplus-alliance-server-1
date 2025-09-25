@@ -69,7 +69,7 @@ export class EmbeddedModule {
   description: string;
 
   @Prop({ required: true })
-  temp_id: string; // This will be used to reference questions
+  temp_id: string; // This will be used to reference questionss
 
   @Prop()
   order?: number; // Optional order field
@@ -157,6 +157,9 @@ export class ApplicationForm extends Document {
 
   @Prop()
   welcome_button_text?: string; // Added this field
+
+  @Prop({ required: true, unique: true })
+  slug: string; // Add a unique slug field
 
   @Prop({ type: [EmbeddedModuleSchema], default: [] })
   modules: EmbeddedModule[];
