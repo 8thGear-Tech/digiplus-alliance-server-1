@@ -8,6 +8,7 @@ import {
 } from './schemas/application-form.schema';
 import { Submission, SubmissionSchema } from './schemas/submission.schema';
 import { QuestionValidationService } from './services/question-validation.service';
+import { QuestionDataKeyService } from './services/question-data-key.service';
 
 @Module({
   imports: [
@@ -17,7 +18,15 @@ import { QuestionValidationService } from './services/question-validation.servic
     ]),
   ],
   controllers: [AdminApplicationController],
-  providers: [AdminApplicationService, QuestionValidationService],
-  exports: [AdminApplicationService, QuestionValidationService],
+  providers: [
+    AdminApplicationService,
+    QuestionValidationService,
+    QuestionDataKeyService,
+  ],
+  exports: [
+    AdminApplicationService,
+    QuestionValidationService,
+    QuestionDataKeyService,
+  ],
 })
 export class ApplicationModule {}

@@ -24,7 +24,11 @@
 
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, SchemaTypes, Types } from 'mongoose';
-import { ServicesTypes } from 'src/shared/enums';
+import {
+  ApplicationStatus,
+  PaymentStatus,
+  ServicesTypes,
+} from 'src/shared/enums';
 
 @Schema({ timestamps: true })
 export class Submission extends Document {
@@ -43,8 +47,19 @@ export class Submission extends Document {
   })
   answers: { questionId: Types.ObjectId; answer: any }[];
 
-  @Prop({ required: true, default: 'Submitted' })
-  status: string;
+  @Prop({
+    type: String,
+    enum: Object.values(ApplicationStatus),
+    default: ApplicationStatus.Submitted,
+  })
+  status: ApplicationStatus;
+
+  @Prop({
+    type: String,
+    enum: Object.values(PaymentStatus),
+    default: PaymentStatus.NotPaid,
+  })
+  payment_status: PaymentStatus;
 }
 
 export const SubmissionSchema = SchemaFactory.createForClass(Submission);

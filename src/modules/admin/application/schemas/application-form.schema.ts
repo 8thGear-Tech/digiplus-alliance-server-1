@@ -137,6 +137,10 @@ export class EmbeddedQuestion {
 
   @Prop({ required: true })
   module_ref: string;
+
+  // Add the data_key property here
+  @Prop({ type: String, required: false })
+  data_key?: string;
 }
 const EmbeddedQuestionSchema = SchemaFactory.createForClass(EmbeddedQuestion);
 

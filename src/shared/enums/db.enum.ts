@@ -57,6 +57,21 @@ export enum QuestionType {
   file_upload = 'file_upload',
 }
 
+// src/shared/enums.ts
+
+export enum ApplicationStatus {
+  Submitted = 'Submitted',
+  BeingProcessed = 'Being Processed',
+  Approved = 'Approved',
+  Rejected = 'Rejected',
+  Completed = 'Completed',
+}
+
+export enum PaymentStatus {
+  Paid = 'Paid',
+  NotPaid = 'Not Paid',
+}
+
 export enum ValidationRule {
   NONE = 'none',
   EMAIL = 'email',

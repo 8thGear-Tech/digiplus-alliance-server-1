@@ -13,6 +13,18 @@ import { Transform, Type } from 'class-transformer';
 import { QuestionType, ValidationRule } from 'src/shared/enums';
 import { Types } from 'mongoose';
 
+// Paste the customSlugify function here or import it from a utility file
+function customSlugify(text: string): string {
+  if (!text) return '';
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 // DTO for a single module
 export class ModuleDto {
   @ApiProperty({
@@ -308,6 +320,26 @@ export class QuestionDto {
   @IsArray()
   @IsString({ each: true })
   accepted_file_types?: string[];
+
+  @ApiProperty({
+    example: 'first-name',
+    description: 'A unique key to programmatically identify this question.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value, obj }) => {
+    // If the admin provides a data_key, use it.
+    if (value) {
+      return customSlugify(value);
+    }
+    // Otherwise, generate it from the question text.
+    if (obj.question) {
+      return customSlugify(obj.question);
+    }
+    return undefined;
+  })
+  data_key?: string;
 }
 
 export class CreateApplicationFormDto {

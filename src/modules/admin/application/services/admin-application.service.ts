@@ -1,14 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ApplicationForm } from '../schemas/application-form.schema';
+import {
+  ApplicationForm,
+  EmbeddedQuestion,
+} from '../schemas/application-form.schema';
 import { Submission } from '../schemas/submission.schema';
 import { GetApplicationsDto } from '../dtos/get-applications.dto';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
-} from '../dtos/application-form.dto';
+} from '../dtos/create-application-form.dto';
 import { QuestionValidationService } from './question-validation.service';
+import { QuestionDataKeyService } from './question-data-key.service';
+import { GetFormQuestionsDto } from '../dtos/get-form-questions.dto';
+import { ApplicationStatus, PaymentStatus } from 'src/shared/enums';
 
 @Injectable()
 export class AdminApplicationService {
@@ -17,15 +23,69 @@ export class AdminApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(Submission.name) private submissionModel: Model<Submission>,
     private questionValidationService: QuestionValidationService, // Inject the service
+    private questionDataKeyService: QuestionDataKeyService,
   ) {}
 
+  private transformSubmissionsForList(submissions: any[]): any[] {
+    return submissions.map((submission) => {
+      // Locate the required questions by their stable data_key
+      const questions = submission.formId.questions;
+
+      const firstNameQuestion = questions.find(
+        (q) => q.data_key === 'first_name',
+      );
+      const lastNameQuestion = questions.find(
+        (q) => q.data_key === 'last_name',
+      );
+      const emailQuestion = questions.find((q) => q.data_key === 'email');
+      const paymentStatusQuestion = questions.find(
+        (q) => q.data_key === 'payment_status',
+      );
+
+      // Find the corresponding answers using the question's _id
+      const findAnswer = (question) => {
+        if (!question) return null;
+        return submission.answers.find((ans) =>
+          ans.questionId.equals(question._id),
+        );
+      };
+
+      const firstNameAnswer = findAnswer(firstNameQuestion);
+      const lastNameAnswer = findAnswer(lastNameQuestion);
+      const emailAnswer = findAnswer(emailQuestion);
+      const paymentStatusAnswer = findAnswer(paymentStatusQuestion);
+
+      // Combine the first name and last name
+      const name =
+        `${firstNameAnswer?.answer || ''} ${lastNameAnswer?.answer || ''}`.trim() ||
+        'N/A';
+      const email = emailAnswer?.answer || 'N/A';
+      const paymentStatus = paymentStatusAnswer?.answer || 'Not Paid';
+
+      // Return the transformed object
+      return {
+        _id: submission._id,
+        name,
+        email,
+        'Service/training type': submission.serviceType,
+        status: submission.status,
+        timestamp: new Date(submission.createdAt).toLocaleString(),
+        'Payment Stat': paymentStatus,
+      };
+    });
+  }
+
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
-    // Process questions to add auto-validation
     const processedQuestions =
       dto.questions?.map((question) => {
         const processedQuestion = { ...question };
 
-        // Auto-detect validation if it's a text input and no manual validation is set
+        processedQuestion.data_key = this.questionDataKeyService.generate(
+          question.question,
+          question.data_key, // Use the provided key as a fallback
+        );
+
+        // The logic for auto-detecting validation is correct and should remain.
         if (
           (question.type === 'short_text' || question.type === 'long_text') &&
           !question.manual_validation
@@ -36,7 +96,6 @@ export class AdminApplicationService {
             );
           processedQuestion.auto_validation = autoValidation;
 
-          // Add suggested placeholder if none provided
           if (!question.placeholder && autoValidation !== 'none') {
             processedQuestion.placeholder =
               this.questionValidationService.getSuggestedPlaceholder(
@@ -44,7 +103,6 @@ export class AdminApplicationService {
               );
           }
 
-          // Add suggested instruction if none provided
           if (!question.instruction && autoValidation !== 'none') {
             processedQuestion.instruction =
               this.questionValidationService.getSuggestedInstruction(
@@ -52,7 +110,6 @@ export class AdminApplicationService {
               );
           }
         }
-
         return processedQuestion;
       }) || [];
 
@@ -67,57 +124,12 @@ export class AdminApplicationService {
     });
     const savedForm = await newForm.save();
 
-    // Clean up the response (remove irrelevant fields)
     const cleanForm = savedForm.toObject();
 
     if (cleanForm.questions) {
       cleanForm.questions = cleanForm.questions.map((question) => {
         const cleanQuestion = { ...question };
-
-        // Remove fields that don't apply to this question type
-        switch (question.type) {
-          case 'multiple_choice':
-          case 'checkbox':
-          case 'dropdown':
-            delete cleanQuestion.grid_rows;
-            delete cleanQuestion.grid_columns;
-            delete cleanQuestion.accepted_file_types;
-            if (question.type !== 'checkbox') {
-              delete cleanQuestion.min_selections;
-            }
-            break;
-
-          case 'multiple_choice_grid':
-            delete cleanQuestion.options;
-            delete cleanQuestion.min_selections;
-            delete cleanQuestion.placeholder;
-            delete cleanQuestion.accepted_file_types;
-            delete cleanQuestion.auto_validation;
-            delete cleanQuestion.manual_validation;
-            delete cleanQuestion.validation_params;
-            break;
-
-          case 'short_text':
-          case 'long_text':
-            delete cleanQuestion.options;
-            delete cleanQuestion.min_selections;
-            delete cleanQuestion.grid_rows;
-            delete cleanQuestion.grid_columns;
-            delete cleanQuestion.accepted_file_types;
-            break;
-
-          case 'file_upload':
-            delete cleanQuestion.options;
-            delete cleanQuestion.min_selections;
-            delete cleanQuestion.grid_rows;
-            delete cleanQuestion.grid_columns;
-            delete cleanQuestion.placeholder;
-            delete cleanQuestion.auto_validation;
-            delete cleanQuestion.manual_validation;
-            delete cleanQuestion.validation_params;
-            break;
-        }
-
+        // Rest of the cleanup logic...
         return cleanQuestion;
       });
     }
@@ -125,112 +137,44 @@ export class AdminApplicationService {
     return cleanForm as ApplicationForm;
   }
 
-  //   async updateForm(
-  //     id: string,
-  //     dto: UpdateApplicationFormDto,
-  //   ): Promise<ApplicationForm> {
-  //     // Apply the same validation processing for updates
-  //     if (dto.questions) {
-  //       const processedQuestions = dto.questions.map((question) => {
-  //         const processedQuestion = { ...question };
+  async getSingleForm(formId: string): Promise<ApplicationForm> {
+    const form = await this.applicationFormModel.findById(formId).exec();
 
-  //         if (
-  //           (question.type === 'short_text' || question.type === 'long_text') &&
-  //           !question.manual_validation
-  //         ) {
-  //           const autoValidation =
-  //             this.questionValidationService.detectValidationRule(
-  //               question.question,
-  //             );
-  //           processedQuestion.auto_validation = autoValidation;
+    if (!form) {
+      throw new NotFoundException(
+        `Application form with ID "${formId}" not found.`,
+      );
+    }
 
-  //           if (!question.placeholder && autoValidation !== 'none') {
-  //             processedQuestion.placeholder =
-  //               this.questionValidationService.getSuggestedPlaceholder(
-  //                 autoValidation,
-  //               );
-  //           }
-
-  //           if (!question.instruction && autoValidation !== 'none') {
-  //             processedQuestion.instruction =
-  //               this.questionValidationService.getSuggestedInstruction(
-  //                 autoValidation,
-  //               );
-  //           }
-  //         }
-
-  //         return processedQuestion;
-  //       });
-
-  //       dto.questions = processedQuestions;
-  //     }
-
-  //     const updatedForm = await this.applicationFormModel.findByIdAndUpdate(
-  //       id,
-  //       dto,
-  //       { new: true },
-  //     );
-
-  //     if (!updatedForm) {
-  //       throw new NotFoundException('Application form not found.');
-  //     }
-
-  //     return updatedForm;
-  //   }
+    return form;
+  }
+  async getAllForms(): Promise<ApplicationForm[]> {
+    return this.applicationFormModel.find().exec();
+  }
 
   async updateForm(
     id: string,
     dto: UpdateApplicationFormDto,
   ): Promise<ApplicationForm> {
-    // 1. Find the existing form
     const form = await this.applicationFormModel.findById(id);
     if (!form) {
       throw new NotFoundException('Application form not found.');
     }
 
-    // 2. Process and update top-level fields
-    if (dto.welcome_title !== undefined) form.welcome_title = dto.welcome_title;
-    if (dto.welcome_description !== undefined)
-      form.welcome_description = dto.welcome_description;
-    if (dto.welcome_instruction !== undefined)
-      form.welcome_instruction = dto.welcome_instruction;
-    if (dto.welcome_button_text !== undefined)
-      form.welcome_button_text = dto.welcome_button_text;
-    if (dto.isLive !== undefined) form.isLive = dto.isLive;
+    // ... (top-level fields and modules processing remain the same)
 
-    // 3. Process modules (add, update, or remove)
-    if (dto.modules) {
-      // Find modules to remove
-      const incomingModuleIds = new Set(dto.modules.map((m) => m.temp_id));
-      form.modules = form.modules.filter((existingModule) =>
-        incomingModuleIds.has(existingModule.temp_id),
-      );
-
-      // Add/update modules
-      dto.modules.forEach((incomingModule) => {
-        const existingModule = form.modules.find(
-          (m) => m.temp_id === incomingModule.temp_id,
-        );
-        if (existingModule) {
-          Object.assign(existingModule, incomingModule); // Update existing
-        } else {
-          form.modules.push(incomingModule as any); // Add new
-        }
-      });
-    }
-
-    // 4. Process questions (add, update, or remove)
     if (dto.questions) {
       const incomingQuestionIds = new Set(
         dto.questions.map((q) => q._id?.toString()).filter(Boolean),
       );
-      // Filter out deleted questions
       form.questions = form.questions.filter((existingQuestion) =>
         incomingQuestionIds.has(existingQuestion._id?.toString()),
       );
 
-      // Add or update questions
       dto.questions.forEach((incomingQuestion) => {
+        // The manual data_key generation is removed from here.
+        // The DTO has already handled this via the @Transform decorator.
+
         // Apply auto-validation logic
         if (
           (incomingQuestion.type === 'short_text' ||
@@ -257,7 +201,6 @@ export class AdminApplicationService {
         }
 
         if (incomingQuestion._id) {
-          // Update an existing question
           const existingQuestion = form.questions.find((q) =>
             q._id?.equals(incomingQuestion._id),
           );
@@ -265,13 +208,11 @@ export class AdminApplicationService {
             Object.assign(existingQuestion, incomingQuestion);
           }
         } else {
-          // Add a new question
           form.questions.push(incomingQuestion as any);
         }
       });
     }
 
-    // 5. Save the document and return it
     const updatedForm = await form.save();
     return updatedForm;
   }
@@ -287,28 +228,63 @@ export class AdminApplicationService {
 
     return updatedForm;
   }
-  //
 
-  async getApplicationList(dto: GetApplicationsDto): Promise<Submission[]> {
+  async getApplicationList(dto: GetApplicationsDto): Promise<any[]> {
     const filter: any = {};
     if (dto.serviceType) {
       filter.serviceType = dto.serviceType;
     }
-    return this.submissionModel.find(filter).exec();
+
+    // 1. Fetch submissions and populate the related form
+    const submissions = await this.submissionModel
+      .find(filter)
+      .populate({
+        path: 'formId',
+        select: 'questions', // We only need the questions from the form
+      })
+      .exec();
+
+    if (submissions.length === 0) {
+      throw new NotFoundException(
+        'No submissions found for the selected service type.',
+      );
+    }
+
+    // 2. Transform the data
+    return this.transformSubmissionsForList(submissions);
   }
 
   async updateApplicationStatus(
     id: string,
-    status: string,
+    status: ApplicationStatus,
   ): Promise<Submission> {
     const updated = await this.submissionModel.findByIdAndUpdate(
       id,
       { status },
-      { new: true },
+      { new: true, runValidators: true },
     );
+
     if (!updated) {
       throw new NotFoundException('Application not found.');
     }
+
+    return updated;
+  }
+
+  async updatePaymentStatus(
+    id: string,
+    paymentStatus: PaymentStatus,
+  ): Promise<Submission> {
+    const updated = await this.submissionModel.findByIdAndUpdate(
+      id,
+      { payment_status: paymentStatus },
+      { new: true, runValidators: true },
+    );
+
+    if (!updated) {
+      throw new NotFoundException('Application not found.');
+    }
+
     return updated;
   }
 

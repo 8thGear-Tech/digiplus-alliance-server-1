@@ -21,13 +21,18 @@ import { Submission } from './schemas/submission.schema';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
-} from './dtos/application-form.dto';
-import { ApplicationForm } from './schemas/application-form.schema';
+} from './dtos/create-application-form.dto';
+import {
+  ApplicationForm,
+  EmbeddedQuestion,
+} from './schemas/application-form.schema';
 import { GetApplicationsDto } from './dtos/get-applications.dto';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { UserTypes } from 'src/shared/enums';
+import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
+import { QuestionDataKeyService } from './services/question-data-key.service';
+import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -36,6 +41,7 @@ import { PublishFormDto } from './dtos/publish-form.dto';
 export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
+    private readonly questionDataKeyService: QuestionDataKeyService,
   ) {}
 
   // Admin Routes for managing forms
@@ -282,7 +288,41 @@ export class AdminApplicationController {
   async createForm(
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
+    if (dto.questions && dto.questions.length > 0) {
+      dto.questions.forEach((question) => {
+        // Always generate the data_key using the service
+        question.data_key = this.questionDataKeyService.generate(
+          question.question,
+          question.data_key, // The second argument handles cases where the admin manually provided a key
+        );
+      });
+    }
+
+    // Now, call the service with the DTO, which should have the data_key populated.
     return this.adminApplicationService.createForm(dto);
+  }
+
+  @Get('forms')
+  @ApiOperation({ summary: 'Get a list of all application forms' })
+  @ApiResponse({
+    status: 200,
+    description: 'Forms retrieved successfully.',
+    type: [ApplicationForm],
+  })
+  async getMultipleForms(): Promise<ApplicationForm[]> {
+    return this.adminApplicationService.getAllForms();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single application form by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Form retrieved successfully.',
+    type: ApplicationForm,
+  })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  async getSingleForm(@Param('id') id: string): Promise<ApplicationForm> {
+    return this.adminApplicationService.getSingleForm(id);
   }
 
   @Patch(':id')
@@ -313,10 +353,17 @@ export class AdminApplicationController {
     return this.adminApplicationService.publishForm(id, isLive);
   }
 
-  // Common Routes for submissions
   @Get('list')
   @ApiOperation({ summary: 'Get a list of all submitted applications' })
-  @ApiResponse({ status: 200, type: [Submission] })
+  @ApiResponse({
+    status: 200,
+    description: 'List of submissions retrieved successfully.',
+    type: [Submission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No submissions found for the selected filter.',
+  })
   async getApplicationList(
     @Query() dto: GetApplicationsDto,
   ): Promise<Submission[]> {
@@ -325,12 +372,88 @@ export class AdminApplicationController {
 
   @Patch('status/:id')
   @ApiOperation({ summary: 'Update the status of a specific application' })
-  @ApiResponse({ status: 200, type: Submission })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [
+            'Submitted',
+            'Being Processed',
+            'Approved',
+            'Rejected',
+            'Completed',
+          ],
+          example: 'Approved',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        serviceType: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Not Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
   async updateApplicationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
   ): Promise<Submission> {
-    return this.adminApplicationService.updateApplicationStatus(id, status);
+    return this.adminApplicationService.updateApplicationStatus(
+      id,
+      status as ApplicationStatus,
+    );
+  }
+
+  @Patch('payment-status/:id')
+  @ApiOperation({
+    summary: 'Update the payment status of a specific application',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        paymentStatus: {
+          type: 'string',
+          enum: ['Paid', 'Not Paid'],
+          example: 'Paid',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission payment status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        serviceType: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: string,
+  ): Promise<Submission> {
+    return this.adminApplicationService.updatePaymentStatus(
+      id,
+      paymentStatus as PaymentStatus,
+    );
   }
 
   //validation
