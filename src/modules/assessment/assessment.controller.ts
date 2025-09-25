@@ -25,10 +25,6 @@ import {
   CreateAssessmentDto,
   CreateAssessmentResDto,
 } from './dto/create-assessment.dto';
-// import {
-//   SubmitAssessmentDto,
-//   SubmitAssessmentResDto,
-// } from './dto/submit-assessment.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserTypes } from '../../shared/enums';

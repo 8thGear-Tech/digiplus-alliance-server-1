@@ -16,7 +16,7 @@ import * as dotenv from 'dotenv';
 
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import {
-  AllExceptionsFilter,
+  // AllExceptionsFilter,
   BadRequestExceptionFilter,
   ForbiddenExceptionFilter,
   NotFoundExceptionFilter,
@@ -30,6 +30,7 @@ import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.
 import { ProfileModule } from './modules/profile/profile.module';
 import { BlogModule } from './modules/admin/blog/blog.module';
 import { ApplicationModule } from './modules/admin/application/application.module';
+import { ServicesModule } from './modules/admin/services/services.module';
 
 dotenv.config();
 @Module({
@@ -105,6 +106,7 @@ dotenv.config();
     AssessmentModule,
     BlogModule,
     ApplicationModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [
