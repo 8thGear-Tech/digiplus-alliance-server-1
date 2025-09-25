@@ -48,66 +48,21 @@ export class AdminApplicationService {
       };
     });
   }
-  // private transformSubmissionsForList(submissions: any[]): any[] {
-  //   return submissions.map((submission) => {
-  //     // Locate the required questions by their stable data_key
-  //     const questions = submission.formId.questions;
-
-  //     const firstNameQuestion = questions.find(
-  //       (q) => q.data_key === 'first_name',
-  //     );
-  //     const lastNameQuestion = questions.find(
-  //       (q) => q.data_key === 'last_name',
-  //     );
-  //     const emailQuestion = questions.find((q) => q.data_key === 'email');
-  //     const paymentStatusQuestion = questions.find(
-  //       (q) => q.data_key === 'payment_status',
-  //     );
-
-  //     // Find the corresponding answers using the question's _id
-  //     const findAnswer = (question) => {
-  //       if (!question) return null;
-  //       return submission.answers.find((ans) =>
-  //         ans.questionId.equals(question._id),
-  //       );
-  //     };
-
-  //     const firstNameAnswer = findAnswer(firstNameQuestion);
-  //     const lastNameAnswer = findAnswer(lastNameQuestion);
-  //     const emailAnswer = findAnswer(emailQuestion);
-  //     const paymentStatusAnswer = findAnswer(paymentStatusQuestion);
-
-  //     // Combine the first name and last name
-  //     const name =
-  //       `${firstNameAnswer?.answer || ''} ${lastNameAnswer?.answer || ''}`.trim() ||
-  //       'N/A';
-  //     const email = emailAnswer?.answer || 'N/A';
-  //     const paymentStatus = paymentStatusAnswer?.answer || 'Not Paid';
-
-  //     // Return the transformed object
-  //     return {
-  //       _id: submission._id,
-  //       name,
-  //       email,
-  //       'Service/training type': submission.serviceType,
-  //       status: submission.status,
-  //       timestamp: new Date(submission.createdAt).toLocaleString(),
-  //       'Payment Stat': paymentStatus,
-  //     };
-  //   });
-  // }
 
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
+    const existingDataKeys: string[] = [];
+
     const processedQuestions =
       dto.questions?.map((question) => {
         const processedQuestion = { ...question };
 
         processedQuestion.data_key = this.questionDataKeyService.generate(
           question.question,
-          question.data_key, // Use the provided key as a fallback
+          existingDataKeys,
         );
 
-        // The logic for auto-detecting validation is correct and should remain.
+        existingDataKeys.push(processedQuestion.data_key);
+
         if (
           (question.type === 'short_text' || question.type === 'long_text') &&
           !question.manual_validation
@@ -135,15 +90,28 @@ export class AdminApplicationService {
         return processedQuestion;
       }) || [];
 
+    const welcomeTitle = dto.welcome_title || 'new-form';
+    let newSlug = this.questionDataKeyService.generateSlug(welcomeTitle);
+
+    let slugExists = await this.applicationFormModel.findOne({ slug: newSlug });
+    let counter = 1;
+    while (slugExists) {
+      newSlug = `${this.questionDataKeyService.generateSlug(welcomeTitle)}-${counter}`;
+      slugExists = await this.applicationFormModel.findOne({ slug: newSlug });
+      counter++;
+    }
+
     const processedDto = {
       ...dto,
       questions: processedQuestions,
+      slug: newSlug,
     };
 
     const newForm = new this.applicationFormModel({
       ...processedDto,
       isLive: false,
     });
+
     const savedForm = await newForm.save();
 
     const cleanForm = savedForm.toObject();
@@ -151,7 +119,6 @@ export class AdminApplicationService {
     if (cleanForm.questions) {
       cleanForm.questions = cleanForm.questions.map((question) => {
         const cleanQuestion = { ...question };
-        // Rest of the cleanup logic...
         return cleanQuestion;
       });
     }

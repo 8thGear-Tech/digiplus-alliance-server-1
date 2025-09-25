@@ -44,7 +44,6 @@ export class AdminApplicationController {
     private readonly questionDataKeyService: QuestionDataKeyService,
   ) {}
 
-  // Admin Routes for managing forms
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -65,7 +64,6 @@ export class AdminApplicationController {
             'This assessment helps us understand your needs.',
           welcome_instruction:
             'Please read the instructions carefully before proceeding. This will take about 10–15 minutes.\n\nTip: You can use the "Back" button anytime to review your answers.',
-          //   is_active: true,
         },
       },
       'Multiple Choice Form': {
@@ -73,8 +71,6 @@ export class AdminApplicationController {
         description:
           'An example of an application form using multiple choice questions.',
         value: {
-          //   title: 'University Admission Application',
-          //   description: 'Initial student information form.',
           modules: [
             {
               temp_id: 'personal-info-module',
@@ -98,7 +94,6 @@ export class AdminApplicationController {
               module_ref: 'personal-info-module',
             },
           ],
-          //   is_active: true,
         },
       },
       'Checkbox Form': {
@@ -137,8 +132,6 @@ export class AdminApplicationController {
         summary: 'Form with a Short Text Question',
         description: 'An example of a form that includes a short text input.',
         value: {
-          //   title: 'Contact Information',
-          //   description: 'Please provide your contact details.',
           modules: [
             {
               temp_id: 'contact-module',
@@ -164,8 +157,6 @@ export class AdminApplicationController {
         summary: 'Form with a Long Text Question',
         description: 'An example of a form that includes a long text input.',
         value: {
-          //   title: 'Feedback Form',
-          //   description: 'We would love to hear from you!',
           modules: [
             {
               temp_id: 'feedback-module',
@@ -191,8 +182,6 @@ export class AdminApplicationController {
         summary: 'Form with a Dropdown Question',
         description: 'An example of a form that uses a dropdown menu.',
         value: {
-          //   title: 'Survey',
-          //   description: 'A quick survey to gather demographic information.',
           modules: [
             {
               temp_id: 'demographics-module',
@@ -222,8 +211,6 @@ export class AdminApplicationController {
         summary: 'Form with Multiple Choice Grid Questions',
         description: 'An example of a form using a multiple choice grid.',
         value: {
-          //   title: 'Course Enrollment Form',
-          //   description: 'A form for selecting courses and rating your interest.',
           modules: [
             {
               temp_id: 'course-selection',
@@ -258,8 +245,6 @@ export class AdminApplicationController {
         description:
           'An example of a form that includes a file upload question.',
         value: {
-          //   title: 'Job Application',
-          //   description: 'A form for submitting a resume and cover letter.',
           modules: [
             {
               temp_id: 'documents-module',
@@ -286,27 +271,6 @@ export class AdminApplicationController {
   async createForm(
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
-    if (!dto.slug && dto.welcome_title) {
-      // You'll need to import or create a slugify function
-      const slugify = (text: string) =>
-        text
-          .toLowerCase()
-          .replace(/ /g, '-')
-          .replace(/[^\w-]+/g, '');
-      dto.slug = slugify(dto.welcome_title);
-    }
-
-    if (dto.questions && dto.questions.length > 0) {
-      dto.questions.forEach((question) => {
-        // Always generate the data_key using the service
-        question.data_key = this.questionDataKeyService.generate(
-          question.question,
-          question.data_key, // The second argument handles cases where the admin manually provided a key
-        );
-      });
-    }
-
-    // Now, call the service with the DTO, which should have the data_key populated.
     return this.adminApplicationService.createForm(dto);
   }
 
