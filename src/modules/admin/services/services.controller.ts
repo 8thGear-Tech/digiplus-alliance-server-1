@@ -26,6 +26,7 @@ import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserTypes } from 'src/shared/enums';
+import { toServiceResponse } from 'src/modules/mappers/service.mapper';
 
 @ApiTags('Services')
 @Controller('services')
@@ -61,7 +62,8 @@ export class ServicesController {
   async create(
     @Body() createServiceDto: CreateServiceDto,
   ): Promise<ServiceResponseDto> {
-    return await this.servicesService.create(createServiceDto);
+    const services = await this.servicesService.create(createServiceDto);
+    return toServiceResponse(services);
   }
 
   @Get()
@@ -99,15 +101,18 @@ export class ServicesController {
     @Query('maxPrice') maxPrice?: number,
   ): Promise<ServiceResponseDto[]> {
     if (search) {
-      return await this.servicesService.searchServices(search);
+      const services = await this.servicesService.searchServices(search);
+      return services.map(toServiceResponse);
     }
     if (minPrice !== undefined || maxPrice !== undefined) {
-      return await this.servicesService.getServicesByPriceRange(
+      const services = await this.servicesService.getServicesByPriceRange(
         minPrice,
         maxPrice,
       );
+      return services.map(toServiceResponse);
     }
-    return await this.servicesService.findAll();
+    const services = await this.servicesService.findAll();
+    return services.map(toServiceResponse);
   }
 
   @Get('count')
@@ -147,7 +152,8 @@ export class ServicesController {
     description: 'Unauthorized access',
   })
   async findOne(@Param('id') id: string): Promise<ServiceResponseDto> {
-    return await this.servicesService.findOne(id);
+    const services = await this.servicesService.findOne(id);
+    return toServiceResponse(services);
   }
 
   @Patch(':id')
@@ -187,7 +193,8 @@ export class ServicesController {
     @Param('id') id: string,
     @Body() updateServiceDto: UpdateServiceDto,
   ): Promise<ServiceResponseDto> {
-    return await this.servicesService.update(id, updateServiceDto);
+    const services = await this.servicesService.update(id, updateServiceDto);
+    return toServiceResponse(services);
   }
 
   @Delete(':id')
@@ -245,6 +252,7 @@ export class ServicesController {
   async findByName(
     @Param('name') name: string,
   ): Promise<ServiceResponseDto | null> {
-    return await this.servicesService.findByName(name);
+    const services = await this.servicesService.findByName(name);
+    return toServiceResponse(services);
   }
 }

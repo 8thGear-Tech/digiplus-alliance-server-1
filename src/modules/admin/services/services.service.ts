@@ -174,17 +174,29 @@ export class ServicesService {
     }
   }
 
-  async findByName(name: string): Promise<ServiceDocument | null> {
+  async findByName(name: string): Promise<ServiceDocument> {
     if (!name) {
       throw new BadRequestException('Service name is required');
     }
 
     try {
-      return await this.serviceModel.findOne({
+      const service = await this.serviceModel.findOne({
         name: name.trim(),
         deletedAt: null,
       });
+
+      if (!service) {
+        throw new NotFoundException(`Service with name '${name}' not found`);
+      }
+
+      return service;
     } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       throw new BadRequestException('Failed to search service by name');
     }
   }
