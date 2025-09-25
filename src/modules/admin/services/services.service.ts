@@ -13,6 +13,7 @@ import { Model, Types } from 'mongoose';
 import { Service, ServiceDocument } from './schemas/service.schema';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
+import { ServicesTypes } from 'src/shared/enums';
 
 @Injectable()
 export class ServicesService {
@@ -257,5 +258,10 @@ export class ServicesService {
     } catch (error) {
       throw new BadRequestException('Failed to count services');
     }
+  }
+
+  // added by opeyemi
+  getAvailableServiceTypes(): string[] {
+    return Object.values(ServicesTypes);
   }
 }

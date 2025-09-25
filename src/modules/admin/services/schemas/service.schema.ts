@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { ServicesTypes } from 'src/shared/enums';
 
 export type ServiceDocument = Service & Document & { _id: Types.ObjectId };
 
@@ -10,6 +11,10 @@ export type ServiceDocument = Service & Document & { _id: Types.ObjectId };
 export class Service {
   @Prop({ required: true, trim: true, maxlength: 255 })
   name: string;
+
+  //added by opeyemi
+  @Prop({ type: String, enum: Object.values(ServicesTypes), required: true })
+  serviceType: ServicesTypes;
 
   @Prop({ required: true, trim: true })
   image: string;

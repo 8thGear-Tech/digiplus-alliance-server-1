@@ -17,17 +17,22 @@ import {
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
-import { Submission } from './schemas/submission.schema';
+import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
-} from './dtos/application-form.dto';
-import { ApplicationForm } from './schemas/application-form.schema';
+} from './dtos/create-application-form.dto';
+import {
+  ApplicationForm,
+  EmbeddedQuestion,
+} from './schemas/application-form.schema';
 import { GetApplicationsDto } from './dtos/get-applications.dto';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { UserTypes } from 'src/shared/enums';
+import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
+import { QuestionDataKeyService } from './services/question-data-key.service';
+import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -36,6 +41,7 @@ import { PublishFormDto } from './dtos/publish-form.dto';
 export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
+    private readonly questionDataKeyService: QuestionDataKeyService,
   ) {}
 
   // Admin Routes for managing forms
@@ -100,8 +106,6 @@ export class AdminApplicationController {
         description:
           'An example of a form that uses checkbox questions for multiple selections.',
         value: {
-          //   title: 'Internship Application',
-          //   description: 'Form to apply for a software engineering internship.',
           modules: [
             {
               temp_id: 'skills-module',
@@ -282,7 +286,68 @@ export class AdminApplicationController {
   async createForm(
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
+    if (!dto.slug && dto.welcome_title) {
+      // You'll need to import or create a slugify function
+      const slugify = (text: string) =>
+        text
+          .toLowerCase()
+          .replace(/ /g, '-')
+          .replace(/[^\w-]+/g, '');
+      dto.slug = slugify(dto.welcome_title);
+    }
+
+    if (dto.questions && dto.questions.length > 0) {
+      dto.questions.forEach((question) => {
+        // Always generate the data_key using the service
+        question.data_key = this.questionDataKeyService.generate(
+          question.question,
+          question.data_key, // The second argument handles cases where the admin manually provided a key
+        );
+      });
+    }
+
+    // Now, call the service with the DTO, which should have the data_key populated.
     return this.adminApplicationService.createForm(dto);
+  }
+
+  @Get('forms')
+  @ApiOperation({ summary: 'Get a list of all application forms' })
+  @ApiResponse({
+    status: 200,
+    description: 'Forms retrieved successfully.',
+    type: [ApplicationForm],
+  })
+  async getMultipleForms(): Promise<ApplicationForm[]> {
+    return this.adminApplicationService.getAllForms();
+  }
+
+  @Get('list')
+  @ApiOperation({ summary: 'Get a list of all submitted applications' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of submissions retrieved successfully.',
+    type: [UserSubmission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No submissions found for the selected filter.',
+  })
+  async getApplicationList(
+    @Query() dto: GetApplicationsDto,
+  ): Promise<UserSubmission[]> {
+    return this.adminApplicationService.getApplicationList(dto);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single application form by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Form retrieved successfully.',
+    type: ApplicationForm,
+  })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  async getSingleForm(@Param('id') id: string): Promise<ApplicationForm> {
+    return this.adminApplicationService.getSingleForm(id);
   }
 
   @Patch(':id')
@@ -313,24 +378,90 @@ export class AdminApplicationController {
     return this.adminApplicationService.publishForm(id, isLive);
   }
 
-  // Common Routes for submissions
-  @Get('list')
-  @ApiOperation({ summary: 'Get a list of all submitted applications' })
-  @ApiResponse({ status: 200, type: [Submission] })
-  async getApplicationList(
-    @Query() dto: GetApplicationsDto,
-  ): Promise<Submission[]> {
-    return this.adminApplicationService.getApplicationList(dto);
-  }
-
   @Patch('status/:id')
   @ApiOperation({ summary: 'Update the status of a specific application' })
-  @ApiResponse({ status: 200, type: Submission })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [
+            'Submitted',
+            'Being Processed',
+            'Approved',
+            'Rejected',
+            'Completed',
+          ],
+          example: 'Approved',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        serviceType: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Not Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
   async updateApplicationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
-  ): Promise<Submission> {
-    return this.adminApplicationService.updateApplicationStatus(id, status);
+  ): Promise<UserSubmission> {
+    return this.adminApplicationService.updateApplicationStatus(
+      id,
+      status as ApplicationStatus,
+    );
+  }
+
+  @Patch('payment-status/:id')
+  @ApiOperation({
+    summary: 'Update the payment status of a specific application',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        paymentStatus: {
+          type: 'string',
+          enum: ['Paid', 'Not Paid'],
+          example: 'Paid',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission payment status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        serviceType: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: string,
+  ): Promise<UserSubmission> {
+    return this.adminApplicationService.updatePaymentStatus(
+      id,
+      paymentStatus as PaymentStatus,
+    );
   }
 
   //validation
@@ -347,9 +478,7 @@ export class AdminApplicationController {
   async validateInput(
     @Body() dto: { questionId: string; value: string; formId: string },
   ) {
-    // This would be useful for real-time validation on the frontend
-    const form = await this.adminApplicationService.getApplicationList({}); // You'd need to get the specific form
-    // Implementation depends on your specific needs
+    const form = await this.adminApplicationService.getApplicationList({});
     return { isValid: true, errors: [] };
   }
 }

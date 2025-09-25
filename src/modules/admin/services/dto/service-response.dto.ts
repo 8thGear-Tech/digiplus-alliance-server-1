@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ServicesTypes } from 'src/shared/enums';
 
 export class ServiceResponseDto {
   @ApiProperty({
@@ -12,6 +13,14 @@ export class ServiceResponseDto {
     example: 'Web Development',
   })
   name: string;
+
+  // Add the serviceType property to the DTO
+  @ApiProperty({
+    description: 'The type or category of the service.',
+    enum: ServicesTypes,
+    example: ServicesTypes.digital_skills_and_training,
+  })
+  serviceType: ServicesTypes;
 
   @ApiProperty({
     description: 'Service image URL',

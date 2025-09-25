@@ -7,9 +7,11 @@ import {
   IsNumber,
   IsPositive,
   Length,
+  IsEnum,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { ServicesTypes } from 'src/shared/enums';
 
 export class CreateServiceDto {
   @ApiProperty({
@@ -24,6 +26,19 @@ export class CreateServiceDto {
   })
   @Transform(({ value }) => value?.trim())
   name: string;
+
+  //added by opeyemi
+  // Add the serviceType property with validation
+  @ApiProperty({
+    description: 'The category or type of the service.',
+    enum: ServicesTypes,
+    example: ServicesTypes.digital_skills_and_training,
+  })
+  @IsNotEmpty({ message: 'Service type is required' })
+  @IsEnum(ServicesTypes, {
+    message: 'Service type must be a valid ServicesTypes enum value.',
+  })
+  serviceType: ServicesTypes;
 
   @ApiProperty({
     description: 'Service image URL or base64',
