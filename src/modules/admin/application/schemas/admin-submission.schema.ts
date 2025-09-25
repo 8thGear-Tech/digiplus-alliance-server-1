@@ -31,7 +31,7 @@ import {
 } from 'src/shared/enums';
 
 @Schema({ timestamps: true })
-export class Submission extends Document {
+export class AdminSubmission extends Document {
   @Prop({ required: true })
   service: string;
 
@@ -62,4 +62,5 @@ export class Submission extends Document {
   payment_status: PaymentStatus;
 }
 
-export const SubmissionSchema = SchemaFactory.createForClass(Submission);
+export const AdminSubmissionSchema =
+  SchemaFactory.createForClass(AdminSubmission);

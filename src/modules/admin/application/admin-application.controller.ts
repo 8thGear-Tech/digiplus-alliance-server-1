@@ -17,7 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
-import { Submission } from './schemas/submission.schema';
+import { AdminSubmission } from './schemas/admin-submission.schema';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
@@ -313,6 +313,23 @@ export class AdminApplicationController {
     return this.adminApplicationService.getAllForms();
   }
 
+  @Get('list')
+  @ApiOperation({ summary: 'Get a list of all submitted applications' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of submissions retrieved successfully.',
+    type: [AdminSubmission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No submissions found for the selected filter.',
+  })
+  async getApplicationList(
+    @Query() dto: GetApplicationsDto,
+  ): Promise<AdminSubmission[]> {
+    return this.adminApplicationService.getApplicationList(dto);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single application form by ID' })
   @ApiResponse({
@@ -353,23 +370,6 @@ export class AdminApplicationController {
     return this.adminApplicationService.publishForm(id, isLive);
   }
 
-  @Get('list')
-  @ApiOperation({ summary: 'Get a list of all submitted applications' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of submissions retrieved successfully.',
-    type: [Submission],
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'No submissions found for the selected filter.',
-  })
-  async getApplicationList(
-    @Query() dto: GetApplicationsDto,
-  ): Promise<Submission[]> {
-    return this.adminApplicationService.getApplicationList(dto);
-  }
-
   @Patch('status/:id')
   @ApiOperation({ summary: 'Update the status of a specific application' })
   @ApiBody({
@@ -408,7 +408,7 @@ export class AdminApplicationController {
   async updateApplicationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
-  ): Promise<Submission> {
+  ): Promise<AdminSubmission> {
     return this.adminApplicationService.updateApplicationStatus(
       id,
       status as ApplicationStatus,
@@ -449,7 +449,7 @@ export class AdminApplicationController {
   async updatePaymentStatus(
     @Param('id') id: string,
     @Body('paymentStatus') paymentStatus: string,
-  ): Promise<Submission> {
+  ): Promise<AdminSubmission> {
     return this.adminApplicationService.updatePaymentStatus(
       id,
       paymentStatus as PaymentStatus,

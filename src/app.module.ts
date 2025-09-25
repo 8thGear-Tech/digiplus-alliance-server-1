@@ -30,7 +30,7 @@ import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.
 import { ProfileModule } from './modules/profile/profile.module';
 import { BlogModule } from './modules/admin/blog/blog.module';
 import { ApplicationModule } from './modules/admin/application/application.module';
-// import { UserApplicationModule } from './modules/business-owner/user-application.module';
+import { UserApplicationModule } from './modules/business-owner/user-application.module';
 
 dotenv.config();
 @Module({
@@ -106,7 +106,7 @@ dotenv.config();
     AssessmentModule,
     BlogModule,
     ApplicationModule,
-    // UserApplicationModule,
+    UserApplicationModule,
   ],
   controllers: [AppController],
   providers: [

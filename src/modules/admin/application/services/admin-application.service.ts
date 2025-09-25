@@ -5,7 +5,7 @@ import {
   ApplicationForm,
   EmbeddedQuestion,
 } from '../schemas/application-form.schema';
-import { Submission } from '../schemas/submission.schema';
+import { AdminSubmission } from '../schemas/admin-submission.schema';
 import { GetApplicationsDto } from '../dtos/get-applications.dto';
 import {
   CreateApplicationFormDto,
@@ -21,7 +21,8 @@ export class AdminApplicationService {
   constructor(
     @InjectModel(ApplicationForm.name)
     private applicationFormModel: Model<ApplicationForm>,
-    @InjectModel(Submission.name) private submissionModel: Model<Submission>,
+    @InjectModel(AdminSubmission.name)
+    private submissionModel: Model<AdminSubmission>,
     private questionValidationService: QuestionValidationService, // Inject the service
     private questionDataKeyService: QuestionDataKeyService,
   ) {}
@@ -257,7 +258,7 @@ export class AdminApplicationService {
   async updateApplicationStatus(
     id: string,
     status: ApplicationStatus,
-  ): Promise<Submission> {
+  ): Promise<AdminSubmission> {
     const updated = await this.submissionModel.findByIdAndUpdate(
       id,
       { status },
@@ -274,7 +275,7 @@ export class AdminApplicationService {
   async updatePaymentStatus(
     id: string,
     paymentStatus: PaymentStatus,
-  ): Promise<Submission> {
+  ): Promise<AdminSubmission> {
     const updated = await this.submissionModel.findByIdAndUpdate(
       id,
       { payment_status: paymentStatus },
