@@ -4,12 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { UserSubmission } from './user-submission.schema';
 import { SubmissionDto } from './submission.dto';
 import { ApplicationForm } from '../admin/application/schemas/application-form.schema';
 import { FormListItemDto } from './form-list-item.dto';
 import { Service } from '../admin/services/schemas/service.schema';
+import { ApplicationStatus } from 'src/shared/enums';
 
 type FormProjection = {
   _id: string;
@@ -173,5 +174,48 @@ export class UserApplicationService {
       .exec();
 
     return this.transformUserSubmissions(submissions);
+  }
+
+  async getSubmissionStatusCounts(
+    userId: string,
+  ): Promise<Record<string, number>> {
+    // 1. Define the Mongoose aggregation pipeline
+    const pipeline = [
+      // Stage 1: Filter by authenticated user's ID
+      {
+        $match: {
+          userId: new Types.ObjectId(userId), // Assuming userId is stored as ObjectId
+        },
+      },
+      // Stage 2: Group by status and count the results in each group
+      {
+        $group: {
+          _id: '$status', // Group documents by the 'status' field
+          count: { $sum: 1 }, // Count the documents in each group
+        },
+      },
+    ];
+
+    const results = await this.submissionModel.aggregate(pipeline).exec();
+
+    // 3. Initialize the final map with all statuses set to 0
+    const finalCounts: Record<string, number> = Object.values(
+      ApplicationStatus,
+    ).reduce(
+      (acc, status) => {
+        acc[status] = 0;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    // 4. Merge aggregation results into the final map
+    results.forEach((result) => {
+      if (result._id && finalCounts.hasOwnProperty(result._id)) {
+        finalCounts[result._id] = result.count;
+      }
+    });
+
+    return finalCounts;
   }
 }
