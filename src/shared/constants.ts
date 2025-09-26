@@ -1,7 +1,7 @@
 export const COOKIE_NAME = 'refreshToken';
 
 export const Constants = {
-  tokenExpiry: '10m',
+  tokenExpiry: 24 * 60 * 60 * 1000,
   lockedAccountTime: 60 * 20 * 1000,
   resetTokenExpiry: 60 * 60 * 1000,
 

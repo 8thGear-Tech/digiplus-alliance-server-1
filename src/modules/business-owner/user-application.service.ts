@@ -11,6 +11,7 @@ import { ApplicationForm } from '../admin/application/schemas/application-form.s
 import { FormListItemDto } from './form-list-item.dto';
 import { Service } from '../admin/services/schemas/service.schema';
 import { ApplicationStatus } from 'src/shared/enums';
+import { BaseRepository } from '../repository/base.repository';
 
 type FormProjection = {
   _id: string;

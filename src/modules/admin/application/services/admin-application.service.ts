@@ -22,6 +22,7 @@ import { UserSubmission } from 'src/modules/business-owner/user-submission.schem
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
+import { BaseRepository } from 'src/modules/repository/base.repository';
 
 @Injectable()
 export class AdminApplicationService {
@@ -30,6 +31,7 @@ export class AdminApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(UserSubmission.name)
     private submissionModel: Model<UserSubmission>,
+    // private readonly userSubmissionRepository: BaseRepository<UserSubmission>,
     @InjectModel(Service.name)
     private serviceModel: Model<Service>,
     private questionValidationService: QuestionValidationService,
@@ -444,4 +446,18 @@ export class AdminApplicationService {
 
     return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
   }
+
+  // async getTotalApplicationsCount(): Promise<number> {
+  //   // Counts all documents in the submissions collection
+  //   return this.userSubmissionRepository.count({});
+  // }
+
+  // --- NEW: Get total assessments completed count for admin dashboard ---
+  // async getTotalAssessmentsCompletedCount(): Promise<number> {
+  //   // Assuming 'status' is used to define 'completed' assessments.
+  //   // Adjust logic if 'assessmentCompleted' is a boolean field.
+  //   return this.submissionRepository.countDocuments({
+  //     status: ApplicationStatus.Completed,
+  //   });
+  // }
 }
