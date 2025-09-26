@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/only-throw-error */
+
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
@@ -29,6 +29,7 @@ import {
   CreateWelcomeScreenDto,
   // ServiceRecommendationDto,
 } from './dto/create-assessment.dto';
+import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 // import {
 //   SubmitAssessmentDto,
 //   SubmitAssessmentResDto,
@@ -146,6 +147,634 @@ export class AssessmentService {
       priority: service.priority,
       assessment_id: service.assessment_id,
     };
+  }
+
+  private calculateTotalPossiblePoints(questions: any[]): number {
+    return questions.reduce((total, question) => {
+      switch (question.type) {
+        case QuestionType.MULTIPLE_CHOICE:
+        case QuestionType.DROPDOWN:
+          return (
+            total + this.calculateMultipleChoiceMaxPoints(question.options)
+          );
+
+        case QuestionType.CHECKBOX:
+          return (
+            total +
+            this.calculateCheckboxMaxPoints(
+              question.options,
+              question.scoring_method || 'sum',
+              question.max_selections,
+            )
+          );
+
+        case QuestionType.SHORT_TEXT:
+          return total + (question.completion_points || 0);
+
+        case QuestionType.LONG_TEXT:
+          return (
+            total +
+            this.calculateLongTextMaxPoints(
+              question.completion_points,
+              question.keyword_scoring,
+            )
+          );
+
+        case QuestionType.MULTIPLE_CHOICE_GRID:
+          return (
+            total +
+            this.calculateGridMaxPoints(
+              question.grid_columns,
+              question.grid_rows,
+            )
+          );
+
+        default:
+          return total + (question.max_points || 0);
+      }
+    }, 0);
+  }
+
+  private calculateModulePoints(moduleRef: string, questions: any[]): number {
+    return questions
+      .filter((q) => q.module_ref === moduleRef)
+      .reduce((total, question) => {
+        switch (question.type) {
+          case QuestionType.MULTIPLE_CHOICE:
+          case QuestionType.DROPDOWN:
+            return (
+              total + this.calculateMultipleChoiceMaxPoints(question.options)
+            );
+          case QuestionType.CHECKBOX:
+            return (
+              total +
+              this.calculateCheckboxMaxPoints(
+                question.options,
+                question.scoring_method,
+                question.max_selections,
+              )
+            );
+          case QuestionType.SHORT_TEXT:
+            return total + (question.completion_points || 0);
+          case QuestionType.LONG_TEXT:
+            return (
+              total +
+              this.calculateLongTextMaxPoints(
+                question.completion_points,
+                question.keyword_scoring,
+              )
+            );
+          case QuestionType.MULTIPLE_CHOICE_GRID:
+            return (
+              total +
+              this.calculateGridMaxPoints(
+                question.grid_columns,
+                question.grid_rows,
+              )
+            );
+          default:
+            return total + (question.max_points || 0);
+        }
+      }, 0);
+  }
+
+  private calculateMultipleChoiceMaxPoints(options: any[]): number {
+    if (!options || options.length === 0) return 0;
+    return Math.max(...options.map((option) => option.points || 0));
+  }
+
+  private calculateCheckboxMaxPoints(
+    options: any[],
+    scoringMethod: string = 'sum',
+    maxSelections?: number,
+  ): number {
+    if (!options || options.length === 0) return 0;
+
+    const optionPoints = options.map((option) => option.points || 0);
+    const selectionsLimit = maxSelections || options.length;
+
+    switch (scoringMethod) {
+      case 'sum':
+        return optionPoints
+          .sort((a, b) => b - a)
+          .slice(0, selectionsLimit)
+          .reduce((sum, points) => sum + points, 0);
+
+      case 'average':
+        return (
+          optionPoints.reduce((sum, points) => sum + points, 0) /
+          optionPoints.length
+        );
+
+      case 'max':
+        return Math.max(...optionPoints);
+
+      default:
+        return Math.max(...optionPoints);
+    }
+  }
+
+  private calculateLongTextMaxPoints(
+    completionPoints: number = 0,
+    keywordScoring: any[] = [],
+  ): number {
+    const keywordPoints =
+      keywordScoring?.reduce(
+        (sum, keyword) => sum + (keyword.points || 0),
+        0,
+      ) || 0;
+    return completionPoints + keywordPoints;
+  }
+
+  private calculateGridMaxPoints(gridColumns: any[], gridRows: any[]): number {
+    if (
+      !gridColumns ||
+      gridColumns.length === 0 ||
+      !gridRows ||
+      gridRows.length === 0
+    ) {
+      return 0;
+    }
+
+    const maxColumnPoints = Math.max(
+      ...gridColumns.map((col) => col.points || 0),
+    );
+    const totalWeightedRows = gridRows.reduce(
+      (sum, row) => sum + (row.weight || 1),
+      0,
+    );
+
+    return Math.round(maxColumnPoints * totalWeightedRows);
+  }
+
+  private async updateModules(
+    assessmentId: string,
+    modules: any[],
+  ): Promise<string[]> {
+    const updatedModuleIds: string[] = [];
+    const moduleMapping = new Map<string, Types.ObjectId>();
+
+    for (const moduleDto of modules) {
+      if (moduleDto.id) {
+        // Update existing module
+        const existingModule = await this.assessmentModuleRepository.findById(
+          moduleDto.id,
+        );
+        if (!existingModule) {
+          this.logger.warn(
+            `Module with ID ${moduleDto.id} not found, skipping...`,
+          );
+          continue;
+        }
+
+        const updateData: any = {};
+        if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
+        if (moduleDto.description !== undefined)
+          updateData.description = moduleDto.description;
+        if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
+        if (moduleDto.max_points !== undefined)
+          updateData.max_points = moduleDto.max_points;
+
+        if (Object.keys(updateData).length > 0) {
+          await this.assessmentModuleRepository.findByIdAndUpdate(
+            moduleDto.id,
+            updateData,
+          );
+          updatedModuleIds.push(moduleDto.id);
+          moduleMapping.set(
+            moduleDto.temp_id || moduleDto.id,
+            new Types.ObjectId(moduleDto.id),
+          );
+          this.logger.log(`Module ${moduleDto.id} updated`);
+        }
+      } else if (moduleDto.temp_id) {
+        // Create new module
+        const moduleData = {
+          assessment_id: new Types.ObjectId(assessmentId),
+          title: moduleDto.title,
+          description: moduleDto.description,
+          order: moduleDto.order,
+          max_points: moduleDto.max_points || 0,
+        };
+
+        const newModule =
+          await this.assessmentModuleRepository.create(moduleData);
+        moduleMapping.set(moduleDto.temp_id, newModule._id as Types.ObjectId);
+        updatedModuleIds.push(newModule._id.toString());
+        this.logger.log(`New module created: ${newModule._id}`);
+      }
+    }
+
+    return updatedModuleIds;
+  }
+
+  private async updateQuestions(
+    assessmentId: string,
+    questions: any[],
+  ): Promise<string[]> {
+    const updatedQuestionIds: string[] = [];
+
+    for (const questionDto of questions) {
+      try {
+        if (questionDto.id) {
+          // Update existing question
+          const existingQuestion = await this.questionRepository.findById(
+            questionDto.id,
+          );
+          if (!existingQuestion) {
+            this.logger.warn(
+              `Question with ID ${questionDto.id} not found, skipping...`,
+            );
+            continue;
+          }
+
+          const updateData = this.buildQuestionUpdateData(questionDto);
+          if (Object.keys(updateData).length > 0) {
+            await this.questionRepository.findByIdAndUpdate(
+              questionDto.id,
+              updateData,
+            );
+            updatedQuestionIds.push(questionDto.id);
+            this.logger.log(`Question ${questionDto.id} updated`);
+          }
+        } else {
+          // Create new question - validate required fields
+          if (!questionDto.type) {
+            throw BadRequestException.BAD_REQUEST(
+              'Question type is required for new questions',
+            );
+          }
+          if (questionDto.step === undefined || questionDto.step === null) {
+            throw BadRequestException.BAD_REQUEST(
+              'Question step is required for new questions',
+            );
+          }
+          if (!questionDto.question || questionDto.question.trim() === '') {
+            throw BadRequestException.BAD_REQUEST('Question text is required');
+          }
+          // Create new question
+          const questionData = this.buildNewQuestionData(
+            assessmentId,
+            questionDto,
+          );
+          const newQuestion =
+            await this.questionRepository.create(questionData);
+          updatedQuestionIds.push(
+            (newQuestion._id as Types.ObjectId).toString(),
+          );
+          this.logger.log(
+            `New question created: ${(newQuestion._id as Types.ObjectId).toString()}`,
+          );
+        }
+      } catch (error) {
+        // Add context about which question failed
+        const questionInfo = questionDto.id
+          ? `question ID ${questionDto.id}`
+          : `new question at step ${questionDto.step}`;
+        this.logger.error(`Error processing ${questionInfo}:`, error.message);
+
+        if (error instanceof BadRequestException) {
+          throw BadRequestException.BAD_REQUEST(
+            `Error with ${questionInfo}: ${error.message}`,
+          );
+        }
+        throw error;
+      }
+    }
+
+    return updatedQuestionIds;
+  }
+
+  private buildQuestionUpdateData(questionDto: any): any {
+    const updateData: any = {};
+
+    // Common properties
+    if (questionDto.question !== undefined)
+      updateData.question = questionDto.question;
+    if (questionDto.description !== undefined)
+      updateData.description = questionDto.description;
+    if (questionDto.instruction !== undefined)
+      updateData.instruction = questionDto.instruction;
+    if (questionDto.is_required !== undefined)
+      updateData.is_required = questionDto.is_required;
+    if (questionDto.step !== undefined) updateData.step = questionDto.step;
+    if (questionDto.is_active !== undefined)
+      updateData.is_active = questionDto.is_active;
+    if (questionDto.scoring_categories !== undefined)
+      updateData.scoring_categories = questionDto.scoring_categories;
+
+    // Type-specific properties
+    switch (questionDto.type) {
+      case QuestionType.WELCOME_SCREEN:
+        if (questionDto.welcome_title !== undefined)
+          updateData.welcome_title = questionDto.welcome_title;
+        if (questionDto.welcome_message !== undefined)
+          updateData.welcome_message = questionDto.welcome_message;
+        if (questionDto.button_text !== undefined)
+          updateData.button_text = questionDto.button_text;
+        break;
+
+      case QuestionType.MODULE_TITLE:
+        if (questionDto.module_title !== undefined)
+          updateData.module_title = questionDto.module_title;
+        if (questionDto.module_description !== undefined)
+          updateData.module_description = questionDto.module_description;
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE:
+      case QuestionType.DROPDOWN:
+        if (questionDto.options !== undefined) {
+          updateData.options = questionDto.options;
+          updateData.max_points = this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          );
+        }
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        break;
+
+      case QuestionType.CHECKBOX:
+        if (questionDto.options !== undefined) {
+          updateData.options = questionDto.options;
+          updateData.max_points = this.calculateCheckboxMaxPoints(
+            questionDto.options,
+            questionDto.scoring_method,
+            questionDto.max_selections,
+          );
+        }
+        if (questionDto.min_selections !== undefined)
+          updateData.min_selections = questionDto.min_selections;
+        if (questionDto.max_selections !== undefined)
+          updateData.max_selections = questionDto.max_selections;
+        if (questionDto.scoring_method !== undefined)
+          updateData.scoring_method = questionDto.scoring_method;
+        break;
+
+      case QuestionType.SHORT_TEXT:
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        if (questionDto.max_length !== undefined)
+          updateData.max_length = questionDto.max_length;
+        if (questionDto.min_length !== undefined)
+          updateData.min_length = questionDto.min_length;
+        if (questionDto.completion_points !== undefined) {
+          updateData.completion_points = questionDto.completion_points;
+          updateData.max_points = questionDto.completion_points;
+        }
+        break;
+
+      case QuestionType.LONG_TEXT:
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        if (questionDto.max_length !== undefined)
+          updateData.max_length = questionDto.max_length;
+        if (questionDto.min_length !== undefined)
+          updateData.min_length = questionDto.min_length;
+        if (questionDto.rows !== undefined) updateData.rows = questionDto.rows;
+        if (questionDto.completion_points !== undefined)
+          updateData.completion_points = questionDto.completion_points;
+        if (questionDto.keyword_scoring !== undefined)
+          updateData.keyword_scoring = questionDto.keyword_scoring;
+        if (
+          questionDto.completion_points !== undefined ||
+          questionDto.keyword_scoring !== undefined
+        ) {
+          updateData.max_points = this.calculateLongTextMaxPoints(
+            questionDto.completion_points,
+            questionDto.keyword_scoring,
+          );
+        }
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE_GRID:
+        if (questionDto.grid_columns !== undefined)
+          updateData.grid_columns = questionDto.grid_columns;
+        if (questionDto.grid_rows !== undefined)
+          updateData.grid_rows = questionDto.grid_rows;
+        if (
+          questionDto.grid_columns !== undefined ||
+          questionDto.grid_rows !== undefined
+        ) {
+          updateData.max_points = this.calculateGridMaxPoints(
+            questionDto.grid_columns || [],
+            questionDto.grid_rows || [],
+          );
+        }
+        break;
+    }
+
+    return updateData;
+  }
+
+  private buildNewQuestionData(assessmentId: string, questionDto: any): any {
+    // Validate required fields for new questions
+    if (!questionDto.type) {
+      throw BadRequestException.BAD_REQUEST(
+        'Question type is required for new questions',
+      );
+    }
+    if (questionDto.step === undefined || questionDto.step === null) {
+      throw BadRequestException.BAD_REQUEST(
+        'Question step is required for new questions',
+      );
+    }
+
+    // Use existing logic from createAssessment but for single question
+    const baseQuestionData = {
+      assessment_id: new Types.ObjectId(assessmentId),
+      module_id: questionDto.module_id
+        ? new Types.ObjectId(questionDto.module_id)
+        : undefined,
+      type: questionDto.type,
+      question: questionDto.question || '', // Provide default if missing
+      description: questionDto.description,
+      instruction: questionDto.instruction,
+      is_required: questionDto.is_required ?? false,
+      step: questionDto.step,
+      max_points: questionDto.max_points || 0,
+      scoring_categories: questionDto.scoring_categories || [],
+      is_active: questionDto.is_active ?? true,
+    };
+
+    // Apply type-specific data using existing logic
+    let questionData: any = { ...baseQuestionData };
+
+    switch (questionDto.type) {
+      case QuestionType.WELCOME_SCREEN:
+        questionData = {
+          ...baseQuestionData,
+          welcome_title: questionDto.welcome_title,
+          welcome_message: questionDto.welcome_message,
+          button_text: questionDto.button_text,
+        };
+        break;
+
+      case QuestionType.MODULE_TITLE:
+        questionData = {
+          ...baseQuestionData,
+          module_title: questionDto.module_title,
+          module_description: questionDto.module_description,
+        };
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          max_points: this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          ),
+        };
+        break;
+
+      case QuestionType.CHECKBOX:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          min_selections: questionDto.min_selections,
+          max_selections: questionDto.max_selections,
+          scoring_method: questionDto.scoring_method || 'sum',
+          max_points: this.calculateCheckboxMaxPoints(
+            questionDto.options,
+            questionDto.scoring_method,
+            questionDto.max_selections,
+          ),
+        };
+        break;
+
+      case QuestionType.DROPDOWN:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          placeholder: questionDto.placeholder,
+          max_points: this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          ),
+        };
+        break;
+
+      case QuestionType.SHORT_TEXT:
+        questionData = {
+          ...baseQuestionData,
+          placeholder: questionDto.placeholder,
+          max_length: questionDto.max_length,
+          min_length: questionDto.min_length,
+          completion_points: questionDto.completion_points || 0,
+          max_points: questionDto.completion_points || 0,
+        };
+        break;
+
+      case QuestionType.LONG_TEXT:
+        questionData = {
+          ...baseQuestionData,
+          placeholder: questionDto.placeholder,
+          max_length: questionDto.max_length,
+          min_length: questionDto.min_length,
+          rows: questionDto.rows,
+          completion_points: questionDto.completion_points || 0,
+          keyword_scoring: questionDto.keyword_scoring || [],
+          max_points: this.calculateLongTextMaxPoints(
+            questionDto.completion_points,
+            questionDto.keyword_scoring,
+          ),
+        };
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE_GRID:
+        questionData = {
+          ...baseQuestionData,
+          grid_columns: questionDto.grid_columns || [],
+          grid_rows: questionDto.grid_rows || [],
+          max_points: this.calculateGridMaxPoints(
+            questionDto.grid_columns,
+            questionDto.grid_rows,
+          ),
+        };
+        break;
+
+      default:
+        questionData = baseQuestionData;
+        break;
+    }
+
+    return questionData;
+  }
+
+  private async updateServiceRecommendations(
+    assessmentId: string,
+    serviceRecommendations: any[],
+  ): Promise<string[]> {
+    const updatedServiceIds: string[] = [];
+
+    for (const serviceDto of serviceRecommendations) {
+      if (serviceDto.id) {
+        // Update existing service recommendation
+        const updateData: any = {};
+        if (serviceDto.service_id !== undefined)
+          updateData.service_id = serviceDto.service_id;
+        if (serviceDto.service_name !== undefined)
+          updateData.service_name = serviceDto.service_name;
+        if (serviceDto.description !== undefined)
+          updateData.description = serviceDto.description;
+        if (serviceDto.min_points !== undefined)
+          updateData.min_points = serviceDto.min_points;
+        if (serviceDto.max_points !== undefined)
+          updateData.max_points = serviceDto.max_points;
+        if (serviceDto.categories !== undefined)
+          updateData.categories = serviceDto.categories;
+        if (serviceDto.priority !== undefined)
+          updateData.priority = serviceDto.priority;
+
+        if (Object.keys(updateData).length > 0) {
+          await this.serviceRecommendationRepository.findByIdAndUpdate(
+            serviceDto.id,
+            updateData,
+          );
+          updatedServiceIds.push(serviceDto.id);
+          this.logger.log(`Service recommendation ${serviceDto.id} updated`);
+        }
+      } else {
+        // Create new service recommendation
+        const serviceData = {
+          assessment_id: new Types.ObjectId(assessmentId),
+          service_id: serviceDto.service_id,
+          service_name: serviceDto.service_name,
+          description: serviceDto.description,
+          min_points: serviceDto.min_points,
+          max_points: serviceDto.max_points,
+          categories: serviceDto.categories || [],
+          priority: serviceDto.priority,
+        };
+
+        const newService =
+          await this.serviceRecommendationRepository.create(serviceData);
+        updatedServiceIds.push(newService._id.toString());
+        this.logger.log(
+          `New service recommendation created: ${newService._id}`,
+        );
+      }
+    }
+
+    return updatedServiceIds;
+  }
+
+  private async recalculateTotalPoints(assessmentId: string): Promise<void> {
+    const questions = await this.questionRepository.find({
+      assessment_id: new Types.ObjectId(assessmentId),
+    });
+
+    const questionArray = Array.isArray(questions)
+      ? questions
+      : [questions].filter(Boolean);
+    const totalPoints = this.calculateTotalPossiblePoints(questionArray);
+
+    await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
+      total_possible_points: totalPoints,
+    });
+
+    this.logger.log(
+      `Total points recalculated for assessment ${assessmentId}: ${totalPoints}`,
+    );
   }
 
   async createAssessment(
@@ -402,165 +1031,6 @@ export class AssessmentService {
         'Failed to create assessment with modules and questions',
       );
     }
-  }
-
-  // Enhanced scoring calculation methods
-  private calculateTotalPossiblePoints(questions: any[]): number {
-    return questions.reduce((total, question) => {
-      switch (question.type) {
-        case QuestionType.MULTIPLE_CHOICE:
-        case QuestionType.DROPDOWN:
-          return (
-            total + this.calculateMultipleChoiceMaxPoints(question.options)
-          );
-
-        case QuestionType.CHECKBOX:
-          return (
-            total +
-            this.calculateCheckboxMaxPoints(
-              question.options,
-              question.scoring_method || 'sum',
-              question.max_selections,
-            )
-          );
-
-        case QuestionType.SHORT_TEXT:
-          return total + (question.completion_points || 0);
-
-        case QuestionType.LONG_TEXT:
-          return (
-            total +
-            this.calculateLongTextMaxPoints(
-              question.completion_points,
-              question.keyword_scoring,
-            )
-          );
-
-        case QuestionType.MULTIPLE_CHOICE_GRID:
-          return (
-            total +
-            this.calculateGridMaxPoints(
-              question.grid_columns,
-              question.grid_rows,
-            )
-          );
-
-        default:
-          return total + (question.max_points || 0);
-      }
-    }, 0);
-  }
-
-  private calculateModulePoints(moduleRef: string, questions: any[]): number {
-    return questions
-      .filter((q) => q.module_ref === moduleRef)
-      .reduce((total, question) => {
-        switch (question.type) {
-          case QuestionType.MULTIPLE_CHOICE:
-          case QuestionType.DROPDOWN:
-            return (
-              total + this.calculateMultipleChoiceMaxPoints(question.options)
-            );
-          case QuestionType.CHECKBOX:
-            return (
-              total +
-              this.calculateCheckboxMaxPoints(
-                question.options,
-                question.scoring_method,
-                question.max_selections,
-              )
-            );
-          case QuestionType.SHORT_TEXT:
-            return total + (question.completion_points || 0);
-          case QuestionType.LONG_TEXT:
-            return (
-              total +
-              this.calculateLongTextMaxPoints(
-                question.completion_points,
-                question.keyword_scoring,
-              )
-            );
-          case QuestionType.MULTIPLE_CHOICE_GRID:
-            return (
-              total +
-              this.calculateGridMaxPoints(
-                question.grid_columns,
-                question.grid_rows,
-              )
-            );
-          default:
-            return total + (question.max_points || 0);
-        }
-      }, 0);
-  }
-
-  private calculateMultipleChoiceMaxPoints(options: any[]): number {
-    if (!options || options.length === 0) return 0;
-    return Math.max(...options.map((option) => option.points || 0));
-  }
-
-  private calculateCheckboxMaxPoints(
-    options: any[],
-    scoringMethod: string = 'sum',
-    maxSelections?: number,
-  ): number {
-    if (!options || options.length === 0) return 0;
-
-    const optionPoints = options.map((option) => option.points || 0);
-    const selectionsLimit = maxSelections || options.length;
-
-    switch (scoringMethod) {
-      case 'sum':
-        return optionPoints
-          .sort((a, b) => b - a)
-          .slice(0, selectionsLimit)
-          .reduce((sum, points) => sum + points, 0);
-
-      case 'average':
-        return (
-          optionPoints.reduce((sum, points) => sum + points, 0) /
-          optionPoints.length
-        );
-
-      case 'max':
-        return Math.max(...optionPoints);
-
-      default:
-        return Math.max(...optionPoints);
-    }
-  }
-
-  private calculateLongTextMaxPoints(
-    completionPoints: number = 0,
-    keywordScoring: any[] = [],
-  ): number {
-    const keywordPoints =
-      keywordScoring?.reduce(
-        (sum, keyword) => sum + (keyword.points || 0),
-        0,
-      ) || 0;
-    return completionPoints + keywordPoints;
-  }
-
-  private calculateGridMaxPoints(gridColumns: any[], gridRows: any[]): number {
-    if (
-      !gridColumns ||
-      gridColumns.length === 0 ||
-      !gridRows ||
-      gridRows.length === 0
-    ) {
-      return 0;
-    }
-
-    const maxColumnPoints = Math.max(
-      ...gridColumns.map((col) => col.points || 0),
-    );
-    const totalWeightedRows = gridRows.reduce(
-      (sum, row) => sum + (row.weight || 1),
-      0,
-    );
-
-    return Math.round(maxColumnPoints * totalWeightedRows);
   }
 
   // Enhanced getAssessments with statistics
@@ -868,48 +1338,6 @@ export class AssessmentService {
     }
   }
 
-  async deleteQuestion(questionId: string): Promise<any> {
-    try {
-      const result = await this.questionRepository.delete({
-        _id: new Types.ObjectId(questionId),
-      });
-
-      return {
-        success: true,
-        message: 'Question deleted successfully',
-        data: result,
-      };
-    } catch (error) {
-      this.logger.error('Error deleting question:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to delete question');
-    }
-  }
-
-  async updateQuestion(
-    questionId: string,
-    updateData: Partial<QuestionDocument>,
-  ): Promise<any> {
-    try {
-      const question = await this.questionRepository.update(
-        { _id: new Types.ObjectId(questionId) },
-        { ...updateData, updated_at: new Date() },
-      );
-
-      if (!question) {
-        throw BadRequestException.RESOURCE_NOT_FOUND('Question not found');
-      }
-
-      return {
-        success: true,
-        message: 'Question updated successfully',
-        data: question,
-      };
-    } catch (error) {
-      this.logger.error('Error updating question:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to update question');
-    }
-  }
-
   async getUserAssessments(userId: string): Promise<any> {
     try {
       const filter: any = {
@@ -928,6 +1356,118 @@ export class AssessmentService {
       throw BadRequestException.BAD_REQUEST(
         'Failed to retrieve user assessments',
       );
+    }
+  }
+
+  // Add this method to your AssessmentService class
+  async updateAssessment(
+    assessmentId: string,
+    updateAssessmentDto: UpdateAssessmentDto,
+  ): Promise<any> {
+    try {
+      // Validate assessment exists
+      const existingAssessment =
+        await this.assessmentRepository.findById(assessmentId);
+      if (!existingAssessment) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      // No authorization check needed here - RolesGuard handles it
+
+      const updatedItems = {
+        modules: [] as string[],
+        questions: [] as string[],
+        service_recommendations: [] as string[],
+      };
+
+      // Update assessment basic properties
+      const assessmentUpdateData: any = {};
+      if (updateAssessmentDto.title !== undefined) {
+        assessmentUpdateData.title = updateAssessmentDto.title;
+      }
+      if (updateAssessmentDto.description !== undefined) {
+        assessmentUpdateData.description = updateAssessmentDto.description;
+      }
+      if (updateAssessmentDto.instruction !== undefined) {
+        assessmentUpdateData.instruction = updateAssessmentDto.instruction;
+      }
+      if (updateAssessmentDto.is_active !== undefined) {
+        assessmentUpdateData.is_active = updateAssessmentDto.is_active;
+      }
+
+      if (Object.keys(assessmentUpdateData).length > 0) {
+        await this.assessmentRepository.findByIdAndUpdate(
+          assessmentId,
+          assessmentUpdateData,
+        );
+        this.logger.log(`Assessment ${assessmentId} basic properties updated`);
+      }
+
+      // Update modules if provided
+      if (
+        updateAssessmentDto.modules &&
+        updateAssessmentDto.modules.length > 0
+      ) {
+        const moduleUpdates = await this.updateModules(
+          assessmentId,
+          updateAssessmentDto.modules,
+        );
+        updatedItems.modules = moduleUpdates;
+      }
+
+      // Update questions if provided
+      if (
+        updateAssessmentDto.questions &&
+        updateAssessmentDto.questions.length > 0
+      ) {
+        const questionUpdates = await this.updateQuestions(
+          assessmentId,
+          updateAssessmentDto.questions,
+        );
+        updatedItems.questions = questionUpdates;
+      }
+
+      // Update service recommendations if provided
+      if (
+        updateAssessmentDto.service_recommendations &&
+        updateAssessmentDto.service_recommendations.length > 0
+      ) {
+        const serviceUpdates = await this.updateServiceRecommendations(
+          assessmentId,
+          updateAssessmentDto.service_recommendations,
+        );
+        updatedItems.service_recommendations = serviceUpdates;
+      }
+
+      // Recalculate total possible points if questions were updated
+      if (
+        updateAssessmentDto.questions &&
+        updateAssessmentDto.questions.length > 0
+      ) {
+        await this.recalculateTotalPoints(assessmentId);
+      }
+
+      // Get updated assessment with all relations
+      const updatedAssessmentData = await this.getAssessmentById(assessmentId);
+
+      return {
+        success: true,
+        message: 'Assessment updated successfully',
+        data: {
+          ...updatedAssessmentData.data,
+          updated_items: updatedItems,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error updating assessment:', error);
+
+      // Re-throw known exceptions to preserve their status codes
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // For unknown errors, throw a generic bad request
+      throw BadRequestException.BAD_REQUEST('Failed to update assessment');
     }
   }
 }

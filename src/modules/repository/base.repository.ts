@@ -159,4 +159,12 @@ export class BaseRepository<T> {
   async count(filter: FilterQuery<T> = {}): Promise<number> {
     return this.model.countDocuments(filter).exec();
   }
+
+  async findByIdAndUpdate(
+    id: string,
+    update: UpdateQuery<T>,
+    options: { new?: boolean; upsert?: boolean } = { new: true },
+  ): Promise<T | null> {
+    return this.model.findByIdAndUpdate(id, update, options).exec();
+  }
 }

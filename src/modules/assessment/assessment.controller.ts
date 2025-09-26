@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -10,6 +12,7 @@ import {
   Param,
   UseGuards,
   Request,
+  Put,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -19,6 +22,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBody,
+  ApiParam,
 } from '@nestjs/swagger';
 import { AssessmentService } from './assessment.service';
 import {
@@ -29,6 +33,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserTypes } from '../../shared/enums';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';
+import {
+  UpdateAssessmentDto,
+  UpdateAssessmentResDto,
+} from './dto/update-assessment.dto';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -541,6 +549,97 @@ export class AssessmentController {
   })
   async getAssessmentById(@Param('id') id: string): Promise<any> {
     return this.assessmentService.getAssessmentById(id);
+  }
+
+  @Put(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update an assessment (Admin only)',
+    description:
+      'Update an existing assessment with its modules, questions, and service recommendations. Only admins can update assessments.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    type: 'string',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiBody({
+    type: UpdateAssessmentDto,
+    description: 'Assessment update data',
+    examples: {
+      basicUpdate: {
+        summary: 'Basic assessment update',
+        value: {
+          title: 'Updated Digital Maturity Assessment',
+          description: 'Updated description for better clarity',
+          is_active: true,
+        },
+      },
+      addNewQuestion: {
+        summary: 'Add new question to assessment',
+        value: {
+          questions: [
+            {
+              type: 'multiple_choice',
+              question: 'How would you rate your AI adoption?',
+              step: 15,
+              module_ref: 'module-1',
+              options: [
+                { id: 'ai-1', text: 'No AI tools', points: 1 },
+                { id: 'ai-2', text: 'Basic AI tools', points: 3 },
+                { id: 'ai-3', text: 'Advanced AI', points: 5 },
+              ],
+            },
+          ],
+        },
+      },
+      updateExistingQuestion: {
+        summary: 'Update existing question',
+        value: {
+          questions: [
+            {
+              id: '507f1f77bcf86cd799439013',
+              question: 'Updated: What is your digital skill level?',
+              options: [
+                { id: 'opt-1', text: 'Beginner', points: 2 },
+                { id: 'opt-2', text: 'Intermediate', points: 5 },
+                { id: 'opt-3', text: 'Advanced', points: 8 },
+                { id: 'opt-4', text: 'Expert', points: 10 },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment updated successfully',
+    type: UpdateAssessmentResDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid data provided',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Can only update own assessments',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found',
+  })
+  async updateAssessment(
+    @Param('id') assessmentId: string,
+    @Body() updateAssessmentDto: UpdateAssessmentDto,
+  ): Promise<UpdateAssessmentResDto> {
+    return await this.assessmentService.updateAssessment(
+      assessmentId,
+      updateAssessmentDto,
+    );
   }
 
   // @Put('questions/:questionId')
