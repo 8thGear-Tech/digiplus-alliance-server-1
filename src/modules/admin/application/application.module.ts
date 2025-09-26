@@ -15,6 +15,8 @@ import { QuestionValidationService } from './services/question-validation.servic
 import { QuestionDataKeyService } from './services/question-data-key.service';
 import { Service, ServiceSchema } from '../services/schemas/service.schema';
 
+import { CloudinaryModule } from 'src/modules/cloudinary/cloudinary.module';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -22,6 +24,8 @@ import { Service, ServiceSchema } from '../services/schemas/service.schema';
       { name: UserSubmission.name, schema: UserSubmissionSchema },
       { name: Service.name, schema: ServiceSchema },
     ]),
+
+    CloudinaryModule,
   ],
   controllers: [AdminApplicationController],
   providers: [

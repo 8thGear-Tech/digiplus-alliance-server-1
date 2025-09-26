@@ -1,4 +1,3 @@
-// added by opeyemi
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ServiceTypesListDto {
@@ -6,5 +5,5 @@ export class ServiceTypesListDto {
     description: 'An array of all available service types.',
     example: ['Ecosystem Building', 'Digital Skills & Training'],
   })
-  serviceTypes: string[];
+  service_types: string[];
 }

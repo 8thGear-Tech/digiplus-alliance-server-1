@@ -29,6 +29,39 @@ export class UserApplicationService {
     private serviceModel: Model<Service>,
   ) {}
 
+  private transformUserSubmissions(submissions: any[]): any[] {
+    return submissions.map((submission) => {
+      const firstName = submission.responses['first_name'] || 'N/A';
+      const lastName = submission.responses['last_name'] || '';
+      const name = `${firstName} ${lastName}`.trim();
+
+      const submissionTime = new Date(submission.createdAt).toLocaleString();
+
+      const startDate = submission.start_date
+        ? new Date(submission.start_date).toLocaleString()
+        : null;
+
+      const endDate = submission.end_date
+        ? new Date(submission.end_date).toLocaleString()
+        : null;
+
+      return {
+        _id: submission._id,
+        name,
+        email: submission.responses['email'] || 'N/A',
+        service: submission.service,
+        service_type: submission.service_type,
+        payment_amount: submission.payment_amount || null,
+        status: submission.status,
+        payment_status: submission.payment_status,
+        submission_time: submissionTime,
+        start_date: startDate,
+        end_date: endDate,
+        timetable_url: submission.timetable_url || null,
+      };
+    });
+  }
+
   async getLiveFormsList(): Promise<FormListItemDto[]> {
     const forms = await this.applicationFormModel
       .find({ isLive: true })
@@ -41,7 +74,7 @@ export class UserApplicationService {
         throw new Error('Form is missing a required slug.');
       }
       return {
-        id: projectedForm.slug, // Use slug here
+        id: projectedForm.slug,
         welcome_title: projectedForm.welcome_title,
         welcome_description: projectedForm.welcome_description || '',
       };
@@ -83,10 +116,8 @@ export class UserApplicationService {
       throw new NotFoundException('Selected service not found.');
     }
 
-    // Perform validation on the submitted responses
     const formQuestions = new Map();
     form.questions.forEach((question) => {
-      // Only process questions with a data_key to avoid the 'undefined' error
       if (question.data_key) {
         formQuestions.set(question.data_key, {
           isRequired: question.is_required,
@@ -97,9 +128,7 @@ export class UserApplicationService {
 
     const submittedResponsesKeys = new Set(Object.keys(responses));
 
-    // A. Validate that all required questions have an answer
     form.questions.forEach((question) => {
-      // Only check required questions that have a data_key
       if (
         question.is_required &&
         question.data_key &&
@@ -111,7 +140,6 @@ export class UserApplicationService {
       }
     });
 
-    // B. Validate that no extra/invalid fields were submitted
     submittedResponsesKeys.forEach((key) => {
       if (!formQuestions.has(key)) {
         throw new BadRequestException(
@@ -120,13 +148,13 @@ export class UserApplicationService {
       }
     });
 
-    // Create the new user submission
     const newSubmission = new this.submissionModel({
       responses,
       service,
       userId,
-      serviceType: selectedService.serviceType,
+      service_type: selectedService.service_type,
       formId: form._id,
+      payment_amount: selectedService.price,
     });
 
     try {
@@ -138,7 +166,12 @@ export class UserApplicationService {
     }
   }
 
-  async getUserSubmissions(userId: string): Promise<UserSubmission[]> {
-    return this.submissionModel.find({ userId }).exec();
+  async getUserSubmissions(userId: string): Promise<any[]> {
+    const submissions = await this.submissionModel
+      .find({ userId })
+      .select('+start_date +end_date +timetable_url +payment_amount')
+      .exec();
+
+    return this.transformUserSubmissions(submissions);
   }
 }

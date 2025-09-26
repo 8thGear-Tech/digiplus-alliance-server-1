@@ -11,5 +11,5 @@ export class GetApplicationsDto {
   })
   @IsOptional()
   @IsEnum(ServicesTypes)
-  serviceType?: ServicesTypes;
+  service_type?: ServicesTypes;
 }
