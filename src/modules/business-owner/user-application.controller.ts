@@ -151,6 +151,31 @@ export class UserApplicationController {
     return this.userApplicationService.getUserSubmissions(userId);
   }
 
+  @Get('submissions/status-counts')
+  @ApiOperation({
+    summary:
+      'Get the count of user submissions under each status (Submitted, Approved, etc.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Status counts retrieved successfully.',
+    schema: {
+      example: {
+        Submitted: 5,
+        'Being Processed': 2,
+        Approved: 1,
+        Rejected: 0,
+        Completed: 0,
+      },
+    },
+  })
+  async getSubmissionStatusCounts(
+    @Req() req: any,
+  ): Promise<Record<string, number>> {
+    const userId = req.user._id;
+    return this.userApplicationService.getSubmissionStatusCounts(userId);
+  }
+
   // UPDATED: Endpoint to use slug instead of formId
   @Get(':slug/questions')
   @ApiOperation({ summary: 'Get questions for a specific form by slug' })
