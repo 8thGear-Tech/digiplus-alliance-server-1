@@ -14,13 +14,12 @@ export class ServiceResponseDto {
   })
   name: string;
 
-  // Add the serviceType property to the DTO
   @ApiProperty({
     description: 'The type or category of the service.',
     enum: ServicesTypes,
     example: ServicesTypes.digital_skills_and_training,
   })
-  serviceType: ServicesTypes;
+  service_type: ServicesTypes;
 
   @ApiProperty({
     description: 'Service image URL',

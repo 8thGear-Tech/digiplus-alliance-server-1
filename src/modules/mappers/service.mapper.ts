@@ -7,7 +7,7 @@ export function toServiceResponse(
   return {
     _id: service._id.toString(),
     name: service.name,
-    serviceType: service.serviceType,
+    service_type: service.service_type,
     image: service.image,
     price: service.price,
     subtitle: service.subtitle,

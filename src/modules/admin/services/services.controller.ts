@@ -136,8 +136,8 @@ export class ServicesController {
     type: ServiceTypesListDto,
   })
   getServiceTypes(): ServiceTypesListDto {
-    const serviceTypes = this.servicesService.getAvailableServiceTypes();
-    return { serviceTypes };
+    const service_types = this.servicesService.getAvailableServiceTypes();
+    return { service_types };
   }
 
   @Get(':id')

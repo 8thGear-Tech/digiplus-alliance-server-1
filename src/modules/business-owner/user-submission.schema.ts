@@ -9,7 +9,7 @@ import {
 @Schema({ timestamps: true })
 export class UserSubmission extends Document {
   @Prop({ type: Types.ObjectId, ref: 'ApplicationForm', required: true })
-  formId: Types.ObjectId; // Add this field
+  formId: Types.ObjectId;
 
   @Prop({ type: Object, required: true })
   responses: Record<string, any>;
@@ -17,10 +17,13 @@ export class UserSubmission extends Document {
   @Prop({ type: String, required: true })
   service: string;
 
-  // Add the serviceType field here
   @Prop({ type: String, enum: Object.values(ServicesTypes), required: true })
-  serviceType: ServicesTypes;
-  // Add the userId field
+  service_type: ServicesTypes;
+
+  // Add the service_price field
+  @Prop({ type: Number }) // Assuming price is a number
+  payment_amount?: number;
+
   @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId: string;
 
@@ -37,6 +40,15 @@ export class UserSubmission extends Document {
     default: PaymentStatus.NotPaid,
   })
   payment_status: PaymentStatus;
+
+  @Prop({ type: String })
+  timetable_url?: string;
+
+  @Prop({ type: Date })
+  start_date?: Date;
+
+  @Prop({ type: Date })
+  end_date?: Date;
 }
 
 export const UserSubmissionSchema =

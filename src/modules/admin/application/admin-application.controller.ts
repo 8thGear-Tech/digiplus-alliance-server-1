@@ -7,6 +7,9 @@ import {
   Get,
   Query,
   Patch,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
@@ -34,6 +38,8 @@ import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
 import { QuestionDataKeyService } from './services/question-data-key.service';
 import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -371,7 +377,7 @@ export class AdminApplicationController {
         _id: '654c6a654c6a4654c6a654c6a',
         name: 'Oyebode Anjoke',
         email: 'anjokea@gmail.com',
-        serviceType: 'Digital Skills & Training',
+        service_type: 'Digital Skills & Training',
         status: 'Approved',
         payment_status: 'Not Paid',
         timestamp: '16 June 2025 • 9.30 am',
@@ -429,9 +435,6 @@ export class AdminApplicationController {
     );
   }
 
-  //validation
-  // Add these methods to your AdminApplicationController
-
   @Get('validation-rules/:id')
   @ApiOperation({ summary: 'Get validation rules for a form' })
   async getFormValidationRules(@Param('id') id: string) {
@@ -447,8 +450,6 @@ export class AdminApplicationController {
     return { isValid: true, errors: [] };
   }
 
-  //trainings
-
   @Get('trainings/participants')
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -458,7 +459,7 @@ export class AdminApplicationController {
       'Returns a list of applications for "Digital Skills & Training" that have been approved and paid.',
   })
   @ApiQuery({
-    name: 'trainingName', // Change this to 'trainingName'
+    name: 'trainingName',
     required: false,
     description: 'Optional filter by training name (e.g., "Web Development").',
     type: String,
@@ -476,5 +477,88 @@ export class AdminApplicationController {
     @Query('trainingName') trainingName?: string,
   ): Promise<UserSubmission[]> {
     return this.adminApplicationService.getTrainingParticipants(trainingName);
+  }
+
+  @Patch('trainings/details')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary:
+      'Set start/end dates and/or upload timetable for all approved and paid participants of a specific training.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description:
+      'Date details and optional timetable file/URL. If a file is uploaded, the generated URL takes precedence over the timetableUrl field.',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'Optional timetable file to upload. This field maps to @UploadedFile().',
+        },
+
+        timetable_url: {
+          type: 'string',
+          example: 'https://storage.link/timetable_mire_plus.pdf',
+          description:
+            'Optional direct link to the timetable (used if no file is uploaded).',
+        },
+        start_date: {
+          type: 'string',
+          format: 'date',
+          example: '2025-10-15',
+          description: 'The start date of the training.',
+        },
+        end_date: {
+          type: 'string',
+          format: 'date',
+          example: '2025-10-30',
+          description: 'The end date of the training.',
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'trainingName',
+    required: true,
+    description:
+      'The exact name of the training service to update (e.g., "MIRE Plus").',
+    type: String,
+  })
+  async updateTrainingDetails(
+    @Query('trainingName') trainingName: string,
+    @Body() updateDto: UpdateTrainingDetailsDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!trainingName) {
+      throw new BadRequestException(
+        'A trainingName query parameter is required to identify the training service to update.',
+      );
+    }
+
+    const hasTimetableUrl = !!updateDto.timetable_url;
+    const hasDates = !!updateDto.start_date || !!updateDto.end_date;
+    const hasFile = !!file;
+
+    if (hasFile && hasTimetableUrl) {
+      throw new BadRequestException(
+        'You cannot submit both a file upload and a timetable URL. Please choose one.',
+      );
+    }
+
+    if (!hasFile && !hasTimetableUrl && !hasDates) {
+      throw new BadRequestException(
+        'Must provide a file, a timetable URL, a start date, or an end date.',
+      );
+    }
+    return this.adminApplicationService.updateTrainingDetails(
+      trainingName,
+      updateDto,
+      file,
+    );
   }
 }

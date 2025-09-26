@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   IsNotEmpty,
   IsString,
@@ -27,8 +24,6 @@ export class CreateServiceDto {
   @Transform(({ value }) => value?.trim())
   name: string;
 
-  //added by opeyemi
-  // Add the serviceType property with validation
   @ApiProperty({
     description: 'The category or type of the service.',
     enum: ServicesTypes,
@@ -38,7 +33,7 @@ export class CreateServiceDto {
   @IsEnum(ServicesTypes, {
     message: 'Service type must be a valid ServicesTypes enum value.',
   })
-  serviceType: ServicesTypes;
+  service_type: ServicesTypes;
 
   @ApiProperty({
     description: 'Service image URL or base64',

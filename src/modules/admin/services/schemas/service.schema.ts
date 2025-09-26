@@ -12,9 +12,8 @@ export class Service {
   @Prop({ required: true, trim: true, maxlength: 255 })
   name: string;
 
-  //added by opeyemi
   @Prop({ type: String, enum: Object.values(ServicesTypes), required: true })
-  serviceType: ServicesTypes;
+  service_type: ServicesTypes;
 
   @Prop({ required: true, trim: true })
   image: string;
