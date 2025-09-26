@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
@@ -444,5 +445,36 @@ export class AdminApplicationController {
   ) {
     const form = await this.adminApplicationService.getApplicationList({});
     return { isValid: true, errors: [] };
+  }
+
+  //trainings
+
+  @Get('trainings/participants')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Get a list of all approved and paid training participants.',
+    description:
+      'Returns a list of applications for "Digital Skills & Training" that have been approved and paid.',
+  })
+  @ApiQuery({
+    name: 'trainingName', // Change this to 'trainingName'
+    required: false,
+    description: 'Optional filter by training name (e.g., "Web Development").',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of training participants retrieved successfully.',
+    type: [UserSubmission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No approved and paid participants found.',
+  })
+  async getTrainingParticipants(
+    @Query('trainingName') trainingName?: string,
+  ): Promise<UserSubmission[]> {
+    return this.adminApplicationService.getTrainingParticipants(trainingName);
   }
 }

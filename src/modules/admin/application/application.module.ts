@@ -13,12 +13,14 @@ import {
 
 import { QuestionValidationService } from './services/question-validation.service';
 import { QuestionDataKeyService } from './services/question-data-key.service';
+import { Service, ServiceSchema } from '../services/schemas/service.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: ApplicationForm.name, schema: ApplicationFormSchema },
       { name: UserSubmission.name, schema: UserSubmissionSchema },
+      { name: Service.name, schema: ServiceSchema },
     ]),
   ],
   controllers: [AdminApplicationController],

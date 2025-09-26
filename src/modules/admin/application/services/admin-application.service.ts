@@ -15,6 +15,7 @@ import { QuestionDataKeyService } from './question-data-key.service';
 import { GetFormQuestionsDto } from '../dtos/get-form-questions.dto';
 import { ApplicationStatus, PaymentStatus } from 'src/shared/enums';
 import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
+import { Service } from '../../services/schemas/service.schema';
 
 @Injectable()
 export class AdminApplicationService {
@@ -23,17 +24,50 @@ export class AdminApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(UserSubmission.name)
     private submissionModel: Model<UserSubmission>,
-    private questionValidationService: QuestionValidationService, // Inject the service
+    @InjectModel(Service.name)
+    private serviceModel: Model<Service>,
+    private questionValidationService: QuestionValidationService,
     private questionDataKeyService: QuestionDataKeyService,
   ) {}
+
+  private transformTrainingsList(
+    submissions: any[],
+    servicePriceMap: any,
+  ): any[] {
+    return submissions.map((submission) => {
+      const firstName = submission.responses['first_name'] || 'N/A';
+      const lastName = submission.responses['last_name'] || '';
+      const name = `${firstName} ${lastName}`.trim();
+      const email = submission.responses['email'] || 'N/A';
+      const paymentStatus = submission.payment_status || 'Not Paid';
+
+      const specificService = submission.service;
+
+      const paymentAmount = servicePriceMap[specificService] || 'N/A';
+
+      return {
+        application_id: submission._id,
+        name,
+        email,
+        'Service/training type': submission.serviceType,
+        'Specific service name': specificService,
+        status: submission.status,
+        submission_time: new Date(submission.createdAt).toLocaleString(),
+        payment_status: paymentStatus,
+        payment_amount: paymentAmount,
+        timetable: submission.timetableUrl || null,
+        start_date: submission.start_date || null,
+      };
+    });
+  }
 
   private transformSubmissionsForList(submissions: any[]): any[] {
     return submissions.map((submission) => {
       const firstName = submission.responses['firstname'] || 'N/A';
       const lastName = submission.responses['lastname'] || '';
       const email = submission.responses['email'] || 'N/A';
-      const paymentStatus =
-        submission.responses['payment_status'] || 'Not Paid';
+
+      const paymentStatus = submission.payment_status || 'Not Paid';
 
       const name = `${firstName} ${lastName}`.trim();
 
@@ -44,7 +78,8 @@ export class AdminApplicationService {
         'Service/training type': submission.serviceType,
         status: submission.status,
         timestamp: new Date(submission.createdAt).toLocaleString(),
-        'Payment Stat': paymentStatus,
+
+        payment_status: paymentStatus,
       };
     });
   }
@@ -161,10 +196,6 @@ export class AdminApplicationService {
       );
 
       dto.questions.forEach((incomingQuestion) => {
-        // The manual data_key generation is removed from here.
-        // The DTO has already handled this via the @Transform decorator.
-
-        // Apply auto-validation logic
         if (
           (incomingQuestion.type === 'short_text' ||
             incomingQuestion.type === 'long_text') &&
@@ -289,5 +320,34 @@ export class AdminApplicationService {
       formId,
       validationRules,
     };
+  }
+
+  async getTrainingParticipants(trainingName?: string): Promise<any[]> {
+    const filter: any = {
+      status: ApplicationStatus.Approved,
+      payment_status: PaymentStatus.Paid,
+    };
+
+    if (trainingName && trainingName.trim() !== '') {
+      filter.service = new RegExp(trainingName.trim(), 'i');
+    } else {
+      filter.serviceType = new RegExp('Digital Skills & Training', 'i');
+    }
+
+    const submissions = await this.submissionModel.find(filter).exec();
+
+    if (submissions.length === 0) {
+      throw new NotFoundException(
+        `No approved and paid participants found for ${trainingName || 'digital skills & training'}.`,
+      );
+    }
+
+    const services = await this.serviceModel.find().exec();
+    const servicePriceMap = services.reduce((map, service) => {
+      map[service.name] = service.price;
+      return map;
+    }, {});
+
+    return this.transformTrainingsList(submissions, servicePriceMap);
   }
 }
