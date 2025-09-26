@@ -75,4 +75,13 @@ export class TokenQueryService {
       throw InternalServerErrorException.INTERNAL_SERVER_ERROR(error);
     }
   }
+
+  async deleteMany(filter: any): Promise<void> {
+    try {
+      await this.tokenRepository.deleteMany(filter);
+    } catch (error) {
+      console.error('Error deleting multiple tokens:', error);
+      throw InternalServerErrorException.INTERNAL_SERVER_ERROR(error);
+    }
+  }
 }

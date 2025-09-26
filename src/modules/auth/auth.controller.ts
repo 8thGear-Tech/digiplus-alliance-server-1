@@ -36,6 +36,7 @@ import { RefreshTokenGuard } from './guards/refresh.token.guard';
 import { RefreshResDto } from './dtos/refresh.dto';
 
 import { UnauthorizedException } from 'src/exceptions';
+import { ForgotPasswordReqDto } from './dtos/forgot-password.dto';
 
 const convertJwtExpiryToMs = (expiry: string): number => {
   const value = parseInt(expiry.slice(0, -1), 10);
@@ -80,6 +81,39 @@ export class AuthController {
     return this.authService.verifyEmail(verifyAccountDto);
   }
 
+  @ApiOperation({
+    summary: 'Request a password reset link to be sent to the provided email.',
+  })
+  @ApiOkResponse({
+    type: SignupResDto, // Use SignupResDto for a generic success/message response
+    description:
+      'A password reset link has been sent (or message returned if email is not registered).',
+  })
+  @HttpCode(200)
+  @Post('forgot-password')
+  async forgotPassword(
+    @Body(ValidationPipe) forgotPasswordReqDto: ForgotPasswordReqDto,
+  ) {
+    // The DTO must only contain the 'email' property
+    return this.authService.forgotPassword(forgotPasswordReqDto.email);
+  }
+
+  @ApiOperation({
+    summary: 'Set the new password using the temporary reset token.',
+  })
+  @ApiOkResponse({
+    type: SignupResDto,
+    description: 'Password has been successfully reset.',
+  })
+  @HttpCode(200)
+  @Post('reset-password')
+  async resetPassword(
+    @Body(ValidationPipe) resetPasswordReqDto: ResetPasswordReqDto,
+  ) {
+    // The DTO must contain the 'password' and 'resetToken' properties
+    return this.authService.resetPassword(resetPasswordReqDto);
+  }
+
   // POST /auth/login
   @ApiOkResponse({
     type: LoginResDto,
@@ -108,30 +142,6 @@ export class AuthController {
 
     return loginResponse;
   }
-  // async login(
-  //   @Body(ValidationPipe) loginReqDto: LoginReqDto,
-  //   @Res({ passthrough: true }) res: Response,
-  // ) {
-  //   const { refreshToken, ...response } =
-  //     await this.authService.login(loginReqDto);
-
-  //   const refreshTokenExpiryInMs = convertJwtExpiryToMs(
-  //     Constants.refreshTokenExpiry,
-  //   );
-
-  //   const cookieExpiresAt = new Date(Date.now() + refreshTokenExpiryInMs);
-
-  //   res.cookie(COOKIE_NAME, refreshToken, {
-  //     httpOnly: true,
-  //     secure: process.env.NODE_ENV === 'production',
-  //     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-
-  //     path: '/',
-  //     expires: cookieExpiresAt,
-  //   });
-
-  //   return response;
-  // }
 
   // POST /auth/logout
   @ApiBearerAuth()
