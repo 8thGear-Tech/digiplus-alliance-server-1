@@ -49,12 +49,12 @@ export class UserApplicationController {
         summary: 'Example submission payload',
         value: {
           responses: {
-            companyname: 'DigiPlus Alliance',
-            firstname: 'John',
-            lastname: 'Doe',
+            company_name: 'DigiPlus Alliance',
+            first_name: 'John',
+            last_name: 'Doe',
             email: 'johndoe@example.com',
-            phonenumber: '+2348012345678',
-            reasonforapplying: 'I want to join the digital community.',
+            phone_number: '+2348012345678',
+            reason_for_applying: 'I want to join the digital community.',
           },
           service: 'Digital Transformation Advisory',
         },
@@ -76,7 +76,7 @@ export class UserApplicationController {
           'reason-for-applying': 'I want to join the digital community.',
         },
         service: 'Digital Transformation Advisory',
-        // serviceType: 'Ecosystem Building', // This is populated by the backend
+        // serviceType: 'Ecosystem Building', // This is populated by the backend//
         status: 'Submitted',
         payment_status: 'Not Paid',
         createdAt: '2025-09-25T10:00:00.000Z',

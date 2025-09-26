@@ -5,12 +5,12 @@ export class SubmissionDto {
   @ApiProperty({
     description: 'The user responses for the application form.',
     example: {
-      companyname: 'DigiPlus Alliance',
-      firstname: 'John',
-      lastname: 'Doe',
+      company_name: 'DigiPlus Alliance',
+      first_name: 'John',
+      last_name: 'Doe',
       email: 'johndoe@example.com',
-      phonenumber: '+2348012345678',
-      reasonforapplying: 'I want to join the digital community.',
+      phone_number: '+2348012345678',
+      reason_for_applying: 'I want to join the digital community.',
     },
   })
   @IsNotEmpty()
