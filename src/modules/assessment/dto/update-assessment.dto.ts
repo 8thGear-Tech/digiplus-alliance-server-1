@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
+import { RecommendationLevel } from '../enums/recommendation-level.enum';
 
 // Simplified Update Question Option DTO
 export class UpdateQuestionOptionDto {
@@ -170,7 +171,7 @@ export class UpdateQuestionDto {
   @ApiProperty({ example: 'This assessment will help...', required: false })
   @IsOptional()
   @IsString()
-  welcome_message?: string;
+  welcome_description?: string;
 
   @ApiProperty({ example: 'Start Assessment', required: false })
   @IsOptional()
@@ -340,18 +341,14 @@ export class UpdateServiceRecommendationDto {
   max_points?: number;
 
   @ApiProperty({
-    example: ['digital_literacy', 'basic_tools'],
-    required: false,
+    example: ['Beginner', 'Foundational'],
+    description: 'Array of recommendation levels this service applies to',
+    type: [String],
+    enum: Object.values(RecommendationLevel),
   })
-  @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  categories?: string[];
-
-  @ApiProperty({ example: 1, required: false })
-  @IsOptional()
-  @IsNumber()
-  priority?: number;
+  @IsEnum(RecommendationLevel, { each: true })
+  level: RecommendationLevel[];
 }
 
 // Main Update Assessment DTO

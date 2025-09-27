@@ -1,6 +1,6 @@
-// service-recommendation.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { RecommendationLevel } from '../enums/recommendation-level.enum';
 
 export type ServiceRecommendationDocument = ServiceRecommendation & Document;
 
@@ -24,11 +24,12 @@ export class ServiceRecommendation extends Document {
   @Prop({ required: true })
   max_points: number;
 
-  @Prop({ type: [String], default: [] })
-  categories: string[];
-
-  @Prop({ required: true })
-  priority: number;
+  @Prop({
+    type: [String],
+    enum: Object.values(RecommendationLevel),
+    required: true,
+  })
+  level: RecommendationLevel[];
 }
 
 export const ServiceRecommendationSchema = SchemaFactory.createForClass(

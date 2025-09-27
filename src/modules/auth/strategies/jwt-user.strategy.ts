@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -24,8 +25,8 @@ export class JwtUserStrategy extends PassportStrategy(Strategy, 'authUser') {
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      // secretOrKey: configService.get('development.jwt.privateKey'),
-      secretOrKey: configService.get('production.jwt.privateKey'),
+      secretOrKey: configService.get('development.jwt.privateKey'),
+      // secretOrKey: configService.get('production.jwt.privateKey'),
     });
   }
 

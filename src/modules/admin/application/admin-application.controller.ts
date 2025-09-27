@@ -7,6 +7,9 @@ import {
   Get,
   Query,
   Patch,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,20 +17,29 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { AdminApplicationService } from './services/admin-application.service';
-import { Submission } from './schemas/submission.schema';
+import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
-} from './dtos/application-form.dto';
-import { ApplicationForm } from './schemas/application-form.schema';
+} from './dtos/create-application-form.dto';
+import {
+  ApplicationForm,
+  EmbeddedQuestion,
+} from './schemas/application-form.schema';
 import { GetApplicationsDto } from './dtos/get-applications.dto';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { UserTypes } from 'src/shared/enums';
+import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
+import { QuestionDataKeyService } from './services/question-data-key.service';
+import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -36,9 +48,9 @@ import { PublishFormDto } from './dtos/publish-form.dto';
 export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
+    private readonly questionDataKeyService: QuestionDataKeyService,
   ) {}
 
-  // Admin Routes for managing forms
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -59,7 +71,6 @@ export class AdminApplicationController {
             'This assessment helps us understand your needs.',
           welcome_instruction:
             'Please read the instructions carefully before proceeding. This will take about 10–15 minutes.\n\nTip: You can use the "Back" button anytime to review your answers.',
-          //   is_active: true,
         },
       },
       'Multiple Choice Form': {
@@ -67,8 +78,6 @@ export class AdminApplicationController {
         description:
           'An example of an application form using multiple choice questions.',
         value: {
-          //   title: 'University Admission Application',
-          //   description: 'Initial student information form.',
           modules: [
             {
               temp_id: 'personal-info-module',
@@ -92,7 +101,6 @@ export class AdminApplicationController {
               module_ref: 'personal-info-module',
             },
           ],
-          //   is_active: true,
         },
       },
       'Checkbox Form': {
@@ -100,8 +108,6 @@ export class AdminApplicationController {
         description:
           'An example of a form that uses checkbox questions for multiple selections.',
         value: {
-          //   title: 'Internship Application',
-          //   description: 'Form to apply for a software engineering internship.',
           modules: [
             {
               temp_id: 'skills-module',
@@ -133,8 +139,6 @@ export class AdminApplicationController {
         summary: 'Form with a Short Text Question',
         description: 'An example of a form that includes a short text input.',
         value: {
-          //   title: 'Contact Information',
-          //   description: 'Please provide your contact details.',
           modules: [
             {
               temp_id: 'contact-module',
@@ -160,8 +164,6 @@ export class AdminApplicationController {
         summary: 'Form with a Long Text Question',
         description: 'An example of a form that includes a long text input.',
         value: {
-          //   title: 'Feedback Form',
-          //   description: 'We would love to hear from you!',
           modules: [
             {
               temp_id: 'feedback-module',
@@ -187,8 +189,6 @@ export class AdminApplicationController {
         summary: 'Form with a Dropdown Question',
         description: 'An example of a form that uses a dropdown menu.',
         value: {
-          //   title: 'Survey',
-          //   description: 'A quick survey to gather demographic information.',
           modules: [
             {
               temp_id: 'demographics-module',
@@ -218,8 +218,6 @@ export class AdminApplicationController {
         summary: 'Form with Multiple Choice Grid Questions',
         description: 'An example of a form using a multiple choice grid.',
         value: {
-          //   title: 'Course Enrollment Form',
-          //   description: 'A form for selecting courses and rating your interest.',
           modules: [
             {
               temp_id: 'course-selection',
@@ -254,8 +252,6 @@ export class AdminApplicationController {
         description:
           'An example of a form that includes a file upload question.',
         value: {
-          //   title: 'Job Application',
-          //   description: 'A form for submitting a resume and cover letter.',
           modules: [
             {
               temp_id: 'documents-module',
@@ -283,6 +279,46 @@ export class AdminApplicationController {
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
     return this.adminApplicationService.createForm(dto);
+  }
+
+  @Get('forms')
+  @ApiOperation({ summary: 'Get a list of all application forms' })
+  @ApiResponse({
+    status: 200,
+    description: 'Forms retrieved successfully.',
+    type: [ApplicationForm],
+  })
+  async getMultipleForms(): Promise<ApplicationForm[]> {
+    return this.adminApplicationService.getAllForms();
+  }
+
+  @Get('list')
+  @ApiOperation({ summary: 'Get a list of all submitted applications' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of submissions retrieved successfully.',
+    type: [UserSubmission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No submissions found for the selected filter.',
+  })
+  async getApplicationList(
+    @Query() dto: GetApplicationsDto,
+  ): Promise<UserSubmission[]> {
+    return this.adminApplicationService.getApplicationList(dto);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single application form by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Form retrieved successfully.',
+    type: ApplicationForm,
+  })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  async getSingleForm(@Param('id') id: string): Promise<ApplicationForm> {
+    return this.adminApplicationService.getSingleForm(id);
   }
 
   @Patch(':id')
@@ -313,28 +349,91 @@ export class AdminApplicationController {
     return this.adminApplicationService.publishForm(id, isLive);
   }
 
-  // Common Routes for submissions
-  @Get('list')
-  @ApiOperation({ summary: 'Get a list of all submitted applications' })
-  @ApiResponse({ status: 200, type: [Submission] })
-  async getApplicationList(
-    @Query() dto: GetApplicationsDto,
-  ): Promise<Submission[]> {
-    return this.adminApplicationService.getApplicationList(dto);
-  }
-
   @Patch('status/:id')
   @ApiOperation({ summary: 'Update the status of a specific application' })
-  @ApiResponse({ status: 200, type: Submission })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [
+            'Submitted',
+            'Being Processed',
+            'Approved',
+            'Rejected',
+            'Completed',
+          ],
+          example: 'Approved',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        service_type: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Not Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
   async updateApplicationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
-  ): Promise<Submission> {
-    return this.adminApplicationService.updateApplicationStatus(id, status);
+  ): Promise<UserSubmission> {
+    return this.adminApplicationService.updateApplicationStatus(
+      id,
+      status as ApplicationStatus,
+    );
   }
 
-  //validation
-  // Add these methods to your AdminApplicationController
+  @Patch('payment-status/:id')
+  @ApiOperation({
+    summary: 'Update the payment status of a specific application',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        paymentStatus: {
+          type: 'string',
+          enum: ['Paid', 'Not Paid'],
+          example: 'Paid',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The submission payment status was updated successfully.',
+    schema: {
+      example: {
+        _id: '654c6a654c6a4654c6a654c6a',
+        name: 'Oyebode Anjoke',
+        email: 'anjokea@gmail.com',
+        serviceType: 'Digital Skills & Training',
+        status: 'Approved',
+        payment_status: 'Paid',
+        timestamp: '16 June 2025 • 9.30 am',
+      },
+    },
+  })
+  async updatePaymentStatus(
+    @Param('id') id: string,
+    @Body('paymentStatus') paymentStatus: string,
+  ): Promise<UserSubmission> {
+    return this.adminApplicationService.updatePaymentStatus(
+      id,
+      paymentStatus as PaymentStatus,
+    );
+  }
 
   @Get('validation-rules/:id')
   @ApiOperation({ summary: 'Get validation rules for a form' })
@@ -347,9 +446,119 @@ export class AdminApplicationController {
   async validateInput(
     @Body() dto: { questionId: string; value: string; formId: string },
   ) {
-    // This would be useful for real-time validation on the frontend
-    const form = await this.adminApplicationService.getApplicationList({}); // You'd need to get the specific form
-    // Implementation depends on your specific needs
+    const form = await this.adminApplicationService.getApplicationList({});
     return { isValid: true, errors: [] };
+  }
+
+  @Get('trainings/participants')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Get a list of all approved and paid training participants.',
+    description:
+      'Returns a list of applications for "Digital Skills & Training" that have been approved and paid.',
+  })
+  @ApiQuery({
+    name: 'trainingName',
+    required: false,
+    description: 'Optional filter by training name (e.g., "Web Development").',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of training participants retrieved successfully.',
+    type: [UserSubmission],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No approved and paid participants found.',
+  })
+  async getTrainingParticipants(
+    @Query('trainingName') trainingName?: string,
+  ): Promise<UserSubmission[]> {
+    return this.adminApplicationService.getTrainingParticipants(trainingName);
+  }
+
+  @Patch('trainings/details')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary:
+      'Set start/end dates and/or upload timetable for all approved and paid participants of a specific training.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description:
+      'Date details and optional timetable file/URL. If a file is uploaded, the generated URL takes precedence over the timetableUrl field.',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'Optional timetable file to upload. This field maps to @UploadedFile().',
+        },
+
+        timetable_url: {
+          type: 'string',
+          example: 'https://storage.link/timetable_mire_plus.pdf',
+          description:
+            'Optional direct link to the timetable (used if no file is uploaded).',
+        },
+        start_date: {
+          type: 'string',
+          format: 'date',
+          example: '2025-10-15',
+          description: 'The start date of the training.',
+        },
+        end_date: {
+          type: 'string',
+          format: 'date',
+          example: '2025-10-30',
+          description: 'The end date of the training.',
+        },
+      },
+    },
+  })
+  @ApiQuery({
+    name: 'trainingName',
+    required: true,
+    description:
+      'The exact name of the training service to update (e.g., "MIRE Plus").',
+    type: String,
+  })
+  async updateTrainingDetails(
+    @Query('trainingName') trainingName: string,
+    @Body() updateDto: UpdateTrainingDetailsDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!trainingName) {
+      throw new BadRequestException(
+        'A trainingName query parameter is required to identify the training service to update.',
+      );
+    }
+
+    const hasTimetableUrl = !!updateDto.timetable_url;
+    const hasDates = !!updateDto.start_date || !!updateDto.end_date;
+    const hasFile = !!file;
+
+    if (hasFile && hasTimetableUrl) {
+      throw new BadRequestException(
+        'You cannot submit both a file upload and a timetable URL. Please choose one.',
+      );
+    }
+
+    if (!hasFile && !hasTimetableUrl && !hasDates) {
+      throw new BadRequestException(
+        'Must provide a file, a timetable URL, a start date, or an end date.',
+      );
+    }
+    return this.adminApplicationService.updateTrainingDetails(
+      trainingName,
+      updateDto,
+      file,
+    );
   }
 }

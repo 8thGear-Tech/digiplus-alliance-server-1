@@ -7,10 +7,14 @@ export function toServiceResponse(
   return {
     _id: service._id.toString(),
     name: service.name,
+    service_type: service.service_type,
     image: service.image,
-    price: service.price,
+    images: service.images || [],
+    product_price: service.product_price,
+    discounted_price: service.discounted_price,
     subtitle: service.subtitle,
-    description: service.description,
+    short_description: service.short_description,
+    long_description: service.long_description,
     createdAt: service.createdAt,
     updatedAt: service.updatedAt,
   };

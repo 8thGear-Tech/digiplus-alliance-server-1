@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Get,
@@ -27,6 +29,7 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserTypes } from 'src/shared/enums';
 import { toServiceResponse } from 'src/modules/mappers/service.mapper';
+import { ServiceTypesListDto } from 'src/modules/admin/services/dto/service-types-list.dto';
 
 @ApiTags('Services')
 @Controller('services')
@@ -125,6 +128,18 @@ export class ServicesController {
   async getCount(): Promise<{ count: number }> {
     const count = await this.servicesService.getServicesCount();
     return { count };
+  }
+
+  @Get('types')
+  @ApiOperation({ summary: 'Get a list of all available service types' })
+  @ApiResponse({
+    status: 200,
+    description: 'A list of all service types.',
+    type: ServiceTypesListDto,
+  })
+  getServiceTypes(): ServiceTypesListDto {
+    const service_types = this.servicesService.getAvailableServiceTypes();
+    return { service_types };
   }
 
   @Get(':id')

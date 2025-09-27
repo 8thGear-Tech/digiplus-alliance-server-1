@@ -7,67 +7,73 @@ import {
   IsNumber,
   IsPositive,
   Length,
+  IsEnum,
+  IsOptional,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { ServicesTypes } from 'src/shared/enums';
 
 export class CreateServiceDto {
   @ApiProperty({
     description: 'Service name',
     example: 'Web Development',
-    maxLength: 255,
   })
-  @IsNotEmpty({ message: 'Service name is required' })
-  @IsString({ message: 'Service name must be a string' })
-  @Length(1, 255, {
-    message: 'Service name must be between 1 and 255 characters',
-  })
+  @IsNotEmpty()
+  @IsString()
+  @Length(1, 255)
   @Transform(({ value }) => value?.trim())
   name: string;
 
-  @ApiProperty({
-    description: 'Service image URL or base64',
-    example: 'https://example.com/image.jpg',
-  })
-  @IsNotEmpty({ message: 'Service image is required' })
-  @IsString({ message: 'Service image must be a string' })
-  @Transform(({ value }) => value?.trim())
+  @ApiProperty({ enum: ServicesTypes })
+  @IsEnum(ServicesTypes)
+  service_type: ServicesTypes;
+
+  @ApiProperty({ description: 'Main service image URL or base64' })
+  @IsNotEmpty()
+  @IsString()
   image: string;
 
   @ApiProperty({
-    description: 'Service price',
-    example: 1500.0,
-    type: 'number',
+    description: 'Additional images',
+    isArray: true,
+    type: String,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Service price is required' })
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiProperty({ description: 'Service base price', example: 2000 })
+  @IsNotEmpty()
   @Type(() => Number)
-  @IsNumber(
-    { maxDecimalPlaces: 2 },
-    { message: 'Price must be a valid number with up to 2 decimal places' },
-  )
-  @IsPositive({ message: 'Price must be a positive number' })
-  price: number;
+  @IsNumber()
+  @IsPositive()
+  product_price: number;
 
   @ApiProperty({
-    description: 'Service subtitle',
-    example: 'Professional web development services',
-    maxLength: 500,
+    description: 'Discounted price',
+    example: 1500,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Service subtitle is required' })
-  @IsString({ message: 'Service subtitle must be a string' })
-  @Length(1, 500, {
-    message: 'Service subtitle must be between 1 and 500 characters',
-  })
-  @Transform(({ value }) => value?.trim())
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  discounted_price?: number;
+
+  @ApiProperty({ description: 'Short description', maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  short_description?: string;
+
+  @ApiProperty({ description: 'Detailed description' })
+  @IsOptional()
+  @IsString()
+  long_description?: string;
+
+  @ApiProperty({ description: 'Subtitle' })
+  @IsNotEmpty()
+  @IsString()
+  @Length(1, 500)
   subtitle: string;
-
-  @ApiProperty({
-    description: 'Service description',
-    example:
-      'We provide comprehensive web development services including frontend, backend, and database design.',
-  })
-  @IsNotEmpty({ message: 'Service description is required' })
-  @IsString({ message: 'Service description must be a string' })
-  @Transform(({ value }) => value?.trim())
-  description: string;
 }

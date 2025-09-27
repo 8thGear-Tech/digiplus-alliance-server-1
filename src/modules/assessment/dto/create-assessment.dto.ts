@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
+import { RecommendationLevel } from '../enums/recommendation-level.enum';
 
 // Base question DTO with common properties
 export class BaseQuestionDto {
@@ -90,15 +91,19 @@ export class CreateWelcomeScreenDto extends BaseQuestionDto {
   @ApiProperty({
     example:
       'This assessment will help evaluate your digital readiness and provide personalized recommendations for your business growth.',
-    description: 'Welcome message content',
+    description: 'Welcome instruction content',
   })
   @IsString()
-  welcome_message: string;
+  welcome_instruction: string;
 
-  @ApiProperty({ example: 'Start Assessment', required: false })
+  @ApiProperty({
+    example:
+      'This assessment will help evaluate your digital readiness and provide personalized recommendations for your business growth.',
+    description: 'Welcome description content',
+  })
   @IsOptional()
   @IsString()
-  button_text?: string;
+  welcome_description?: string;
 }
 
 // Module Title DTO
@@ -599,16 +604,14 @@ export class ServiceRecommendationDto {
   max_points: number;
 
   @ApiProperty({
-    example: ['digital_literacy', 'basic_tools'],
-    description: 'Categories this service addresses',
+    example: ['Beginner', 'Foundational'],
+    description: 'Array of recommendation levels this service applies to',
+    type: [String],
+    enum: Object.values(RecommendationLevel),
   })
   @IsArray()
-  @IsString({ each: true })
-  categories: string[];
-
-  @ApiProperty({ example: 1 })
-  @IsNumber()
-  priority: number;
+  @IsEnum(RecommendationLevel, { each: true })
+  levels: RecommendationLevel[];
 }
 
 // Union type for all question DTOs

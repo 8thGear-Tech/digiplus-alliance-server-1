@@ -3,7 +3,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
@@ -30,10 +29,6 @@ import {
   // ServiceRecommendationDto,
 } from './dto/create-assessment.dto';
 import { UpdateAssessmentDto } from './dto/update-assessment.dto';
-// import {
-//   SubmitAssessmentDto,
-//   SubmitAssessmentResDto,
-// } from './dto/submit-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
 
@@ -51,7 +46,7 @@ export class AssessmentService {
     @Inject(Repositories.UserAssessmentRepository)
     private readonly userAssessmentRepository: BaseRepository<UserAssessmentDocument>,
     @Inject(Repositories.ServiceRecommendationRepository)
-    private readonly serviceRecommendationRepository: BaseRepository<any>, // Define proper type
+    private readonly serviceRecommendationRepository: BaseRepository<any>,
   ) {}
 
   // Add these methods to your AssessmentService class
@@ -99,8 +94,8 @@ export class AssessmentService {
 
     // Type-specific fields
     if (question.welcome_title) base.welcome_title = question.welcome_title;
-    if (question.welcome_message)
-      base.welcome_message = question.welcome_message;
+    if (question.welcome_description)
+      base.welcome_description = question.welcome_description;
     if (question.button_text) base.button_text = question.button_text;
     if (question.module_title) base.module_title = question.module_title;
     if (question.module_description)
@@ -143,7 +138,7 @@ export class AssessmentService {
       description: service.description,
       min_points: service.min_points,
       max_points: service.max_points,
-      categories: service.categories || [],
+      levels: service.levels || [],
       priority: service.priority,
       assessment_id: service.assessment_id,
     };
@@ -468,8 +463,8 @@ export class AssessmentService {
       case QuestionType.WELCOME_SCREEN:
         if (questionDto.welcome_title !== undefined)
           updateData.welcome_title = questionDto.welcome_title;
-        if (questionDto.welcome_message !== undefined)
-          updateData.welcome_message = questionDto.welcome_message;
+        if (questionDto.welcome_description !== undefined)
+          updateData.welcome_description = questionDto.welcome_description;
         if (questionDto.button_text !== undefined)
           updateData.button_text = questionDto.button_text;
         break;
@@ -604,7 +599,7 @@ export class AssessmentService {
         questionData = {
           ...baseQuestionData,
           welcome_title: questionDto.welcome_title,
-          welcome_message: questionDto.welcome_message,
+          welcome_description: questionDto.welcome_description,
           button_text: questionDto.button_text,
         };
         break;
@@ -866,8 +861,8 @@ export class AssessmentService {
             questionData = {
               ...baseQuestionData,
               welcome_title: welcomeDto.welcome_title,
-              welcome_message: welcomeDto.welcome_message,
-              button_text: welcomeDto.button_text,
+              welcome_description: welcomeDto.welcome_description,
+              welcome_instruction: welcomeDto.welcome_instruction,
             };
             break;
           }
@@ -983,7 +978,7 @@ export class AssessmentService {
         );
       }
 
-      // Step 4: Create service recommendations (if repository is available)
+      // Step 4: Create service recommendations
       const createdServiceRecommendations: any[] = [];
 
       if (
@@ -991,6 +986,13 @@ export class AssessmentService {
         createAssessmentDto.service_recommendations.length > 0
       ) {
         for (const serviceDto of createAssessmentDto.service_recommendations) {
+          // Validate level array is not empty
+          if (!serviceDto.levels || serviceDto.levels.length === 0) {
+            throw BadRequestException.BAD_REQUEST(
+              `Service ${serviceDto.service_id} must have at least one level specified`,
+            );
+          }
+
           const serviceData = {
             assessment_id: assessment._id as Types.ObjectId,
             service_id: serviceDto.service_id,
@@ -998,17 +1000,15 @@ export class AssessmentService {
             description: serviceDto.description,
             min_points: serviceDto.min_points,
             max_points: serviceDto.max_points,
-            categories: serviceDto.categories || [],
-            priority: serviceDto.priority,
+            levels: serviceDto.levels,
           };
 
-          // Uncomment when service recommendation repository is available
           const serviceRecommendation =
             await this.serviceRecommendationRepository.create(serviceData);
           createdServiceRecommendations.push(serviceRecommendation);
 
           this.logger.log(
-            `Service recommendation planned: ${serviceDto.service_name} (${serviceDto.min_points}-${serviceDto.max_points} pts)`,
+            `Service recommendation created: ${serviceDto.service_name} (${serviceDto.min_points}-${serviceDto.max_points} pts) for levels: ${serviceDto.levels.join(', ')}`,
           );
         }
       }
@@ -1228,22 +1228,27 @@ export class AssessmentService {
   async getServiceRecommendations(assessmentId: string, userScore: number) {
     try {
       // Uncomment when service recommendation repository is available
-      const recommendations = await this.serviceRecommendationRepository.find(
-        {
-          assessment_id: new Types.ObjectId(assessmentId),
-          min_points: { $lte: userScore },
-          max_points: { $gte: userScore },
-        },
-        null, // projection
-        { sort: { priority: 1 } },
-      );
+      const recommendations = await this.serviceRecommendationRepository.find({
+        assessment_id: new Types.ObjectId(assessmentId),
+        min_points: { $lte: userScore },
+        max_points: { $gte: userScore },
+      });
 
-      // For now, return empty array
-      // const recommendations: any[] = [];
+      // Custom sort order for levels
+      const levelOrder: Record<string, number> = {
+        Beginner: 1,
+        Foundational: 2,
+        Intermediate: 3,
+        Advanced: 4,
+      };
+
+      const sortedRecommendations = recommendations.sort(
+        (a, b) => (levelOrder[a.level] ?? 999) - (levelOrder[b.level] ?? 999),
+      );
 
       return {
         success: true,
-        data: recommendations,
+        data: sortedRecommendations,
         user_score: userScore,
       };
     } catch (error) {

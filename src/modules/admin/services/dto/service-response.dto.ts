@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ServicesTypes } from 'src/shared/enums';
 
 export class ServiceResponseDto {
   @ApiProperty({
@@ -14,16 +15,41 @@ export class ServiceResponseDto {
   name: string;
 
   @ApiProperty({
+    description: 'The type or category of the service.',
+    enum: ServicesTypes,
+    example: ServicesTypes.digital_skills_and_training,
+  })
+  service_type: ServicesTypes;
+
+  @ApiProperty({
     description: 'Service image URL',
     example: 'https://example.com/image.jpg',
   })
   image: string;
 
   @ApiProperty({
-    description: 'Service price',
-    example: 1500.0,
+    isArray: true,
+    type: String,
+    description: 'Additional service images',
+    example: [
+      'https://example.com/image1.jpg',
+      'https://example.com/image2.jpg',
+    ],
   })
-  price: number;
+  images: string[];
+
+  @ApiProperty({
+    description: 'Base product price',
+    example: 2000.0,
+  })
+  product_price: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Discounted price if applicable',
+    example: 1800.0,
+  })
+  discounted_price?: number;
 
   @ApiProperty({
     description: 'Service subtitle',
@@ -32,10 +58,18 @@ export class ServiceResponseDto {
   subtitle: string;
 
   @ApiProperty({
-    description: 'Service description',
-    example: 'We provide comprehensive web development services...',
+    required: false,
+    description: 'Short description',
+    example: 'Expert web development solutions',
   })
-  description: string;
+  short_description?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Detailed service description',
+    example: 'We offer comprehensive web development services including ...',
+  })
+  long_description?: string;
 
   @ApiProperty({
     description: 'Service creation date',
