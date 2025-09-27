@@ -1,7 +1,15 @@
-import { QueryOptions, UpdateWriteOpResult } from 'mongoose';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { QueryOptions, Types, UpdateWriteOpResult } from 'mongoose';
 import { Model, FilterQuery, UpdateQuery } from 'mongoose';
 
 export class BaseRepository<T> {
+  async find(
+    filter: FilterQuery<T> = {},
+    p0?: null,
+    options?: QueryOptions,
+  ): Promise<T[]> {
+    return this.model.find(filter, null, options).exec();
+  }
   constructor(private readonly model: Model<T>) {}
 
   async findAll(
@@ -91,6 +99,10 @@ export class BaseRepository<T> {
     return this.model.findOneAndDelete(filter).exec();
   }
 
+  async deleteMany(filter: FilterQuery<T>): Promise<any> {
+    return this.model.deleteMany(filter).exec();
+  }
+
   async findOneAndUpdate(
     filter: FilterQuery<T>,
     update: UpdateQuery<T>,
@@ -150,5 +162,13 @@ export class BaseRepository<T> {
 
   async count(filter: FilterQuery<T> = {}): Promise<number> {
     return this.model.countDocuments(filter).exec();
+  }
+
+  async findByIdAndUpdate(
+    id: string,
+    update: UpdateQuery<T>,
+    options: { new?: boolean; upsert?: boolean } = { new: true },
+  ): Promise<T | null> {
+    return this.model.findByIdAndUpdate(id, update, options).exec();
   }
 }

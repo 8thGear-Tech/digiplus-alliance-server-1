@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { Module, ValidationError, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Cron, ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
@@ -15,7 +16,7 @@ import * as dotenv from 'dotenv';
 
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import {
-  AllExceptionsFilter,
+  // AllExceptionsFilter,
   BadRequestExceptionFilter,
   ForbiddenExceptionFilter,
   NotFoundExceptionFilter,
@@ -24,8 +25,13 @@ import {
 } from './filters';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { AssessmentModule } from './modules/assessment/assessment.module';
 import { MongooseModelsModule } from './modules/mongoose-models/mongoose.models.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { BlogModule } from './modules/admin/blog/blog.module';
+import { ApplicationModule } from './modules/admin/application/application.module';
+import { UserApplicationModule } from './modules/business-owner/user-application.module';
+import { ServicesModule } from './modules/admin/services/services.module';
 
 dotenv.config();
 @Module({
@@ -95,13 +101,19 @@ dotenv.config();
     ScheduleModule.forRoot(),
     AuthModule,
     UserModule,
+    AssessmentModule,
     MongooseModelsModule,
     ProfileModule,
+    AssessmentModule,
+    BlogModule,
+    ApplicationModule,
+    UserApplicationModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_FILTER, useClass: ValidationExceptionFilter },
     { provide: APP_FILTER, useClass: BadRequestExceptionFilter },
     { provide: APP_FILTER, useClass: UnauthorizedExceptionFilter },
