@@ -28,22 +28,50 @@ export class ServiceResponseDto {
   image: string;
 
   @ApiProperty({
-    description: 'Service price',
-    example: 1500.0,
+    isArray: true,
+    type: String,
+    description: 'Additional service images',
+    example: [
+      'https://example.com/image1.jpg',
+      'https://example.com/image2.jpg',
+    ],
+  })
+  images: string[];
+
+  //changed by opeyemi
+  @ApiProperty({
+    description: 'Base product price',
+    example: 2000.0,
   })
   price: number;
 
   @ApiProperty({
-    description: 'Service subtitle',
-    example: 'Professional web development services',
+    required: false,
+    description: 'Discounted price if applicable',
+    example: 1800.0,
   })
-  subtitle: string;
+  discounted_price?: number;
+
+  //changed by opeyemi
+  // @ApiProperty({
+  //   description: 'Service subtitle',
+  //   example: 'Professional web development services',
+  // })
+  // subtitle: string;
 
   @ApiProperty({
-    description: 'Service description',
-    example: 'We provide comprehensive web development services...',
+    required: false,
+    description: 'Short description',
+    example: 'Expert web development solutions',
   })
-  description: string;
+  short_description?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Detailed service description',
+    example: 'We offer comprehensive web development services including ...',
+  })
+  long_description?: string;
 
   @ApiProperty({
     description: 'Service creation date',

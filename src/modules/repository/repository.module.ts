@@ -139,6 +139,8 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
 import { UserSchema } from '../user/user.schema';
 // import { BusinessProfileSchema } from '../profile/schemas/business.owner.schema';
 import { BlogSchema } from '../admin/blog/blog.schema';
+import { UserSubmissionSchema } from '../business-owner/user-submission.schema';
+import { ServiceSchema } from '../admin/services/schemas/service.schema';
 
 @Module({
   imports: [MongooseModelsModule],
@@ -216,6 +218,25 @@ import { BlogSchema } from '../admin/blog/blog.schema';
         new BaseRepository(applicationFormModel),
       inject: [getModelToken(DatabaseModelNames.APPLICATION_FORM)],
     },
+    {
+      provide: DatabaseModelNames.USER_SUBMISSION,
+      useValue: UserSubmissionSchema,
+    },
+    {
+      provide: Repositories.UserSubmissionRepository,
+      useFactory: (userSubmissionModel) =>
+        new BaseRepository(userSubmissionModel),
+      inject: [getModelToken(DatabaseModelNames.USER_SUBMISSION)],
+    },
+    {
+      provide: DatabaseModelNames.SERVICE,
+      useValue: ServiceSchema,
+    },
+    {
+      provide: Repositories.ServiceRepository,
+      useFactory: (serviceModel) => new BaseRepository(serviceModel),
+      inject: [getModelToken(DatabaseModelNames.SERVICE)],
+    },
   ],
   exports: [
     Repositories.UserRepository,
@@ -230,6 +251,8 @@ import { BlogSchema } from '../admin/blog/blog.schema';
     Repositories.ServiceRecommendationRepository,
     Repositories.BlogRepository,
     Repositories.ApplicationFormRepository,
+    Repositories.UserSubmissionRepository,
+    Repositories.ServiceRepository,
   ],
 })
 export class RepositoryModule {}

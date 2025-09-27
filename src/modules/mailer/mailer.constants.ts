@@ -131,8 +131,8 @@ export const forgotPasswordEmail = (user: User, link: string) => {
 
 export const ZEPTOMAIL_CONFIG = {
   host: process.env.ZEPTOMAIL_HOST,
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.ZEPTOMAIL_USERNAME,
     pass: process.env.ZEPTOMAIL_PASSWORD,

@@ -1,5 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { UserService } from './user.service';
+import { AdminMetrics, UserService } from './user.service';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -45,4 +45,25 @@ export class UserController {
   async getAllUsers(): Promise<User[]> {
     return this.userService.findAll();
   }
+
+  @Get('metrics')
+  @ApiOperation({
+    summary:
+      'Admin: Get key system metrics (Total Users, Applications, Assessments)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Dashboard metrics retrieved successfully.',
+    schema: {
+      example: {
+        totalUsers: 1500,
+        // totalApplications: 2500,
+        // totalAssessmentsCompleted: 980,
+      },
+    },
+  })
+  async getAdminMetrics(): Promise<AdminMetrics> {
+    return this.userService.getAdminMetrics();
+  }
+
 }

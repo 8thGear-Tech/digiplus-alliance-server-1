@@ -28,6 +28,7 @@ import { RepositoryModule } from 'src/modules/repository/repository.module';
 
     // RepositoryModule,
     CloudinaryModule,
+    // RepositoryModule,
   ],
   controllers: [AdminApplicationController],
   providers: [

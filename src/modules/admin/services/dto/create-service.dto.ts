@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   IsNotEmpty,
   IsString,
@@ -5,6 +8,7 @@ import {
   IsPositive,
   Length,
   IsEnum,
+  IsOptional,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -14,70 +18,63 @@ export class CreateServiceDto {
   @ApiProperty({
     description: 'Service name',
     example: 'Web Development',
-    maxLength: 255,
   })
-  @IsNotEmpty({ message: 'Service name is required' })
-  @IsString({ message: 'Service name must be a string' })
-  @Length(1, 255, {
-    message: 'Service name must be between 1 and 255 characters',
-  })
+  @IsNotEmpty()
+  @IsString()
+  @Length(1, 255)
   @Transform(({ value }) => value?.trim())
   name: string;
 
-  @ApiProperty({
-    description: 'The category or type of the service.',
-    enum: ServicesTypes,
-    example: ServicesTypes.digital_skills_and_training,
-  })
-  @IsNotEmpty({ message: 'Service type is required' })
-  @IsEnum(ServicesTypes, {
-    message: 'Service type must be a valid ServicesTypes enum value.',
-  })
+  @ApiProperty({ enum: ServicesTypes })
+  @IsEnum(ServicesTypes)
   service_type: ServicesTypes;
 
-  @ApiProperty({
-    description: 'Service image URL or base64',
-    example: 'https://example.com/image.jpg',
-  })
-  @IsNotEmpty({ message: 'Service image is required' })
-  @IsString({ message: 'Service image must be a string' })
-  @Transform(({ value }) => value?.trim())
+  @ApiProperty({ description: 'Main service image URL or base64' })
+  @IsNotEmpty()
+  @IsString()
   image: string;
 
   @ApiProperty({
-    description: 'Service price',
-    example: 1500.0,
-    type: 'number',
+    description: 'Additional images',
+    isArray: true,
+    type: String,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Service price is required' })
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiProperty({ description: 'Service base price', example: 2000 })
+  @IsNotEmpty()
   @Type(() => Number)
-  @IsNumber(
-    { maxDecimalPlaces: 2 },
-    { message: 'Price must be a valid number with up to 2 decimal places' },
-  )
-  @IsPositive({ message: 'Price must be a positive number' })
+  @IsNumber()
+  @IsPositive()
+  //changed by opeyemi
   price: number;
 
   @ApiProperty({
-    description: 'Service subtitle',
-    example: 'Professional web development services',
-    maxLength: 500,
+    description: 'Discounted price',
+    example: 1500,
+    required: false,
   })
-  @IsNotEmpty({ message: 'Service subtitle is required' })
-  @IsString({ message: 'Service subtitle must be a string' })
-  @Length(1, 500, {
-    message: 'Service subtitle must be between 1 and 500 characters',
-  })
-  @Transform(({ value }) => value?.trim())
-  subtitle: string;
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  discounted_price?: number;
 
-  @ApiProperty({
-    description: 'Service description',
-    example:
-      'We provide comprehensive web development services including frontend, backend, and database design.',
-  })
-  @IsNotEmpty({ message: 'Service description is required' })
-  @IsString({ message: 'Service description must be a string' })
-  @Transform(({ value }) => value?.trim())
-  description: string;
+  @ApiProperty({ description: 'Short description', maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  short_description?: string;
+
+  @ApiProperty({ description: 'Detailed description' })
+  @IsOptional()
+  @IsString()
+  long_description?: string;
+  //changed by opeyemi
+  // @ApiProperty({ description: 'Subtitle' })
+  // @IsNotEmpty()
+  // @IsString()
+  // @Length(1, 500)
+  // subtitle: string;
 }

@@ -134,6 +134,8 @@ export enum DatabaseModelNames {
   SERVICE_RECOMMENDATION = 'ServiceRecommendation',
   BLOG = 'Blog',
   APPLICATION_FORM = 'ApplicationForm',
+  USER_SUBMISSION = 'UserSubmission',
+  SERVICE = 'Service',
 }
 
 export enum TokenTypes {
@@ -206,6 +208,8 @@ export enum Repositories {
   ServiceRecommendationRepository = 'ServiceRecommendationRepository',
   BlogRepository = 'BlogRepository',
   ApplicationFormRepository = 'ApplicationFormRepository',
+  UserSubmissionRepository = 'UserSubmissionRepository',
+  ServiceRepository = 'ServiceRepository',
 }
 
 export enum NotificationTypes {

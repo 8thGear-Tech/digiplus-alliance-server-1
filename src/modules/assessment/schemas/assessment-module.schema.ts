@@ -2,7 +2,10 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { DatabaseCollectionNames } from '../../../shared/enums/db.enum';
 
-export type AssessmentModuleDocument = AssessmentModule & Document;
+export type AssessmentModuleDocument = AssessmentModule &
+  Document & {
+    _id: Types.ObjectId;
+  };
 
 @Schema({
   timestamps: true,

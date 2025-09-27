@@ -5,13 +5,14 @@ import { User } from './user.schema';
 import { Repositories } from 'src/shared/enums';
 import { BaseRepository } from '../repository/base.repository';
 // import { UserApplicationService } from '../business-owner/user-application.service';
-// import { AdminApplicationService } from '../admin/application/services/admin-application.service';
+import { AdminApplicationService } from '../admin/application/services/admin-application.service';
 
-// export interface AdminMetrics {
-//   totalUsers: number;
-//   totalApplications: number;
-//   // totalAssessmentsCompleted: number;
-// }
+export interface AdminMetrics {
+  totalUsers: number;
+  // totalApplications: number;
+  // totalAssessmentsCompleted: number;
+}
+
 
 @Injectable()
 export class UserService {
@@ -42,18 +43,19 @@ export class UserService {
     return `This action removes a #${id} user`;
   }
 
-  // async getAdminMetrics(): Promise<AdminMetrics> {
-  //   const totalUsers = await this.userRepository.count({});
+  async getAdminMetrics(): Promise<AdminMetrics> {
+    const totalUsers = await this.userRepository.count({});
 
-  //   const totalApplications =
-  //     await this.adminApplicationService.getTotalApplicationsCount();
-  //   // const totalAssessmentsCompleted =
-  //   //   await this.userApplicationService.getTotalAssessmentsCompletedCount();
+    // const totalApplications =
+    //   await this.adminApplicationService.getTotalApplicationsCount();
+    // const totalAssessmentsCompleted =
+    //   await this.userApplicationService.getTotalAssessmentsCompletedCount();
 
-  //   return {
-  //     totalUsers,
-  //     totalApplications,
-  //     // totalAssessmentsCompleted,
-  //   };
-  // }
+    return {
+      totalUsers,
+      // totalApplications,
+      // totalAssessmentsCompleted,
+    };
+  }
+
 }

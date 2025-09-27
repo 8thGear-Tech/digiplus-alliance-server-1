@@ -333,21 +333,23 @@ export class CreateApplicationFormDto {
     type: [ModuleDto],
     description: 'An array of modules to organize the form.',
   })
-  @IsNotEmpty()
+  // @IsNotEmpty()
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ModuleDto)
-  modules: ModuleDto[];
+  modules?: ModuleDto[];
 
   @ApiProperty({
     type: [QuestionDto],
     description: 'An array of question objects.',
   })
-  @IsNotEmpty()
+  // @IsNotEmpty()
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => QuestionDto)
-  questions: QuestionDto[];
+  questions?: QuestionDto[];
 
   @ApiProperty({
     example: true,
