@@ -29,7 +29,7 @@ export class ServiceRecommendation extends Document {
     enum: Object.values(RecommendationLevel),
     required: true,
   })
-  level: RecommendationLevel[];
+  levels: RecommendationLevel[];
 }
 
 export const ServiceRecommendationSchema = SchemaFactory.createForClass(

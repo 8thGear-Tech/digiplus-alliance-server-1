@@ -715,10 +715,8 @@ export class AssessmentService {
           updateData.min_points = serviceDto.min_points;
         if (serviceDto.max_points !== undefined)
           updateData.max_points = serviceDto.max_points;
-        if (serviceDto.categories !== undefined)
-          updateData.categories = serviceDto.categories;
-        if (serviceDto.priority !== undefined)
-          updateData.priority = serviceDto.priority;
+        if (serviceDto.levels !== undefined)
+          updateData.levels = serviceDto.levels;
 
         if (Object.keys(updateData).length > 0) {
           await this.serviceRecommendationRepository.findByIdAndUpdate(
@@ -737,8 +735,7 @@ export class AssessmentService {
           description: serviceDto.description,
           min_points: serviceDto.min_points,
           max_points: serviceDto.max_points,
-          categories: serviceDto.categories || [],
-          priority: serviceDto.priority,
+          levels: serviceDto.levels || [],
         };
 
         const newService =
@@ -1132,6 +1129,7 @@ export class AssessmentService {
   }
 
   // Method to calculate user score from assessment responses
+  // Method to calculate user score from assessment responses
   calculateUserScore(questions: any[], userResponses: any): number {
     let totalScore = 0;
 
@@ -1146,7 +1144,8 @@ export class AssessmentService {
             (opt: any) => opt.id === response,
           );
           if (selectedOption) {
-            totalScore += selectedOption.points || 0;
+            // Use 'points' instead of 'value' - check both for backward compatibility
+            totalScore += selectedOption.points || selectedOption.value || 0;
           }
           break;
         }
@@ -1160,19 +1159,21 @@ export class AssessmentService {
 
           if (question.scoring_method === 'sum') {
             totalScore += selectedOptions.reduce(
-              (sum: number, opt: any) => sum + (opt.points || 0),
+              (sum: number, opt: any) => sum + (opt.points || opt.value || 0),
               0,
             );
           } else if (question.scoring_method === 'average') {
             const avgScore =
               selectedOptions.reduce(
-                (sum: number, opt: any) => sum + (opt.points || 0),
+                (sum: number, opt: any) => sum + (opt.points || opt.value || 0),
                 0,
               ) / selectedOptions.length;
             totalScore += avgScore || 0;
           } else if (question.scoring_method === 'max') {
             totalScore += Math.max(
-              ...selectedOptions.map((opt: any) => opt.points || 0),
+              ...selectedOptions.map(
+                (opt: any) => opt.points || opt.value || 0,
+              ),
               0,
             );
           }
@@ -1213,7 +1214,9 @@ export class AssessmentService {
                 (c: any) => c.id === columnId,
               );
               if (row && column) {
-                totalScore += (column.points || 0) * (row.weight || 1);
+                // Use 'points' instead of 'value' - check both for backward compatibility
+                totalScore +=
+                  (column.points || column.value || 0) * (row.weight || 1);
               }
             });
           }
@@ -1225,88 +1228,77 @@ export class AssessmentService {
   }
 
   // Method to get service recommendations for a user's score
+  // Method to get service recommendations for a user's score
   async getServiceRecommendations(assessmentId: string, userScore: number) {
     try {
-      // Uncomment when service recommendation repository is available
-      const recommendations = await this.serviceRecommendationRepository.find({
-        assessment_id: new Types.ObjectId(assessmentId),
-        min_points: { $lte: userScore },
-        max_points: { $gte: userScore },
-      });
+      // Get recommendations based on score range
+      const recommendations = await this.serviceRecommendationRepository.find(
+        {
+          assessment_id: new Types.ObjectId(assessmentId),
+          min_points: { $lte: userScore },
+          max_points: { $gte: userScore },
+        },
+        null,
+        { sort: { min_points: 1 } },
+      );
 
-      // Custom sort order for levels
-      const levelOrder: Record<string, number> = {
-        Beginner: 1,
-        Foundational: 2,
-        Intermediate: 3,
-        Advanced: 4,
-      };
+      // Load assessment safely
+      const assessment = await this.assessmentRepository.findById(assessmentId);
 
-      const sortedRecommendations = recommendations.sort(
-        (a, b) => (levelOrder[a.level] ?? 999) - (levelOrder[b.level] ?? 999),
+      const plainAssessment = assessment ? assessment.toObject() : null;
+
+      if (!plainAssessment) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      // Either use stored value or recalc dynamically
+      let totalPoints = (assessment as any).total_possible_points;
+      if (totalPoints === undefined) {
+        const questions = await this.questionRepository.find({
+          assessment_id: new Types.ObjectId(assessmentId),
+        });
+        totalPoints = this.calculateTotalPossiblePoints(questions);
+      }
+
+      const userLevel = this.getUserLevel(userScore, totalPoints);
+
+      // Filter recommendations by level
+      const filteredRecommendations = recommendations.filter(
+        (rec) => Array.isArray(rec.levels) && rec.levels.includes(userLevel),
+      );
+
+      const finalRecommendations =
+        filteredRecommendations.length > 0
+          ? filteredRecommendations
+          : recommendations;
+
+      this.logger.log(
+        `Found ${finalRecommendations.length} service recommendations for user score ${userScore} (level: ${userLevel})`,
       );
 
       return {
         success: true,
-        data: sortedRecommendations,
+        data: finalRecommendations.map((rec) => ({
+          id: rec._id,
+          service_id: rec.service_id,
+          service_name: rec.service_name,
+          description: rec.description,
+          min_points: rec.min_points,
+          max_points: rec.max_points,
+          levels: rec.levels, // now an array
+          match_reason:
+            Array.isArray(rec.levels) && rec.levels.includes(userLevel)
+              ? 'Level Match'
+              : 'Score Range Match',
+        })),
         user_score: userScore,
+        user_level: userLevel,
       };
     } catch (error) {
       this.logger.error('Error fetching service recommendations:', error);
       throw BadRequestException.BAD_REQUEST(
         'Failed to fetch service recommendations',
       );
-    }
-  }
-
-  // Method to submit assessment and get recommendations
-  async submitAssessment(
-    assessmentId: string,
-    userResponses: any,
-    userId?: string,
-  ) {
-    try {
-      const assessmentData = await this.getAssessmentById(assessmentId);
-      const questions = assessmentData.data.questions;
-
-      const userScore = this.calculateUserScore(questions, userResponses);
-      const recommendedServices = await this.getServiceRecommendations(
-        assessmentId,
-        userScore,
-      );
-
-      // Save the user's submission
-      if (userId) {
-        const userAssessmentData = {
-          user_id: new Types.ObjectId(userId),
-          assessment_id: new Types.ObjectId(assessmentId),
-          responses: userResponses,
-          score: userScore,
-          completed_at: new Date(),
-        };
-
-        await this.userAssessmentRepository.create(userAssessmentData);
-        this.logger.log(
-          `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
-        );
-      }
-
-      return {
-        success: true,
-        message: 'Assessment completed successfully',
-        data: {
-          user_score: userScore,
-          total_possible_points: assessmentData.data.total_possible_points,
-          percentage_score: Math.round(
-            (userScore / assessmentData.data.total_possible_points) * 100,
-          ),
-          recommended_services: recommendedServices.data,
-          assessment_title: assessmentData.data.assessment.title,
-        },
-      };
-    } catch (error) {
-      this.logger.error('Error submitting assessment:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
     }
   }
 
@@ -1474,5 +1466,91 @@ export class AssessmentService {
       // For unknown errors, throw a generic bad request
       throw BadRequestException.BAD_REQUEST('Failed to update assessment');
     }
+  }
+
+  async submitAssessment(
+    assessmentId: string,
+    userResponses: Record<string, any>,
+    userId?: string,
+  ) {
+    try {
+      const assessmentData = await this.getAssessmentById(assessmentId);
+
+      if (!assessmentData?.data) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      const { assessment, questions } = assessmentData.data;
+
+      // ✅ Calculate total possible points dynamically
+      const total_possible_points = questions.reduce((sum, q) => {
+        if (q.options?.length) {
+          const max = Math.max(...q.options.map((opt) => opt.value ?? 0));
+          return sum + max;
+        }
+        if (q.grid_columns?.length && q.grid_rows?.length) {
+          const max = Math.max(...q.grid_columns.map((col) => col.value ?? 0));
+          return sum + max * q.grid_rows.length;
+        }
+        return sum;
+      }, 0);
+
+      // ✅ Calculate user’s score
+      const userScore = this.calculateUserScore(questions, userResponses);
+
+      // ✅ Fetch recommendations
+      const recommendedServicesResult = await this.getServiceRecommendations(
+        assessmentId,
+        userScore,
+      );
+
+      const recommendedServices = recommendedServicesResult.data;
+
+      // ✅ Save submission
+      if (userId) {
+        const userAssessmentData = {
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          responses: userResponses,
+          score: userScore,
+          completed_at: new Date(),
+        };
+
+        await this.userAssessmentRepository.create(userAssessmentData);
+        this.logger.log(
+          `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Assessment completed successfully',
+        data: {
+          user_score: userScore,
+          total_possible_points,
+          percentage_score: Math.round(
+            (userScore / total_possible_points) * 100,
+          ),
+          recommended_services: recommendedServices,
+          assessment_title: assessment.title,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error submitting assessment:', error);
+      throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
+    }
+  }
+
+  // Add this helper method to determine user level
+  private getUserLevel(userScore: number, totalPoints: number): string {
+    if (totalPoints === 0) return 'Unknown';
+
+    const percentage = (userScore / totalPoints) * 100;
+
+    if (percentage >= 90) return 'Expert';
+    if (percentage >= 75) return 'Advanced';
+    if (percentage >= 50) return 'Intermediate';
+    if (percentage >= 25) return 'Foundational';
+    return 'Beginner';
   }
 }
