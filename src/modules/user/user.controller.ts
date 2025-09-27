@@ -65,4 +65,5 @@ export class UserController {
   async getAdminMetrics(): Promise<AdminMetrics> {
     return this.userService.getAdminMetrics();
   }
+
 }
