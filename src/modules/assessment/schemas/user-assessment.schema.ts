@@ -30,7 +30,10 @@ export class UserAssessment {
   answers: UserAnswer[];
 
   @Prop({ type: Number, required: true })
-  total_score: number;
+  user_score: number;
+
+  // @Prop({ type: Number, required: true })
+  // total_score: number;
 
   @Prop({ type: Number, required: true })
   max_possible_score: number;
@@ -41,8 +44,32 @@ export class UserAssessment {
   @Prop({ type: String })
   feedback?: string;
 
-  @Prop({ type: [String] })
-  suggested_services: string[];
+  // @Prop({ type: [String] })
+  // recommended_services: string[];
+
+  @Prop({
+    type: [
+      {
+        service_id: String,
+        service_name: String,
+        description: String,
+        min_points: Number,
+        max_points: Number,
+        levels: [String],
+        match_reason: String,
+      },
+    ],
+    required: false,
+  })
+  recommended_services: {
+    service_id: string;
+    service_name: string;
+    description: string;
+    min_points: number;
+    max_points: number;
+    levels: string[];
+    match_reason: string;
+  }[];
 
   @Prop({ type: Date, default: Date.now })
   completed_at: Date;

@@ -1723,8 +1723,6 @@ export class AssessmentService {
     return 'Advanced';
   }
 
-  //above: added by opeyemi
-
   async submitAssessment(
     assessmentId: string,
     userResponses: Record<string, any>,
@@ -1754,18 +1752,32 @@ export class AssessmentService {
 
       // ✅ Calculate user’s score
       const userScore = this.calculateUserScore(questions, userResponses);
+      const completedAt = new Date();
 
-      //below: added by opeyemi
-      const completedAt = new Date(); // Capture the completion time once
+      // ✅ Determine user level & percentage score
+      const percentage_score =
+        total_possible_points > 0
+          ? (userScore / total_possible_points) * 100
+          : 0;
+      const userLevel = this.determineUserLevel(
+        userScore,
+        total_possible_points,
+      );
 
-      //above: added by opeyemi
+      // ✅ Convert responses → answers to match schema
+      const answers = Object.entries(userResponses).map(
+        ([questionId, answer]) => ({
+          question_id: new Types.ObjectId(questionId),
+          answer,
+          score: undefined, // ✅ fixed: TS error gone (was null)
+        }),
+      );
 
       // ✅ Fetch recommendations
       const recommendedServicesResult = await this.getServiceRecommendations(
         assessmentId,
         userScore,
       );
-
       const recommendedServices = recommendedServicesResult.data;
 
       // ✅ Save submission
@@ -1773,10 +1785,12 @@ export class AssessmentService {
         const userAssessmentData = {
           user_id: new Types.ObjectId(userId),
           assessment_id: new Types.ObjectId(assessmentId),
-          responses: userResponses,
-          score: userScore,
-          // completed_at: new Date(),
-          completed_at: completedAt, // Use the captured time
+          answers, // ✅ matches schema
+          user_score: userScore,
+          max_possible_score: total_possible_points,
+          percentage_score,
+          recommended_services: recommendedServices,
+          completed_at: completedAt,
         };
 
         await this.userAssessmentRepository.create(userAssessmentData);
@@ -1785,33 +1799,13 @@ export class AssessmentService {
         );
       }
 
-      //below: added by opeyemi
-
-      // Determine the required user level
-      const userLevel = this.determineUserLevel(
-        userScore,
-        total_possible_points,
-      );
-
-      const percentage_score =
-        total_possible_points > 0
-          ? (userScore / total_possible_points) * 100
-          : null; // Avoid division by zero
-
-      //above: added by opeyemi
-
       return {
         success: true,
         message: 'Assessment completed successfully',
         data: {
           user_score: userScore,
-          //added by opeyemi
-          total_possible_points: total_possible_points,
-          percentage_score: percentage_score,
-          // total_possible_points,
-          // percentage_score: Math.round(
-          //   (userScore / total_possible_points) * 100,
-          // ),
+          total_possible_points,
+          percentage_score,
           user_level: userLevel,
           recommended_services: recommendedServices,
           assessment_title: assessment.title,
@@ -1823,6 +1817,108 @@ export class AssessmentService {
       throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
     }
   }
+
+  //above: added by opeyemi
+
+  // async submitAssessment(
+  //   assessmentId: string,
+  //   userResponses: Record<string, any>,
+  //   userId?: string,
+  // ) {
+  //   try {
+  //     const assessmentData = await this.getAssessmentById(assessmentId);
+
+  //     if (!assessmentData?.data) {
+  //       throw BadRequestException.BAD_REQUEST('Assessment not found');
+  //     }
+
+  //     const { assessment, questions } = assessmentData.data;
+
+  //     // ✅ Calculate total possible points dynamically
+  //     const total_possible_points = questions.reduce((sum, q) => {
+  //       if (q.options?.length) {
+  //         const max = Math.max(...q.options.map((opt) => opt.value ?? 0));
+  //         return sum + max;
+  //       }
+  //       if (q.grid_columns?.length && q.grid_rows?.length) {
+  //         const max = Math.max(...q.grid_columns.map((col) => col.value ?? 0));
+  //         return sum + max * q.grid_rows.length;
+  //       }
+  //       return sum;
+  //     }, 0);
+
+  //     // ✅ Calculate user’s score
+  //     const userScore = this.calculateUserScore(questions, userResponses);
+
+  //     //below: added by opeyemi
+  //     const completedAt = new Date(); // Capture the completion time once
+
+  //     //above: added by opeyemi
+
+  //     // ✅ Fetch recommendations
+  //     const recommendedServicesResult = await this.getServiceRecommendations(
+  //       assessmentId,
+  //       userScore,
+  //     );
+
+  //     const recommendedServices = recommendedServicesResult.data;
+
+  //     // ✅ Save submission
+  //     if (userId) {
+  //       const userAssessmentData = {
+  //         user_id: new Types.ObjectId(userId),
+  //         assessment_id: new Types.ObjectId(assessmentId),
+  //         responses: userResponses,
+  //         score: userScore,
+  //         // completed_at: new Date(),
+
+  //         completed_at: completedAt, // Use the captured time
+  //       };
+
+  //       await this.userAssessmentRepository.create(userAssessmentData);
+  //       this.logger.log(
+  //         `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
+  //       );
+  //     }
+
+  //     //below: added by opeyemi
+
+  //     // Determine the required user level
+  //     const userLevel = this.determineUserLevel(
+  //       userScore,
+  //       total_possible_points,
+  //     );
+
+  //     const percentage_score =
+  //       total_possible_points > 0
+  //         ? (userScore / total_possible_points) * 100
+  //         : null; // Avoid division by zero
+
+  //     //above: added by opeyemi
+
+  //     return {
+  //       success: true,
+  //       message: 'Assessment completed successfully',
+  //       data: {
+  //         user_score: userScore,
+  //         //added by opeyemi
+  //         total_possible_points: total_possible_points,
+  //         percentage_score: percentage_score,
+  //         // total_possible_points,
+  //         // percentage_score: Math.round(
+  //         //   (userScore / total_possible_points) * 100,
+  //         // ),
+  //         user_level: userLevel,
+  //         recommended_services: recommendedServices,
+  //         assessment_title: assessment.title,
+  //         completed_at: completedAt.toISOString(),
+  //       },
+  //     };
+  //   } catch (error) {
+  //     this.logger.error('Error submitting assessment:', error);
+  //     throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
+  //   }
+  // }
 
   // Add this helper method to determine user level
   private getUserLevel(userScore: number, totalPoints: number): string {

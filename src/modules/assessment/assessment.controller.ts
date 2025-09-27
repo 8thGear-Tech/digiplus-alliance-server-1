@@ -13,6 +13,7 @@ import {
   Request,
   Put,
   Patch,
+  Logger,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -41,6 +42,7 @@ import {
   SubmitAssessmentDto,
   SubmitAssessmentResDto,
 } from './dto/submit-assessment.dto';
+import { BadRequestException } from 'src/exceptions';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -48,6 +50,7 @@ import {
 @ApiBearerAuth()
 export class AssessmentController {
   constructor(private readonly assessmentService: AssessmentService) {}
+  private readonly logger = new Logger(AssessmentController.name);
 
   // Admin Routes
   @Post()
@@ -699,9 +702,26 @@ export class AssessmentController {
   ): Promise<SubmitAssessmentResDto> {
     const { assessment_id, responses, user_id } = submitAssessmentDto; // Destructure the DTO
 
+    // 🛑 ADD THIS LOG to see what your middleware is passing
+    console.log('--- Auth Debug ---');
+    console.log('req.user:', req.user);
+    console.log('user_id from body:', user_id);
+    console.log('------------------');
+
     // Use the authenticated user's ID as the final argument,
     // falling back to the DTO's user_id if needed, or null/undefined if not present.
-    const finalUserId = req.user?.user || user_id;
+
+    const authUserId = req.user?._id?.toString();
+    // Use the ID from auth first, then the body.
+    const finalUserId = authUserId || user_id;
+    this.logger.log(`Attempting submission with finalUserId: [${finalUserId}]`); // <-- ADD THIS LOG
+
+    // Ensure finalUserId is a non-empty string before calling the service
+    if (!finalUserId) {
+      throw BadRequestException.BAD_REQUEST(
+        'User authentication failed or ID is missing.',
+      );
+    }
 
     // ✅ CORRECT CALL: Pass the arguments in the order the Service expects them.
     return this.assessmentService.submitAssessment(
@@ -718,6 +738,8 @@ export class AssessmentController {
     description: 'User assessments retrieved successfully',
   })
   async getUserAssessments(@Request() req): Promise<any> {
-    return this.assessmentService.getUserAssessments(req.user.user);
+    console.log('req.user:', req.user);
+    console.log('req.user.user:', req.user?.user);
+    return this.assessmentService.getUserAssessments(req.user._id);
   }
 }
