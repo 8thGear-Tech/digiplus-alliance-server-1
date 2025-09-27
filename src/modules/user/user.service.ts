@@ -13,6 +13,7 @@ export interface AdminMetrics {
   // totalAssessmentsCompleted: number;
 }
 
+
 @Injectable()
 export class UserService {
   constructor(
@@ -56,4 +57,5 @@ export class UserService {
       // totalAssessmentsCompleted,
     };
   }
+
 }
