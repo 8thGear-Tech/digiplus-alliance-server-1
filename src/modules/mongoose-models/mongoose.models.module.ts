@@ -78,6 +78,8 @@ import { UserAssessmentSchema } from '../assessment/schemas/user-assessment.sche
 import { ServiceRecommendationSchema } from '../assessment/schemas/service-recommendation.schema';
 import { BlogSchema } from '../admin/blog/blog.schema';
 import { ApplicationFormSchema } from '../admin/application/schemas/application-form.schema';
+import { UserSubmissionSchema } from '../business-owner/user-submission.schema';
+import { ServiceSchema } from '../admin/services/schemas/service.schema';
 
 @Module({
   imports: [
@@ -111,6 +113,14 @@ import { ApplicationFormSchema } from '../admin/application/schemas/application-
       {
         name: DatabaseModelNames.APPLICATION_FORM,
         schema: ApplicationFormSchema,
+      },
+      {
+        name: DatabaseModelNames.USER_SUBMISSION,
+        schema: UserSubmissionSchema,
+      },
+      {
+        name: DatabaseModelNames.SERVICE,
+        schema: ServiceSchema,
       },
     ]),
   ],
