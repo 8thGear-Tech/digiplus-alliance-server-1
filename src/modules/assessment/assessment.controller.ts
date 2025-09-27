@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -10,6 +11,8 @@ import {
   Param,
   UseGuards,
   Request,
+  Put,
+  Patch,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -19,6 +22,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBody,
+  ApiParam,
 } from '@nestjs/swagger';
 import { AssessmentService } from './assessment.service';
 import {
@@ -29,6 +33,14 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserTypes } from '../../shared/enums';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';
+import {
+  UpdateAssessmentDto,
+  UpdateAssessmentResDto,
+} from './dto/update-assessment.dto';
+import {
+  SubmitAssessmentDto,
+  SubmitAssessmentResDto,
+} from './dto/submit-assessment.dto';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -70,9 +82,10 @@ export class AssessmentController {
               type: 'welcome_screen',
               question: 'Assessment Welcome',
               welcome_title: 'Digital Readiness Assessment',
-              welcome_message:
+              welcome_description:
                 'Welcome! This assessment will help us understand your current digital capabilities and provide personalized recommendations. It takes about 10-15 minutes to complete.',
-              button_text: 'Begin Assessment',
+              welcome_instruction:
+                'Click the button below to begin your digital transformation assessment journey.',
               step: 1,
               module_ref: 'intro-module',
               is_active: true,
@@ -116,27 +129,27 @@ export class AssessmentController {
                 {
                   id: 'opt-1',
                   text: 'Minimal - Basic email and web browsing',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-2',
                   text: 'Basic - Office applications and simple online tools',
-                  value: 2,
+                  points: 2,
                 },
                 {
                   id: 'opt-3',
                   text: 'Intermediate - Multiple digital tools for business',
-                  value: 3,
+                  points: 3,
                 },
                 {
                   id: 'opt-4',
                   text: 'Advanced - Integrated digital solutions',
-                  value: 4,
+                  points: 4,
                 },
                 {
                   id: 'opt-5',
                   text: 'Expert - Leading digital transformation',
-                  value: 5,
+                  points: 5,
                 },
               ],
               is_required: true,
@@ -170,32 +183,32 @@ export class AssessmentController {
                 {
                   id: 'opt-1',
                   text: 'Email marketing tools (Mailchimp, Constant Contact)',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-2',
                   text: 'Social media management (Hootsuite, Buffer)',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-3',
                   text: 'Customer relationship management (CRM)',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-4',
                   text: 'E-commerce platforms (Shopify, WooCommerce)',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-5',
                   text: 'Accounting software (QuickBooks, Xero)',
-                  value: 1,
+                  points: 1,
                 },
                 {
                   id: 'opt-6',
                   text: 'Project management tools (Trello, Asana)',
-                  value: 1,
+                  points: 1,
                 },
               ],
               min_selections: 1,
@@ -272,11 +285,11 @@ export class AssessmentController {
                 'Rate each area based on your current digital adoption and effectiveness',
               instruction: 'Select one option for each row',
               grid_columns: [
-                { id: 'col-1', text: 'Not Digitized', value: 1 },
-                { id: 'col-2', text: 'Basic Digital Tools', value: 2 },
-                { id: 'col-3', text: 'Integrated Systems', value: 3 },
-                { id: 'col-4', text: 'Advanced Analytics', value: 4 },
-                { id: 'col-5', text: 'AI-Powered Optimization', value: 5 },
+                { id: 'col-1', text: 'Not Digitized', points: 1 },
+                { id: 'col-2', text: 'Basic Digital Tools', points: 2 },
+                { id: 'col-3', text: 'Integrated Systems', points: 3 },
+                { id: 'col-4', text: 'Advanced Analytics', points: 4 },
+                { id: 'col-5', text: 'AI-Powered Optimization', points: 5 },
               ],
               grid_rows: [
                 { id: 'row-1', text: 'Customer relationship management' },
@@ -312,14 +325,14 @@ export class AssessmentController {
                 'Select the industry that best matches your business',
               placeholder: 'Select your industry',
               options: [
-                { id: 'opt-1', text: 'Technology & Software', value: 1 },
-                { id: 'opt-2', text: 'Healthcare & Medical', value: 2 },
-                { id: 'opt-3', text: 'Education & Training', value: 3 },
-                { id: 'opt-4', text: 'Finance & Banking', value: 4 },
-                { id: 'opt-5', text: 'Manufacturing', value: 5 },
-                { id: 'opt-6', text: 'Retail & E-commerce', value: 6 },
-                { id: 'opt-7', text: 'Professional Services', value: 7 },
-                { id: 'opt-8', text: 'Other', value: 8 },
+                { id: 'opt-1', text: 'Technology & Software', points: 1 },
+                { id: 'opt-2', text: 'Healthcare & Medical', points: 2 },
+                { id: 'opt-3', text: 'Education & Training', points: 3 },
+                { id: 'opt-4', text: 'Finance & Banking', points: 4 },
+                { id: 'opt-5', text: 'Manufacturing', points: 5 },
+                { id: 'opt-6', text: 'Retail & E-commerce', points: 6 },
+                { id: 'opt-7', text: 'Professional Services', points: 7 },
+                { id: 'opt-8', text: 'Other', points: 8 },
               ],
               is_required: true,
               step: 1,
@@ -359,8 +372,9 @@ export class AssessmentController {
               type: 'welcome_screen',
               question: 'Welcome',
               welcome_title: 'Digital Maturity Assessment',
-              welcome_message:
+              welcome_description:
                 'This assessment will recommend the best services for your digital transformation journey.',
+              welcome_instruction: 'Begin your personalized assessment now.',
               step: 1,
               module_ref: 'skills-module',
             },
@@ -469,8 +483,7 @@ export class AssessmentController {
               description: 'Essential tools and training for digital beginners',
               min_points: 0,
               max_points: 15,
-              categories: ['digital_literacy', 'basic_tools'],
-              priority: 1,
+              levels: ['Beginner', 'Foundational'],
             },
             {
               service_id: 'intermediate_package',
@@ -478,8 +491,7 @@ export class AssessmentController {
               description: 'Integrated solutions for growing businesses',
               min_points: 16,
               max_points: 30,
-              categories: ['tool_adoption', 'process_optimization'],
-              priority: 2,
+              levels: ['Beginner', 'Foundational'],
             },
             {
               service_id: 'advanced_package',
@@ -487,8 +499,7 @@ export class AssessmentController {
               description: 'Advanced analytics and AI-powered solutions',
               min_points: 31,
               max_points: 50,
-              categories: ['data_maturity', 'innovation_leadership'],
-              priority: 3,
+              levels: ['Beginner', 'Foundational'],
             },
           ],
           is_active: true,
@@ -543,6 +554,97 @@ export class AssessmentController {
     return this.assessmentService.getAssessmentById(id);
   }
 
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update an assessment (Admin only)',
+    description:
+      'Update an existing assessment with its modules, questions, and service recommendations. Only admins can update assessments.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    type: 'string',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiBody({
+    type: UpdateAssessmentDto,
+    description: 'Assessment update data',
+    examples: {
+      basicUpdate: {
+        summary: 'Basic assessment update',
+        value: {
+          title: 'Updated Digital Maturity Assessment',
+          description: 'Updated description for better clarity',
+          is_active: true,
+        },
+      },
+      addNewQuestion: {
+        summary: 'Add new question to assessment',
+        value: {
+          questions: [
+            {
+              type: 'multiple_choice',
+              question: 'How would you rate your AI adoption?',
+              step: 15,
+              module_ref: 'module-1',
+              options: [
+                { id: 'ai-1', text: 'No AI tools', points: 1 },
+                { id: 'ai-2', text: 'Basic AI tools', points: 3 },
+                { id: 'ai-3', text: 'Advanced AI', points: 5 },
+              ],
+            },
+          ],
+        },
+      },
+      updateExistingQuestion: {
+        summary: 'Update existing question',
+        value: {
+          questions: [
+            {
+              id: '507f1f77bcf86cd799439013',
+              question: 'Updated: What is your digital skill level?',
+              options: [
+                { id: 'opt-1', text: 'Beginner', points: 2 },
+                { id: 'opt-2', text: 'Intermediate', points: 5 },
+                { id: 'opt-3', text: 'Advanced', points: 8 },
+                { id: 'opt-4', text: 'Expert', points: 10 },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment updated successfully',
+    type: UpdateAssessmentResDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid data provided',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Can only update own assessments',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found',
+  })
+  async updateAssessment(
+    @Param('id') assessmentId: string,
+    @Body() updateAssessmentDto: UpdateAssessmentDto,
+  ): Promise<UpdateAssessmentResDto> {
+    return await this.assessmentService.updateAssessment(
+      assessmentId,
+      updateAssessmentDto,
+    );
+  }
+
   // @Put('questions/:questionId')
   // @UseGuards(RolesGuard)
   // @Roles(UserTypes.admin)
@@ -565,30 +667,57 @@ export class AssessmentController {
   // }
 
   // User Routes
-  //   @Post('submit')
-  //   @ApiOperation({ summary: 'Submit assessment answers' })
-  //   @ApiResponse({
-  //     status: 200,
-  //     description: 'Assessment submitted successfully',
-  //     type: SubmitAssessmentResDto,
-  //   })
-  //   async submitAssessment(
-  //     @Body() submitAssessmentDto: SubmitAssessmentDto,
-  //     @Request() req,
-  //   ): Promise<SubmitAssessmentResDto> {
-  //     return this.assessmentService.submitAssessment(
-  //       submitAssessmentDto,
-  //       req.user.user,
-  //     );
-  //   }
+  // @Post('submit')
+  // @ApiOperation({ summary: 'Submit assessment answers' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Assessment submitted successfully',
+  //   type: SubmitAssessmentResDto,
+  // })
+  // async submitAssessment(
+  //   @Body() submitAssessmentDto: SubmitAssessmentDto,
+  //   @Request() req,
+  // ): Promise<SubmitAssessmentResDto> {
+  //   return this.assessmentService.submitAssessment(
+  //     submitAssessmentDto,
+  //     req.user.user,
+  //   );
+  // }
 
-  //   @Get('user/submissions')
-  //   @ApiOperation({ summary: 'Get current user assessment submissions' })
-  //   @ApiResponse({
-  //     status: 200,
-  //     description: 'User assessments retrieved successfully',
-  //   })
-  //   async getUserAssessments(@Request() req): Promise<any> {
-  //     return this.assessmentService.getUserAssessments(req.user.user);
-  //   }
+  //added by opeyemi
+  // IN THE CONTROLLER
+  @Post('submit')
+  @ApiOperation({ summary: 'Submit assessment answers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment submitted successfully',
+    type: SubmitAssessmentResDto,
+  })
+  async submitAssessment(
+    @Body() submitAssessmentDto: SubmitAssessmentDto,
+    @Request() req, // Assumes req.user.user contains the authenticated user's ID string
+  ): Promise<SubmitAssessmentResDto> {
+    const { assessment_id, responses, user_id } = submitAssessmentDto; // Destructure the DTO
+
+    // Use the authenticated user's ID as the final argument,
+    // falling back to the DTO's user_id if needed, or null/undefined if not present.
+    const finalUserId = req.user?.user || user_id;
+
+    // ✅ CORRECT CALL: Pass the arguments in the order the Service expects them.
+    return this.assessmentService.submitAssessment(
+      assessment_id, // Argument 1: string
+      responses, // Argument 2: Record<string, any> (object)
+      finalUserId, // Argument 3: string | undefined
+    );
+  }
+
+  @Get('user/submissions')
+  @ApiOperation({ summary: 'Get current user assessment submissions' })
+  @ApiResponse({
+    status: 200,
+    description: 'User assessments retrieved successfully',
+  })
+  async getUserAssessments(@Request() req): Promise<any> {
+    return this.assessmentService.getUserAssessments(req.user.user);
+  }
 }

@@ -68,11 +68,10 @@ export class AdminApplicationController {
         summary: 'Standalone welcome screen (no modules or questions)',
         description: 'A form consisting only of a welcome screen.',
         value: {
-          welcome_title: 'Welcome to Our Assessment',
-          welcome_description:
-            'This assessment helps us understand your needs.',
+          welcome_title: 'Application for DigiPlus Alliance Services',
+          welcome_description: 'This application takes service request.',
           welcome_instruction:
-            'Please read the instructions carefully before proceeding. This will take about 10–15 minutes.\n\nTip: You can use the "Back" button anytime to review your answers.',
+            'Appication Instructions: Please fill out all required fields.',
         },
       },
       'Multiple Choice Form': {

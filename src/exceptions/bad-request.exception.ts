@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
 import { HttpException, HttpStatus } from '@nestjs/common';
 
@@ -8,9 +9,6 @@ import {
 } from './exceptions.interface';
 
 export class BadRequestException extends HttpException {
-  static BAD_REQUEST(arg0: string) {
-    throw new Error('Method not implemented.');
-  }
   @ApiProperty({
     enum: ExceptionConstants.BadRequestCodes,
     description: 'A unique code identifying the error.',
@@ -55,6 +53,14 @@ export class BadRequestException extends HttpException {
     this.success = false;
   }
 
+  static BAD_REQUEST(msg?: string): BadRequestException {
+    return new BadRequestException({
+      message: msg || 'Bad Request',
+      code: ExceptionConstants.BadRequestCodes.VALIDATION_ERROR,
+      success: false,
+    });
+  }
+
   /**
    * Set the Trace ID of the BadRequestException instance.
    * @param traceId A string representing the Trace ID.
@@ -80,6 +86,7 @@ export class BadRequestException extends HttpException {
    * Returns a new instance of BadRequestException representing an HTTP Request Timeout error.
    * @returns An instance of BadRequestException representing the error.
    */
+
   static HTTP_REQUEST_TIMEOUT = () => {
     return new BadRequestException({
       message: 'HTTP Request Timeout',
@@ -160,4 +167,12 @@ export class BadRequestException extends HttpException {
       success: false,
     });
   };
+
+  static FORBIDDEN(msg?: string): BadRequestException {
+    return new BadRequestException({
+      message: msg || 'Forbidden',
+      code: ExceptionConstants.BadRequestCodes.UNAUTHORIZED_ACCESS, // or create a FORBIDDEN code if you want
+      success: false,
+    });
+  }
 }

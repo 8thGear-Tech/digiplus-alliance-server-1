@@ -1,13 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/only-throw-error */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { Repositories } from '../../shared/enums/db.enum';
@@ -29,12 +19,10 @@ import {
   CreateWelcomeScreenDto,
   // ServiceRecommendationDto,
 } from './dto/create-assessment.dto';
-// import {
-//   SubmitAssessmentDto,
-//   SubmitAssessmentResDto,
-// } from './dto/submit-assessment.dto';
+import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
+import { ServicesService } from '../admin/services/services.service';
 
 @Injectable()
 export class AssessmentService {
@@ -50,10 +38,102 @@ export class AssessmentService {
     @Inject(Repositories.UserAssessmentRepository)
     private readonly userAssessmentRepository: BaseRepository<UserAssessmentDocument>,
     @Inject(Repositories.ServiceRecommendationRepository)
-    private readonly serviceRecommendationRepository: BaseRepository<any>, // Define proper type
+    private readonly serviceRecommendationRepository: BaseRepository<any>,
+
+    //added by opeyemi
+    private readonly servicesService: ServicesService,
   ) {}
 
   // Add these methods to your AssessmentService class
+
+  //below: added by opeyemi
+  private async validateServiceRecommendations(
+    serviceRecommendations: any[],
+  ): Promise<void> {
+    if (!serviceRecommendations || serviceRecommendations.length === 0) {
+      return; // No validation needed for empty array
+    }
+
+    const validationErrors: string[] = [];
+    const serviceNames = new Set<string>();
+    const serviceIds = new Set<string>();
+
+    for (const [index, serviceDto] of serviceRecommendations.entries()) {
+      // Check for duplicate service names within the assessment
+      if (serviceNames.has(serviceDto.service_name)) {
+        validationErrors.push(
+          `Duplicate service name '${serviceDto.service_name}' found at position ${index + 1}`,
+        );
+      } else {
+        serviceNames.add(serviceDto.service_name);
+      }
+
+      // Check for duplicate service IDs within the assessment
+      if (serviceDto.service_id && serviceIds.has(serviceDto.service_id)) {
+        validationErrors.push(
+          `Duplicate service ID '${serviceDto.service_id}' found at position ${index + 1}`,
+        );
+      } else if (serviceDto.service_id) {
+        serviceIds.add(serviceDto.service_id);
+      }
+
+      // REQUIRED: Service must exist in the main services catalog
+      try {
+        const existingService = await this.servicesService.findByName(
+          serviceDto.service_name,
+        );
+        if (!existingService) {
+          validationErrors.push(
+            `Service '${serviceDto.service_name}' does not exist in the services catalog. Please create the service first before adding it to recommendations.`,
+          );
+        } else {
+          // Verify the service_id matches the existing service if provided
+          if (
+            serviceDto.service_id &&
+            serviceDto.service_id !== existingService._id.toString()
+          ) {
+            this.logger.warn(
+              `Service ID mismatch for '${serviceDto.service_name}': provided '${serviceDto.service_id}' but actual ID is '${existingService._id}'`,
+            );
+            // Auto-correct the service_id to match existing service
+            serviceDto.service_id = existingService._id.toString();
+          } else if (!serviceDto.service_id) {
+            // Auto-assign service_id from existing service
+            serviceDto.service_id = existingService._id.toString();
+          }
+        }
+      } catch (error) {
+        // Service doesn't exist - this is now an error since services must exist
+        validationErrors.push(
+          `Service '${serviceDto.service_name}' not found in services catalog. All recommended services must be created before being referenced in assessments.`,
+        );
+      }
+
+      // Validate point ranges don't overlap (optional but recommended)
+      const otherServices = serviceRecommendations.filter(
+        (_, i) => i !== index,
+      );
+      for (const otherService of otherServices) {
+        const hasOverlap = !(
+          serviceDto.max_points < otherService.min_points ||
+          serviceDto.min_points > otherService.max_points
+        );
+
+        if (hasOverlap) {
+          validationErrors.push(
+            `Service '${serviceDto.service_name}' has overlapping point range (${serviceDto.min_points}-${serviceDto.max_points}) with '${otherService.service_name}' (${otherService.min_points}-${otherService.max_points})`,
+          );
+        }
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      throw BadRequestException.BAD_REQUEST(
+        `Service recommendation validation failed: ${validationErrors.join('; ')}`,
+      );
+    }
+  }
+  //above: added by opeyemi
 
   private mapAssessmentResponse(assessment: any) {
     return {
@@ -98,8 +178,8 @@ export class AssessmentService {
 
     // Type-specific fields
     if (question.welcome_title) base.welcome_title = question.welcome_title;
-    if (question.welcome_message)
-      base.welcome_message = question.welcome_message;
+    if (question.welcome_description)
+      base.welcome_description = question.welcome_description;
     if (question.button_text) base.button_text = question.button_text;
     if (question.module_title) base.module_title = question.module_title;
     if (question.module_description)
@@ -142,269 +222,12 @@ export class AssessmentService {
       description: service.description,
       min_points: service.min_points,
       max_points: service.max_points,
-      categories: service.categories || [],
+      levels: service.levels || [],
       priority: service.priority,
       assessment_id: service.assessment_id,
     };
   }
 
-  async createAssessment(
-    createAssessmentDto: CreateAssessmentDto,
-    userId: string,
-  ): Promise<CreateAssessmentResDto> {
-    try {
-      // Calculate total possible points first
-      const totalPossiblePoints = this.calculateTotalPossiblePoints(
-        createAssessmentDto.questions,
-      );
-
-      // Step 1: Create the assessment with enhanced data
-      const assessmentData = {
-        title: createAssessmentDto.title,
-        description: createAssessmentDto.description,
-        instruction: createAssessmentDto.instruction,
-        is_active: createAssessmentDto.is_active ?? true,
-        created_by: new Types.ObjectId(userId),
-        total_possible_points: totalPossiblePoints,
-      };
-
-      const assessment = await this.assessmentRepository.create(assessmentData);
-      this.logger.log(
-        `Assessment created with ID: ${assessment._id} and ${totalPossiblePoints} total points`,
-      );
-
-      // Step 2: Create modules and maintain a mapping for reference
-      const moduleMapping = new Map<string, Types.ObjectId>();
-      const createdModules: AssessmentModuleDocument[] = [];
-
-      for (const moduleDto of createAssessmentDto.modules) {
-        const moduleMaxPoints = this.calculateModulePoints(
-          moduleDto.temp_id,
-          createAssessmentDto.questions,
-        );
-
-        const moduleData = {
-          assessment_id: assessment._id as Types.ObjectId,
-          title: moduleDto.title,
-          description: moduleDto.description,
-          order: moduleDto.order,
-          max_points: moduleDto.max_points || moduleMaxPoints,
-        };
-
-        const module = await this.assessmentModuleRepository.create(moduleData);
-        moduleMapping.set(moduleDto.temp_id, module._id as Types.ObjectId);
-        createdModules.push(module);
-
-        this.logger.log(
-          `Module created: ${moduleDto.temp_id} -> ${module._id} with ${moduleData.max_points} points`,
-        );
-      }
-
-      // Step 3: Create questions using the module mapping with enhanced scoring
-      const createdQuestions: QuestionDocument[] = [];
-
-      for (const questionDto of createAssessmentDto.questions) {
-        const moduleId = moduleMapping.get(questionDto.module_ref);
-
-        if (!moduleId && questionDto.module_ref !== 'none') {
-          this.logger.warn(
-            `Module reference not found: ${questionDto.module_ref}`,
-          );
-          continue;
-        }
-
-        // Base question data that all question types have
-        const baseQuestionData = {
-          assessment_id: assessment._id as Types.ObjectId,
-          module_id: moduleId || undefined,
-          type: questionDto.type,
-          question: questionDto.question,
-          description: questionDto.description,
-          instruction: questionDto.instruction,
-          is_required: questionDto.is_required ?? false,
-          step: questionDto.step,
-          max_points: questionDto.max_points || 0,
-          scoring_categories: questionDto.scoring_categories || [],
-          is_active: questionDto.is_active ?? true,
-        };
-
-        // Type-specific data handling with enhanced scoring
-        let questionData: any = { ...baseQuestionData };
-
-        switch (questionDto.type) {
-          case QuestionType.WELCOME_SCREEN: {
-            const welcomeDto = questionDto as CreateWelcomeScreenDto;
-            questionData = {
-              ...baseQuestionData,
-              welcome_title: welcomeDto.welcome_title,
-              welcome_message: welcomeDto.welcome_message,
-              button_text: welcomeDto.button_text,
-            };
-            break;
-          }
-
-          case QuestionType.MODULE_TITLE: {
-            const moduleTitleDto = questionDto as CreateModuleTitleDto;
-            questionData = {
-              ...baseQuestionData,
-              module_title: moduleTitleDto.module_title,
-              module_description: moduleTitleDto.module_description,
-            };
-            break;
-          }
-
-          case QuestionType.MULTIPLE_CHOICE: {
-            const multipleChoiceDto =
-              questionDto as CreateMultipleChoiceQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              options: multipleChoiceDto.options || [],
-              max_points: this.calculateMultipleChoiceMaxPoints(
-                multipleChoiceDto.options,
-              ),
-            };
-            break;
-          }
-
-          case QuestionType.CHECKBOX: {
-            const checkboxDto = questionDto as CreateCheckboxQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              options: checkboxDto.options || [],
-              min_selections: checkboxDto.min_selections,
-              max_selections: checkboxDto.max_selections,
-              scoring_method: checkboxDto.scoring_method || 'sum',
-              max_points: this.calculateCheckboxMaxPoints(
-                checkboxDto.options,
-                checkboxDto.scoring_method,
-                checkboxDto.max_selections,
-              ),
-            };
-            break;
-          }
-
-          case QuestionType.DROPDOWN: {
-            const dropdownDto = questionDto as CreateDropdownQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              options: dropdownDto.options || [],
-              placeholder: dropdownDto.placeholder,
-              max_points: this.calculateMultipleChoiceMaxPoints(
-                dropdownDto.options,
-              ),
-            };
-            break;
-          }
-
-          case QuestionType.SHORT_TEXT: {
-            const shortTextDto = questionDto as CreateShortTextQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              placeholder: shortTextDto.placeholder,
-              max_length: shortTextDto.max_length,
-              min_length: shortTextDto.min_length,
-              completion_points: shortTextDto.completion_points || 0,
-              max_points: shortTextDto.completion_points || 0,
-            };
-            break;
-          }
-
-          case QuestionType.LONG_TEXT: {
-            const longTextDto = questionDto as CreateLongTextQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              placeholder: longTextDto.placeholder,
-              max_length: longTextDto.max_length,
-              min_length: longTextDto.min_length,
-              rows: longTextDto.rows,
-              completion_points: longTextDto.completion_points || 0,
-              keyword_scoring: longTextDto.keyword_scoring || [],
-              max_points: this.calculateLongTextMaxPoints(
-                longTextDto.completion_points,
-                longTextDto.keyword_scoring,
-              ),
-            };
-            break;
-          }
-
-          case QuestionType.MULTIPLE_CHOICE_GRID: {
-            const gridDto = questionDto as CreateMultipleChoiceGridQuestionDto;
-            questionData = {
-              ...baseQuestionData,
-              grid_columns: gridDto.grid_columns || [],
-              grid_rows: gridDto.grid_rows || [],
-              max_points: this.calculateGridMaxPoints(
-                gridDto.grid_columns,
-                gridDto.grid_rows,
-              ),
-            };
-            break;
-          }
-
-          default:
-            questionData = baseQuestionData;
-            break;
-        }
-
-        const question = await this.questionRepository.create(questionData);
-        createdQuestions.push(question);
-
-        this.logger.log(
-          `Question created for step ${questionDto.step} with ${questionData.max_points} max points`,
-        );
-      }
-
-      // Step 4: Create service recommendations (if repository is available)
-      const createdServiceRecommendations: any[] = [];
-
-      if (
-        createAssessmentDto.service_recommendations &&
-        createAssessmentDto.service_recommendations.length > 0
-      ) {
-        for (const serviceDto of createAssessmentDto.service_recommendations) {
-          const serviceData = {
-            assessment_id: assessment._id as Types.ObjectId,
-            service_id: serviceDto.service_id,
-            service_name: serviceDto.service_name,
-            description: serviceDto.description,
-            min_points: serviceDto.min_points,
-            max_points: serviceDto.max_points,
-            categories: serviceDto.categories || [],
-            priority: serviceDto.priority,
-          };
-
-          // Uncomment when service recommendation repository is available
-          const serviceRecommendation =
-            await this.serviceRecommendationRepository.create(serviceData);
-          createdServiceRecommendations.push(serviceRecommendation);
-
-          this.logger.log(
-            `Service recommendation planned: ${serviceDto.service_name} (${serviceDto.min_points}-${serviceDto.max_points} pts)`,
-          );
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Assessment created successfully',
-        data: {
-          assessment: this.mapAssessmentResponse(assessment),
-          modules: createdModules.map(this.mapModuleResponse),
-          questions: createdQuestions.map(this.mapQuestionResponse),
-          service_recommendations: createdServiceRecommendations.map(
-            this.mapServiceResponse,
-          ),
-        },
-      };
-    } catch (error) {
-      this.logger.error('Error creating assessment:', error);
-      throw BadRequestException.BAD_REQUEST(
-        'Failed to create assessment with modules and questions',
-      );
-    }
-  }
-
-  // Enhanced scoring calculation methods
   private calculateTotalPossiblePoints(questions: any[]): number {
     return questions.reduce((total, question) => {
       switch (question.type) {
@@ -563,6 +386,800 @@ export class AssessmentService {
     return Math.round(maxColumnPoints * totalWeightedRows);
   }
 
+  private async updateModules(
+    assessmentId: string,
+    modules: any[],
+  ): Promise<string[]> {
+    const updatedModuleIds: string[] = [];
+    const moduleMapping = new Map<string, Types.ObjectId>();
+
+    for (const moduleDto of modules) {
+      if (moduleDto.id) {
+        // Update existing module
+        const existingModule = await this.assessmentModuleRepository.findById(
+          moduleDto.id,
+        );
+        if (!existingModule) {
+          this.logger.warn(
+            `Module with ID ${moduleDto.id} not found, skipping...`,
+          );
+          continue;
+        }
+
+        const updateData: any = {};
+        if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
+        if (moduleDto.description !== undefined)
+          updateData.description = moduleDto.description;
+        if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
+        if (moduleDto.max_points !== undefined)
+          updateData.max_points = moduleDto.max_points;
+
+        if (Object.keys(updateData).length > 0) {
+          await this.assessmentModuleRepository.findByIdAndUpdate(
+            moduleDto.id,
+            updateData,
+          );
+          updatedModuleIds.push(moduleDto.id);
+          moduleMapping.set(
+            moduleDto.temp_id || moduleDto.id,
+            new Types.ObjectId(moduleDto.id),
+          );
+          this.logger.log(`Module ${moduleDto.id} updated`);
+        }
+      } else if (moduleDto.temp_id) {
+        // Create new module
+        const moduleData = {
+          assessment_id: new Types.ObjectId(assessmentId),
+          title: moduleDto.title,
+          description: moduleDto.description,
+          order: moduleDto.order,
+          max_points: moduleDto.max_points || 0,
+        };
+
+        const newModule =
+          await this.assessmentModuleRepository.create(moduleData);
+        moduleMapping.set(moduleDto.temp_id, newModule._id as Types.ObjectId);
+        updatedModuleIds.push(newModule._id.toString());
+        this.logger.log(`New module created: ${newModule._id}`);
+      }
+    }
+
+    return updatedModuleIds;
+  }
+
+  private async updateQuestions(
+    assessmentId: string,
+    questions: any[],
+  ): Promise<string[]> {
+    const updatedQuestionIds: string[] = [];
+
+    for (const questionDto of questions) {
+      try {
+        if (questionDto.id) {
+          // Update existing question
+          const existingQuestion = await this.questionRepository.findById(
+            questionDto.id,
+          );
+          if (!existingQuestion) {
+            this.logger.warn(
+              `Question with ID ${questionDto.id} not found, skipping...`,
+            );
+            continue;
+          }
+
+          const updateData = this.buildQuestionUpdateData(questionDto);
+          if (Object.keys(updateData).length > 0) {
+            await this.questionRepository.findByIdAndUpdate(
+              questionDto.id,
+              updateData,
+            );
+            updatedQuestionIds.push(questionDto.id);
+            this.logger.log(`Question ${questionDto.id} updated`);
+          }
+        } else {
+          // Create new question - validate required fields
+          if (!questionDto.type) {
+            throw BadRequestException.BAD_REQUEST(
+              'Question type is required for new questions',
+            );
+          }
+          if (questionDto.step === undefined || questionDto.step === null) {
+            throw BadRequestException.BAD_REQUEST(
+              'Question step is required for new questions',
+            );
+          }
+          if (!questionDto.question || questionDto.question.trim() === '') {
+            throw BadRequestException.BAD_REQUEST('Question text is required');
+          }
+          // Create new question
+          const questionData = this.buildNewQuestionData(
+            assessmentId,
+            questionDto,
+          );
+          const newQuestion =
+            await this.questionRepository.create(questionData);
+          updatedQuestionIds.push(
+            (newQuestion._id as Types.ObjectId).toString(),
+          );
+          this.logger.log(
+            `New question created: ${(newQuestion._id as Types.ObjectId).toString()}`,
+          );
+        }
+      } catch (error) {
+        // Add context about which question failed
+        const questionInfo = questionDto.id
+          ? `question ID ${questionDto.id}`
+          : `new question at step ${questionDto.step}`;
+        this.logger.error(`Error processing ${questionInfo}:`, error.message);
+
+        if (error instanceof BadRequestException) {
+          throw BadRequestException.BAD_REQUEST(
+            `Error with ${questionInfo}: ${error.message}`,
+          );
+        }
+        throw error;
+      }
+    }
+
+    return updatedQuestionIds;
+  }
+
+  private buildQuestionUpdateData(questionDto: any): any {
+    const updateData: any = {};
+
+    // Common properties
+    if (questionDto.question !== undefined)
+      updateData.question = questionDto.question;
+    if (questionDto.description !== undefined)
+      updateData.description = questionDto.description;
+    if (questionDto.instruction !== undefined)
+      updateData.instruction = questionDto.instruction;
+    if (questionDto.is_required !== undefined)
+      updateData.is_required = questionDto.is_required;
+    if (questionDto.step !== undefined) updateData.step = questionDto.step;
+    if (questionDto.is_active !== undefined)
+      updateData.is_active = questionDto.is_active;
+    if (questionDto.scoring_categories !== undefined)
+      updateData.scoring_categories = questionDto.scoring_categories;
+
+    // Type-specific properties
+    switch (questionDto.type) {
+      case QuestionType.WELCOME_SCREEN:
+        if (questionDto.welcome_title !== undefined)
+          updateData.welcome_title = questionDto.welcome_title;
+        if (questionDto.welcome_description !== undefined)
+          updateData.welcome_description = questionDto.welcome_description;
+        if (questionDto.button_text !== undefined)
+          updateData.button_text = questionDto.button_text;
+        break;
+
+      case QuestionType.MODULE_TITLE:
+        if (questionDto.module_title !== undefined)
+          updateData.module_title = questionDto.module_title;
+        if (questionDto.module_description !== undefined)
+          updateData.module_description = questionDto.module_description;
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE:
+      case QuestionType.DROPDOWN:
+        if (questionDto.options !== undefined) {
+          updateData.options = questionDto.options;
+          updateData.max_points = this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          );
+        }
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        break;
+
+      case QuestionType.CHECKBOX:
+        if (questionDto.options !== undefined) {
+          updateData.options = questionDto.options;
+          updateData.max_points = this.calculateCheckboxMaxPoints(
+            questionDto.options,
+            questionDto.scoring_method,
+            questionDto.max_selections,
+          );
+        }
+        if (questionDto.min_selections !== undefined)
+          updateData.min_selections = questionDto.min_selections;
+        if (questionDto.max_selections !== undefined)
+          updateData.max_selections = questionDto.max_selections;
+        if (questionDto.scoring_method !== undefined)
+          updateData.scoring_method = questionDto.scoring_method;
+        break;
+
+      case QuestionType.SHORT_TEXT:
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        if (questionDto.max_length !== undefined)
+          updateData.max_length = questionDto.max_length;
+        if (questionDto.min_length !== undefined)
+          updateData.min_length = questionDto.min_length;
+        if (questionDto.completion_points !== undefined) {
+          updateData.completion_points = questionDto.completion_points;
+          updateData.max_points = questionDto.completion_points;
+        }
+        break;
+
+      case QuestionType.LONG_TEXT:
+        if (questionDto.placeholder !== undefined)
+          updateData.placeholder = questionDto.placeholder;
+        if (questionDto.max_length !== undefined)
+          updateData.max_length = questionDto.max_length;
+        if (questionDto.min_length !== undefined)
+          updateData.min_length = questionDto.min_length;
+        if (questionDto.rows !== undefined) updateData.rows = questionDto.rows;
+        if (questionDto.completion_points !== undefined)
+          updateData.completion_points = questionDto.completion_points;
+        if (questionDto.keyword_scoring !== undefined)
+          updateData.keyword_scoring = questionDto.keyword_scoring;
+        if (
+          questionDto.completion_points !== undefined ||
+          questionDto.keyword_scoring !== undefined
+        ) {
+          updateData.max_points = this.calculateLongTextMaxPoints(
+            questionDto.completion_points,
+            questionDto.keyword_scoring,
+          );
+        }
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE_GRID:
+        if (questionDto.grid_columns !== undefined)
+          updateData.grid_columns = questionDto.grid_columns;
+        if (questionDto.grid_rows !== undefined)
+          updateData.grid_rows = questionDto.grid_rows;
+        if (
+          questionDto.grid_columns !== undefined ||
+          questionDto.grid_rows !== undefined
+        ) {
+          updateData.max_points = this.calculateGridMaxPoints(
+            questionDto.grid_columns || [],
+            questionDto.grid_rows || [],
+          );
+        }
+        break;
+    }
+
+    return updateData;
+  }
+
+  private buildNewQuestionData(assessmentId: string, questionDto: any): any {
+    // Validate required fields for new questions
+    if (!questionDto.type) {
+      throw BadRequestException.BAD_REQUEST(
+        'Question type is required for new questions',
+      );
+    }
+    if (questionDto.step === undefined || questionDto.step === null) {
+      throw BadRequestException.BAD_REQUEST(
+        'Question step is required for new questions',
+      );
+    }
+
+    // Use existing logic from createAssessment but for single question
+    const baseQuestionData = {
+      assessment_id: new Types.ObjectId(assessmentId),
+      module_id: questionDto.module_id
+        ? new Types.ObjectId(questionDto.module_id)
+        : undefined,
+      type: questionDto.type,
+      question: questionDto.question || '', // Provide default if missing
+      description: questionDto.description,
+      instruction: questionDto.instruction,
+      is_required: questionDto.is_required ?? false,
+      step: questionDto.step,
+      max_points: questionDto.max_points || 0,
+      scoring_categories: questionDto.scoring_categories || [],
+      is_active: questionDto.is_active ?? true,
+    };
+
+    // Apply type-specific data using existing logic
+    let questionData: any = { ...baseQuestionData };
+
+    switch (questionDto.type) {
+      case QuestionType.WELCOME_SCREEN:
+        questionData = {
+          ...baseQuestionData,
+          welcome_title: questionDto.welcome_title,
+          welcome_description: questionDto.welcome_description,
+          button_text: questionDto.button_text,
+        };
+        break;
+
+      case QuestionType.MODULE_TITLE:
+        questionData = {
+          ...baseQuestionData,
+          module_title: questionDto.module_title,
+          module_description: questionDto.module_description,
+        };
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          max_points: this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          ),
+        };
+        break;
+
+      case QuestionType.CHECKBOX:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          min_selections: questionDto.min_selections,
+          max_selections: questionDto.max_selections,
+          scoring_method: questionDto.scoring_method || 'sum',
+          max_points: this.calculateCheckboxMaxPoints(
+            questionDto.options,
+            questionDto.scoring_method,
+            questionDto.max_selections,
+          ),
+        };
+        break;
+
+      case QuestionType.DROPDOWN:
+        questionData = {
+          ...baseQuestionData,
+          options: questionDto.options || [],
+          placeholder: questionDto.placeholder,
+          max_points: this.calculateMultipleChoiceMaxPoints(
+            questionDto.options,
+          ),
+        };
+        break;
+
+      case QuestionType.SHORT_TEXT:
+        questionData = {
+          ...baseQuestionData,
+          placeholder: questionDto.placeholder,
+          max_length: questionDto.max_length,
+          min_length: questionDto.min_length,
+          completion_points: questionDto.completion_points || 0,
+          max_points: questionDto.completion_points || 0,
+        };
+        break;
+
+      case QuestionType.LONG_TEXT:
+        questionData = {
+          ...baseQuestionData,
+          placeholder: questionDto.placeholder,
+          max_length: questionDto.max_length,
+          min_length: questionDto.min_length,
+          rows: questionDto.rows,
+          completion_points: questionDto.completion_points || 0,
+          keyword_scoring: questionDto.keyword_scoring || [],
+          max_points: this.calculateLongTextMaxPoints(
+            questionDto.completion_points,
+            questionDto.keyword_scoring,
+          ),
+        };
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE_GRID:
+        questionData = {
+          ...baseQuestionData,
+          grid_columns: questionDto.grid_columns || [],
+          grid_rows: questionDto.grid_rows || [],
+          max_points: this.calculateGridMaxPoints(
+            questionDto.grid_columns,
+            questionDto.grid_rows,
+          ),
+        };
+        break;
+
+      default:
+        questionData = baseQuestionData;
+        break;
+    }
+
+    return questionData;
+  }
+
+  private async updateServiceRecommendations(
+    assessmentId: string,
+    serviceRecommendations: any[],
+  ): Promise<string[]> {
+    const updatedServiceIds: string[] = [];
+
+    for (const serviceDto of serviceRecommendations) {
+      if (serviceDto.id) {
+        // Update existing service recommendation
+        const updateData: any = {};
+        if (serviceDto.service_id !== undefined)
+          updateData.service_id = serviceDto.service_id;
+        if (serviceDto.service_name !== undefined)
+          updateData.service_name = serviceDto.service_name;
+        if (serviceDto.description !== undefined)
+          updateData.description = serviceDto.description;
+        if (serviceDto.min_points !== undefined)
+          updateData.min_points = serviceDto.min_points;
+        if (serviceDto.max_points !== undefined)
+          updateData.max_points = serviceDto.max_points;
+        if (serviceDto.levels !== undefined)
+          updateData.levels = serviceDto.levels;
+
+        if (Object.keys(updateData).length > 0) {
+          await this.serviceRecommendationRepository.findByIdAndUpdate(
+            serviceDto.id,
+            updateData,
+          );
+          updatedServiceIds.push(serviceDto.id);
+          this.logger.log(`Service recommendation ${serviceDto.id} updated`);
+        }
+      } else {
+        // Create new service recommendation
+        const serviceData = {
+          assessment_id: new Types.ObjectId(assessmentId),
+          service_id: serviceDto.service_id,
+          service_name: serviceDto.service_name,
+          description: serviceDto.description,
+          min_points: serviceDto.min_points,
+          max_points: serviceDto.max_points,
+          levels: serviceDto.levels || [],
+        };
+
+        const newService =
+          await this.serviceRecommendationRepository.create(serviceData);
+        updatedServiceIds.push(newService._id.toString());
+        this.logger.log(
+          `New service recommendation created: ${newService._id}`,
+        );
+      }
+    }
+
+    return updatedServiceIds;
+  }
+
+  private async recalculateTotalPoints(assessmentId: string): Promise<void> {
+    const questions = await this.questionRepository.find({
+      assessment_id: new Types.ObjectId(assessmentId),
+    });
+
+    const questionArray = Array.isArray(questions)
+      ? questions
+      : [questions].filter(Boolean);
+    const totalPoints = this.calculateTotalPossiblePoints(questionArray);
+
+    await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
+      total_possible_points: totalPoints,
+    });
+
+    this.logger.log(
+      `Total points recalculated for assessment ${assessmentId}: ${totalPoints}`,
+    );
+  }
+
+  async createAssessment(
+    createAssessmentDto: CreateAssessmentDto,
+    userId: string,
+  ): Promise<CreateAssessmentResDto> {
+    try {
+      //below: added by opeyemi
+      // ADD THIS VALIDATION BEFORE CREATING THE ASSESSMENT
+      if (
+        createAssessmentDto.service_recommendations &&
+        Array.isArray(createAssessmentDto.service_recommendations) &&
+        createAssessmentDto.service_recommendations.length > 0
+      ) {
+        await this.validateServiceRecommendations(
+          createAssessmentDto.service_recommendations,
+        );
+      }
+
+      //above: added by opeyemi
+
+      // Calculate total possible points first
+      const totalPossiblePoints = this.calculateTotalPossiblePoints(
+        createAssessmentDto.questions,
+      );
+
+      // Step 1: Create the assessment with enhanced data
+      const assessmentData = {
+        title: createAssessmentDto.title,
+        description: createAssessmentDto.description,
+        instruction: createAssessmentDto.instruction,
+        is_active: createAssessmentDto.is_active ?? true,
+        created_by: new Types.ObjectId(userId),
+        total_possible_points: totalPossiblePoints,
+      };
+
+      const assessment = await this.assessmentRepository.create(assessmentData);
+      this.logger.log(
+        `Assessment created with ID: ${assessment._id} and ${totalPossiblePoints} total points`,
+      );
+
+      // Step 2: Create modules and maintain a mapping for reference
+      const moduleMapping = new Map<string, Types.ObjectId>();
+      const createdModules: AssessmentModuleDocument[] = [];
+
+      for (const moduleDto of createAssessmentDto.modules) {
+        const moduleMaxPoints = this.calculateModulePoints(
+          moduleDto.temp_id,
+          createAssessmentDto.questions,
+        );
+
+        const moduleData = {
+          assessment_id: assessment._id as Types.ObjectId,
+          title: moduleDto.title,
+          description: moduleDto.description,
+          order: moduleDto.order,
+          max_points: moduleDto.max_points || moduleMaxPoints,
+        };
+
+        const module = await this.assessmentModuleRepository.create(moduleData);
+        moduleMapping.set(moduleDto.temp_id, module._id as Types.ObjectId);
+        createdModules.push(module);
+
+        this.logger.log(
+          `Module created: ${moduleDto.temp_id} -> ${module._id} with ${moduleData.max_points} points`,
+        );
+      }
+
+      // Step 3: Create questions using the module mapping with enhanced scoring
+      const createdQuestions: QuestionDocument[] = [];
+
+      for (const questionDto of createAssessmentDto.questions) {
+        const moduleId = moduleMapping.get(questionDto.module_ref);
+
+        if (!moduleId && questionDto.module_ref !== 'none') {
+          this.logger.warn(
+            `Module reference not found: ${questionDto.module_ref}`,
+          );
+          continue;
+        }
+
+        // Base question data that all question types have
+        const baseQuestionData = {
+          assessment_id: assessment._id as Types.ObjectId,
+          module_id: moduleId || undefined,
+          type: questionDto.type,
+          question: questionDto.question,
+          description: questionDto.description,
+          instruction: questionDto.instruction,
+          is_required: questionDto.is_required ?? false,
+          step: questionDto.step,
+          max_points: questionDto.max_points || 0,
+          scoring_categories: questionDto.scoring_categories || [],
+          is_active: questionDto.is_active ?? true,
+        };
+
+        // Type-specific data handling with enhanced scoring
+        let questionData: any = { ...baseQuestionData };
+
+        switch (questionDto.type) {
+          case QuestionType.WELCOME_SCREEN: {
+            const welcomeDto = questionDto as CreateWelcomeScreenDto;
+            questionData = {
+              ...baseQuestionData,
+              welcome_title: welcomeDto.welcome_title,
+              welcome_description: welcomeDto.welcome_description,
+              welcome_instruction: welcomeDto.welcome_instruction,
+            };
+            break;
+          }
+
+          case QuestionType.MODULE_TITLE: {
+            const moduleTitleDto = questionDto as CreateModuleTitleDto;
+            questionData = {
+              ...baseQuestionData,
+              module_title: moduleTitleDto.module_title,
+              module_description: moduleTitleDto.module_description,
+            };
+            break;
+          }
+
+          case QuestionType.MULTIPLE_CHOICE: {
+            const multipleChoiceDto =
+              questionDto as CreateMultipleChoiceQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              options: multipleChoiceDto.options || [],
+              max_points: this.calculateMultipleChoiceMaxPoints(
+                multipleChoiceDto.options,
+              ),
+            };
+            break;
+          }
+
+          case QuestionType.CHECKBOX: {
+            const checkboxDto = questionDto as CreateCheckboxQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              options: checkboxDto.options || [],
+              min_selections: checkboxDto.min_selections,
+              max_selections: checkboxDto.max_selections,
+              scoring_method: checkboxDto.scoring_method || 'sum',
+              max_points: this.calculateCheckboxMaxPoints(
+                checkboxDto.options,
+                checkboxDto.scoring_method,
+                checkboxDto.max_selections,
+              ),
+            };
+            break;
+          }
+
+          case QuestionType.DROPDOWN: {
+            const dropdownDto = questionDto as CreateDropdownQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              options: dropdownDto.options || [],
+              placeholder: dropdownDto.placeholder,
+              max_points: this.calculateMultipleChoiceMaxPoints(
+                dropdownDto.options,
+              ),
+            };
+            break;
+          }
+
+          case QuestionType.SHORT_TEXT: {
+            const shortTextDto = questionDto as CreateShortTextQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              placeholder: shortTextDto.placeholder,
+              max_length: shortTextDto.max_length,
+              min_length: shortTextDto.min_length,
+              completion_points: shortTextDto.completion_points || 0,
+              max_points: shortTextDto.completion_points || 0,
+            };
+            break;
+          }
+
+          case QuestionType.LONG_TEXT: {
+            const longTextDto = questionDto as CreateLongTextQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              placeholder: longTextDto.placeholder,
+              max_length: longTextDto.max_length,
+              min_length: longTextDto.min_length,
+              rows: longTextDto.rows,
+              completion_points: longTextDto.completion_points || 0,
+              keyword_scoring: longTextDto.keyword_scoring || [],
+              max_points: this.calculateLongTextMaxPoints(
+                longTextDto.completion_points,
+                longTextDto.keyword_scoring,
+              ),
+            };
+            break;
+          }
+
+          case QuestionType.MULTIPLE_CHOICE_GRID: {
+            const gridDto = questionDto as CreateMultipleChoiceGridQuestionDto;
+            questionData = {
+              ...baseQuestionData,
+              grid_columns: gridDto.grid_columns || [],
+              grid_rows: gridDto.grid_rows || [],
+              max_points: this.calculateGridMaxPoints(
+                gridDto.grid_columns,
+                gridDto.grid_rows,
+              ),
+            };
+            break;
+          }
+
+          default:
+            questionData = baseQuestionData;
+            break;
+        }
+
+        const question = await this.questionRepository.create(questionData);
+        createdQuestions.push(question);
+
+        this.logger.log(
+          `Question created for step ${questionDto.step} with ${questionData.max_points} max points`,
+        );
+      }
+
+      // Step 4: Create service recommendations
+      const createdServiceRecommendations: any[] = [];
+
+      if (
+        createAssessmentDto.service_recommendations &&
+        createAssessmentDto.service_recommendations.length > 0
+      ) {
+        for (const serviceDto of createAssessmentDto.service_recommendations) {
+          // Validate level array is not empty
+          if (!serviceDto.levels || serviceDto.levels.length === 0) {
+            throw BadRequestException.BAD_REQUEST(
+              `Service ${serviceDto.service_id} must have at least one level specified`,
+            );
+          }
+
+          const serviceData = {
+            assessment_id: assessment._id as Types.ObjectId,
+            service_id: serviceDto.service_id,
+            service_name: serviceDto.service_name,
+            description: serviceDto.description,
+            min_points: serviceDto.min_points,
+            max_points: serviceDto.max_points,
+            levels: serviceDto.levels,
+          };
+
+          const serviceRecommendation =
+            await this.serviceRecommendationRepository.create(serviceData);
+          createdServiceRecommendations.push(serviceRecommendation);
+
+          this.logger.log(
+            `Service recommendation created: ${serviceDto.service_name} (${serviceDto.min_points}-${serviceDto.max_points} pts) for levels: ${serviceDto.levels.join(', ')}`,
+          );
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Assessment created successfully',
+        data: {
+          assessment: this.mapAssessmentResponse(assessment),
+          modules: createdModules.map(this.mapModuleResponse),
+          questions: createdQuestions.map(this.mapQuestionResponse),
+          service_recommendations: createdServiceRecommendations.map(
+            this.mapServiceResponse,
+          ),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error creating assessment:', error);
+
+      //below: added by opeyemi
+      if (error instanceof BadRequestException) {
+        // Check if it's a service validation error
+        if (
+          error.message &&
+          error.message.includes('Service recommendation validation failed')
+        ) {
+          this.logger.error(
+            'Service validation failed during assessment creation:',
+            error.message,
+          );
+          throw BadRequestException.BAD_REQUEST(
+            `Service validation failed: ${error.message}. Please create the required services first using the Services API (/services), then reference them by exact name in your assessment service recommendations.`,
+          );
+        }
+
+        // Check for other specific validation errors
+        if (
+          error.message &&
+          error.message.includes('Question type is required')
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Invalid question configuration: ${error.message}. Ensure all questions have a valid type and required fields are provided.`,
+          );
+        }
+
+        if (
+          error.message &&
+          error.message.includes('must have at least one level specified')
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Service recommendation configuration error: ${error.message}. Ensure all questions have a valid type and required fields are provided.`,
+          );
+        }
+
+        // Log and re-throw other BadRequest exceptions with original message
+        // this.logger.error(
+        //   'Assessment creation validation error:',
+        //   error.message || error.response,
+        // );
+        // throw error;
+      }
+
+      // Handle unexpected errors
+      this.logger.error('Unexpected error during assessment creation:', error);
+
+      throw BadRequestException.BAD_REQUEST(
+        `Failed to create assessment: ${error.message}. Please check your request data and try again. If the issue persists, contact support.`,
+      );
+    }
+    //above: added by opeyemi
+    //   throw BadRequestException.BAD_REQUEST(
+    //     'Failed to create assessment with modules and questions',
+    //   );
+    // }
+  }
+
   // Enhanced getAssessments with statistics
   async getAssessments(userId?: string): Promise<any> {
     try {
@@ -662,6 +1279,7 @@ export class AssessmentService {
   }
 
   // Method to calculate user score from assessment responses
+  // Method to calculate user score from assessment responses
   calculateUserScore(questions: any[], userResponses: any): number {
     let totalScore = 0;
 
@@ -676,7 +1294,8 @@ export class AssessmentService {
             (opt: any) => opt.id === response,
           );
           if (selectedOption) {
-            totalScore += selectedOption.points || 0;
+            // Use 'points' instead of 'value' - check both for backward compatibility
+            totalScore += selectedOption.points || selectedOption.value || 0;
           }
           break;
         }
@@ -690,19 +1309,21 @@ export class AssessmentService {
 
           if (question.scoring_method === 'sum') {
             totalScore += selectedOptions.reduce(
-              (sum: number, opt: any) => sum + (opt.points || 0),
+              (sum: number, opt: any) => sum + (opt.points || opt.value || 0),
               0,
             );
           } else if (question.scoring_method === 'average') {
             const avgScore =
               selectedOptions.reduce(
-                (sum: number, opt: any) => sum + (opt.points || 0),
+                (sum: number, opt: any) => sum + (opt.points || opt.value || 0),
                 0,
               ) / selectedOptions.length;
             totalScore += avgScore || 0;
           } else if (question.scoring_method === 'max') {
             totalScore += Math.max(
-              ...selectedOptions.map((opt: any) => opt.points || 0),
+              ...selectedOptions.map(
+                (opt: any) => opt.points || opt.value || 0,
+              ),
               0,
             );
           }
@@ -743,7 +1364,9 @@ export class AssessmentService {
                 (c: any) => c.id === columnId,
               );
               if (row && column) {
-                totalScore += (column.points || 0) * (row.weight || 1);
+                // Use 'points' instead of 'value' - check both for backward compatibility
+                totalScore +=
+                  (column.points || column.value || 0) * (row.weight || 1);
               }
             });
           }
@@ -755,83 +1378,91 @@ export class AssessmentService {
   }
 
   // Method to get service recommendations for a user's score
+  // Method to get service recommendations for a user's score
   async getServiceRecommendations(assessmentId: string, userScore: number) {
     try {
-      // Uncomment when service recommendation repository is available
+      // Get recommendations based on score range
       const recommendations = await this.serviceRecommendationRepository.find(
         {
           assessment_id: new Types.ObjectId(assessmentId),
           min_points: { $lte: userScore },
           max_points: { $gte: userScore },
         },
-        null, // projection
-        { sort: { priority: 1 } },
+        null,
+        { sort: { min_points: 1 } },
       );
 
-      // For now, return empty array
-      // const recommendations: any[] = [];
+      // Load assessment safely
+      const assessment = await this.assessmentRepository.findById(assessmentId);
+
+      //added by opeyemi
+      if (!assessment) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      // const plainAssessment = assessment ? assessment.toObject() : null;
+
+      // if (!plainAssessment) {
+      //   throw BadRequestException.BAD_REQUEST('Assessment not found');
+      // }
+
+      //added by opeyemi
+      if (!assessment) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      // Either use stored value or recalc dynamically
+      let totalPoints = (assessment as any).total_possible_points;
+      if (totalPoints === undefined) {
+        const questions = await this.questionRepository.find({
+          assessment_id: new Types.ObjectId(assessmentId),
+        });
+        totalPoints = this.calculateTotalPossiblePoints(questions);
+      }
+
+      const userLevel = this.getUserLevel(userScore, totalPoints);
+
+      // Filter recommendations by level
+      const filteredRecommendations = recommendations.filter(
+        (rec) => Array.isArray(rec.levels) && rec.levels.includes(userLevel),
+      );
+
+      const finalRecommendations =
+        filteredRecommendations.length > 0
+          ? filteredRecommendations
+          : recommendations;
+
+      this.logger.log(
+        `Found ${finalRecommendations.length} service recommendations for user score ${userScore} (level: ${userLevel})`,
+      );
 
       return {
         success: true,
-        data: recommendations,
+        data: finalRecommendations.map((rec) => ({
+          id: rec._id,
+          service_id: rec.service_id,
+          service_name: rec.service_name,
+          description: rec.description,
+          min_points: rec.min_points,
+          max_points: rec.max_points,
+          levels: rec.levels, // now an array
+          match_reason:
+            Array.isArray(rec.levels) && rec.levels.includes(userLevel)
+              ? 'Level Match'
+              : 'Score Range Match',
+        })),
         user_score: userScore,
+        user_level: userLevel,
+
+        //added by opeyemi
+        total_possible_points: totalPoints,
+        assessment_title: assessment.title,
       };
     } catch (error) {
       this.logger.error('Error fetching service recommendations:', error);
       throw BadRequestException.BAD_REQUEST(
         'Failed to fetch service recommendations',
       );
-    }
-  }
-
-  // Method to submit assessment and get recommendations
-  async submitAssessment(
-    assessmentId: string,
-    userResponses: any,
-    userId?: string,
-  ) {
-    try {
-      const assessmentData = await this.getAssessmentById(assessmentId);
-      const questions = assessmentData.data.questions;
-
-      const userScore = this.calculateUserScore(questions, userResponses);
-      const recommendedServices = await this.getServiceRecommendations(
-        assessmentId,
-        userScore,
-      );
-
-      // Save the user's submission
-      if (userId) {
-        const userAssessmentData = {
-          user_id: new Types.ObjectId(userId),
-          assessment_id: new Types.ObjectId(assessmentId),
-          responses: userResponses,
-          score: userScore,
-          completed_at: new Date(),
-        };
-
-        await this.userAssessmentRepository.create(userAssessmentData);
-        this.logger.log(
-          `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
-        );
-      }
-
-      return {
-        success: true,
-        message: 'Assessment completed successfully',
-        data: {
-          user_score: userScore,
-          total_possible_points: assessmentData.data.total_possible_points,
-          percentage_score: Math.round(
-            (userScore / assessmentData.data.total_possible_points) * 100,
-          ),
-          recommended_services: recommendedServices.data,
-          assessment_title: assessmentData.data.assessment.title,
-        },
-      };
-    } catch (error) {
-      this.logger.error('Error submitting assessment:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
     }
   }
 
@@ -868,48 +1499,6 @@ export class AssessmentService {
     }
   }
 
-  async deleteQuestion(questionId: string): Promise<any> {
-    try {
-      const result = await this.questionRepository.delete({
-        _id: new Types.ObjectId(questionId),
-      });
-
-      return {
-        success: true,
-        message: 'Question deleted successfully',
-        data: result,
-      };
-    } catch (error) {
-      this.logger.error('Error deleting question:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to delete question');
-    }
-  }
-
-  async updateQuestion(
-    questionId: string,
-    updateData: Partial<QuestionDocument>,
-  ): Promise<any> {
-    try {
-      const question = await this.questionRepository.update(
-        { _id: new Types.ObjectId(questionId) },
-        { ...updateData, updated_at: new Date() },
-      );
-
-      if (!question) {
-        throw BadRequestException.RESOURCE_NOT_FOUND('Question not found');
-      }
-
-      return {
-        success: true,
-        message: 'Question updated successfully',
-        data: question,
-      };
-    } catch (error) {
-      this.logger.error('Error updating question:', error);
-      throw BadRequestException.BAD_REQUEST('Failed to update question');
-    }
-  }
-
   async getUserAssessments(userId: string): Promise<any> {
     try {
       const filter: any = {
@@ -929,5 +1518,322 @@ export class AssessmentService {
         'Failed to retrieve user assessments',
       );
     }
+  }
+
+  // Add this method to your AssessmentService class
+  async updateAssessment(
+    assessmentId: string,
+    updateAssessmentDto: UpdateAssessmentDto,
+  ): Promise<any> {
+    try {
+      // Validate assessment exists
+      const existingAssessment =
+        await this.assessmentRepository.findById(assessmentId);
+      if (!existingAssessment) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      //below: added by opeyemi
+
+      // FIXED: Explicit null/undefined check instead of optional chaining with length
+      if (
+        updateAssessmentDto.service_recommendations &&
+        Array.isArray(updateAssessmentDto.service_recommendations) &&
+        updateAssessmentDto.service_recommendations.length > 0
+      ) {
+        await this.validateServiceRecommendations(
+          updateAssessmentDto.service_recommendations,
+        );
+      }
+
+      //above: added by opeyemi
+      // No authorization check needed here - RolesGuard handles it
+
+      const updatedItems = {
+        modules: [] as string[],
+        questions: [] as string[],
+        service_recommendations: [] as string[],
+      };
+
+      // Update assessment basic properties
+      const assessmentUpdateData: any = {};
+      if (updateAssessmentDto.title !== undefined) {
+        assessmentUpdateData.title = updateAssessmentDto.title;
+      }
+      if (updateAssessmentDto.description !== undefined) {
+        assessmentUpdateData.description = updateAssessmentDto.description;
+      }
+      if (updateAssessmentDto.instruction !== undefined) {
+        assessmentUpdateData.instruction = updateAssessmentDto.instruction;
+      }
+      if (updateAssessmentDto.is_active !== undefined) {
+        assessmentUpdateData.is_active = updateAssessmentDto.is_active;
+      }
+
+      if (Object.keys(assessmentUpdateData).length > 0) {
+        await this.assessmentRepository.findByIdAndUpdate(
+          assessmentId,
+          assessmentUpdateData,
+        );
+        this.logger.log(`Assessment ${assessmentId} basic properties updated`);
+      }
+
+      // Update modules if provided
+      if (
+        updateAssessmentDto.modules &&
+        updateAssessmentDto.modules.length > 0
+      ) {
+        const moduleUpdates = await this.updateModules(
+          assessmentId,
+          updateAssessmentDto.modules,
+        );
+        updatedItems.modules = moduleUpdates;
+      }
+
+      // Update questions if provided
+      if (
+        updateAssessmentDto.questions &&
+        updateAssessmentDto.questions.length > 0
+      ) {
+        const questionUpdates = await this.updateQuestions(
+          assessmentId,
+          updateAssessmentDto.questions,
+        );
+        updatedItems.questions = questionUpdates;
+      }
+
+      // Update service recommendations if provided
+      if (
+        updateAssessmentDto.service_recommendations &&
+        updateAssessmentDto.service_recommendations.length > 0
+      ) {
+        const serviceUpdates = await this.updateServiceRecommendations(
+          assessmentId,
+          updateAssessmentDto.service_recommendations,
+        );
+        updatedItems.service_recommendations = serviceUpdates;
+      }
+
+      // Recalculate total possible points if questions were updated
+      if (
+        updateAssessmentDto.questions &&
+        updateAssessmentDto.questions.length > 0
+      ) {
+        await this.recalculateTotalPoints(assessmentId);
+      }
+
+      // Get updated assessment with all relations
+      const updatedAssessmentData = await this.getAssessmentById(assessmentId);
+
+      return {
+        success: true,
+        message: 'Assessment updated successfully',
+        data: {
+          ...updatedAssessmentData.data,
+          updated_items: updatedItems,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error updating assessment:', error);
+
+      // Re-throw known exceptions to preserve their status codes
+
+      //below: added by opeyemi
+
+      if (error instanceof BadRequestException) {
+        // Check if it's a service validation error
+        if (
+          error.message &&
+          error.message.includes('Service recommendation validation failed')
+        ) {
+          this.logger.error(
+            'Service validation failed during assessment update:',
+            error.message,
+          );
+
+          throw BadRequestException.BAD_REQUEST(
+            `Service validation failed during update: ${error.message}. Please ensure all referenced services exist in the Services catalog (/services). Create missing services first, then update your assessment.`,
+          );
+        }
+
+        // Check for assessment not found errors
+        if (error.message && error.message.includes('Assessment not found')) {
+          throw BadRequestException.BAD_REQUEST(
+            `Assessment not found: ${error.message}. Verify the assessment ID is correct and the assessment exists.`,
+          );
+        }
+
+        // Check for module/question validation errors
+        if (
+          error.message &&
+          error.message.includes('Question type is required')
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Invalid question update configuration: ${error.message}. When updating questions, ensure type and step are provided for new questions. For existing questions, provide the question ID.`,
+          );
+        }
+
+        // Check for service level configuration errors
+        if (
+          error.message &&
+          error.message.includes('must have at least one level specified')
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Service recommendation update error: ${error.message}. Each service recommendation must specify at least one level (Beginner, Foundational, Intermediate, Advanced, Expert) when updating.`,
+          );
+        }
+
+        // Check for point calculation errors
+        if (error.message && error.message.includes('Failed to recalculate')) {
+          throw BadRequestException.BAD_REQUEST(
+            `Point calculation error during update: ${error.message}. There was an issue recalculating assessment points after your updates. Please verify your question scoring configuration.`,
+          );
+        }
+
+        // Log and re-throw other BadRequest exceptions with original message
+        //   this.logger.error(
+        //     'Assessment update validation error:',
+        //     error.message || error.response,
+        //   );
+        //   throw error;
+        // }
+
+        // Handle unexpected errors during update
+        this.logger.error('Unexpected error during assessment update:', error);
+        throw BadRequestException.BAD_REQUEST(
+          `Failed to update assessment: ${error.message}. Please verify your update data and try again. If the issue persists, contact support.`,
+        );
+        //a
+        // if (error instanceof BadRequestException) {
+        //   throw error;
+        // }
+
+        // // For unknown errors, throw a generic bad request
+        // throw BadRequestException.BAD_REQUEST('Failed to update assessment');
+      }
+    }
+  }
+
+  //below: added by opeyemi
+  private determineUserLevel(userScore: number, totalPoints: number): string {
+    // Implement your logic here (e.g., 0-30% is 'Beginner', 31-70% is 'Intermediate', etc.)
+    const percentage = (userScore / totalPoints) * 100;
+    if (percentage < 30) return 'Beginner';
+    if (percentage < 70) return 'Intermediate';
+    return 'Advanced';
+  }
+
+  //above: added by opeyemi
+
+  async submitAssessment(
+    assessmentId: string,
+    userResponses: Record<string, any>,
+    userId?: string,
+  ) {
+    try {
+      const assessmentData = await this.getAssessmentById(assessmentId);
+
+      if (!assessmentData?.data) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      const { assessment, questions } = assessmentData.data;
+
+      // ✅ Calculate total possible points dynamically
+      const total_possible_points = questions.reduce((sum, q) => {
+        if (q.options?.length) {
+          const max = Math.max(...q.options.map((opt) => opt.value ?? 0));
+          return sum + max;
+        }
+        if (q.grid_columns?.length && q.grid_rows?.length) {
+          const max = Math.max(...q.grid_columns.map((col) => col.value ?? 0));
+          return sum + max * q.grid_rows.length;
+        }
+        return sum;
+      }, 0);
+
+      // ✅ Calculate user’s score
+      const userScore = this.calculateUserScore(questions, userResponses);
+
+      //below: added by opeyemi
+      const completedAt = new Date(); // Capture the completion time once
+
+      //above: added by opeyemi
+
+      // ✅ Fetch recommendations
+      const recommendedServicesResult = await this.getServiceRecommendations(
+        assessmentId,
+        userScore,
+      );
+
+      const recommendedServices = recommendedServicesResult.data;
+
+      // ✅ Save submission
+      if (userId) {
+        const userAssessmentData = {
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          responses: userResponses,
+          score: userScore,
+          // completed_at: new Date(),
+          completed_at: completedAt, // Use the captured time
+        };
+
+        await this.userAssessmentRepository.create(userAssessmentData);
+        this.logger.log(
+          `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
+        );
+      }
+
+      //below: added by opeyemi
+
+      // Determine the required user level
+      const userLevel = this.determineUserLevel(
+        userScore,
+        total_possible_points,
+      );
+
+      const percentage_score =
+        total_possible_points > 0
+          ? (userScore / total_possible_points) * 100
+          : null; // Avoid division by zero
+
+      //above: added by opeyemi
+
+      return {
+        success: true,
+        message: 'Assessment completed successfully',
+        data: {
+          user_score: userScore,
+          //added by opeyemi
+          total_possible_points: total_possible_points,
+          percentage_score: percentage_score,
+          // total_possible_points,
+          // percentage_score: Math.round(
+          //   (userScore / total_possible_points) * 100,
+          // ),
+          user_level: userLevel,
+          recommended_services: recommendedServices,
+          assessment_title: assessment.title,
+          completed_at: completedAt.toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error submitting assessment:', error);
+      throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
+    }
+  }
+
+  // Add this helper method to determine user level
+  private getUserLevel(userScore: number, totalPoints: number): string {
+    if (totalPoints === 0) return 'Unknown';
+
+    const percentage = (userScore / totalPoints) * 100;
+
+    if (percentage >= 90) return 'Expert';
+    if (percentage >= 75) return 'Advanced';
+    if (percentage >= 50) return 'Intermediate';
+    if (percentage >= 25) return 'Foundational';
+    return 'Beginner';
   }
 }

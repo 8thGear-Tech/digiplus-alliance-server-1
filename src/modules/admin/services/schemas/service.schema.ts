@@ -16,16 +16,27 @@ export class Service {
   service_type: ServicesTypes;
 
   @Prop({ required: true, trim: true })
-  image: string;
+  image: string; // still keep a primary image
 
+  @Prop({ type: [String], default: [] })
+  images: string[]; // multiple pictures
+
+  //changed by opeyemi
   @Prop({ required: true, type: Number, min: 0 })
   price: number;
 
-  @Prop({ required: true, trim: true, maxlength: 500 })
-  subtitle: string;
+  @Prop({ type: Number, min: 0 })
+  discounted_price?: number;
 
-  @Prop({ required: true, trim: true })
-  description: string;
+  //changed by opeyemi
+  // @Prop({ required: true, trim: true, maxlength: 500 })
+  // subtitle: string;
+
+  @Prop({ trim: true, maxlength: 500 })
+  short_description?: string;
+
+  @Prop({ trim: true })
+  long_description?: string;
 
   @Prop({ default: null })
   deletedAt?: Date;
@@ -42,4 +53,7 @@ export const ServiceSchema = SchemaFactory.createForClass(Service);
 // Add indexes for better performance
 ServiceSchema.index({ name: 1 });
 ServiceSchema.index({ deletedAt: 1 });
-ServiceSchema.index({ name: 'text', subtitle: 'text', description: 'text' });
+//changed by opeyemi
+ServiceSchema.index({ name: 'text', description: 'text' });
+
+// ServiceSchema.index({ name: 'text', subtitle: 'text', description: 'text' });

@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
+import { RecommendationLevel } from '../enums/recommendation-level.enum';
 
 // Base question DTO with common properties
 export class BaseQuestionDto {
@@ -90,15 +91,19 @@ export class CreateWelcomeScreenDto extends BaseQuestionDto {
   @ApiProperty({
     example:
       'This assessment will help evaluate your digital readiness and provide personalized recommendations for your business growth.',
-    description: 'Welcome message content',
+    description: 'Welcome instruction content',
   })
   @IsString()
-  welcome_message: string;
+  welcome_instruction: string;
 
-  @ApiProperty({ example: 'Start Assessment', required: false })
+  @ApiProperty({
+    example:
+      'This assessment will help evaluate your digital readiness and provide personalized recommendations for your business growth.',
+    description: 'Welcome description content',
+  })
   @IsOptional()
   @IsString()
-  button_text?: string;
+  welcome_description?: string;
 }
 
 // Module Title DTO
@@ -576,19 +581,32 @@ export class CreateMultipleChoiceGridQuestionDto extends BaseQuestionDto {
 
 // Service Recommendation DTO
 export class ServiceRecommendationDto {
-  @ApiProperty({ example: 'basic_digital_transformation' })
+  @ApiProperty({
+    example: 'basic_digital_transformation',
+    description:
+      'Must match an existing service ID (leave blank to auto-generate from service_name)',
+  })
+  @IsOptional()
   @IsString()
-  service_id: string;
+  service_id?: string;
 
-  @ApiProperty({ example: 'Basic Digital Transformation Package' })
+  @ApiProperty({
+    example: 'Basic Digital Transformation Package',
+    description:
+      'Must exactly match the name of an existing service in the services catalog',
+  })
   @IsString()
   service_name: string;
 
   @ApiProperty({
     example: 'Perfect for businesses just starting their digital journey',
+    description:
+      'Assessment-specific description for how this service relates to the score range',
   })
   @IsString()
   description: string;
+
+  //above: added by opeyemi
 
   @ApiProperty({ example: 15 })
   @IsNumber()
@@ -599,16 +617,14 @@ export class ServiceRecommendationDto {
   max_points: number;
 
   @ApiProperty({
-    example: ['digital_literacy', 'basic_tools'],
-    description: 'Categories this service addresses',
+    example: ['Beginner', 'Foundational'],
+    description: 'Array of recommendation levels this service applies to',
+    type: [String],
+    enum: Object.values(RecommendationLevel),
   })
   @IsArray()
-  @IsString({ each: true })
-  categories: string[];
-
-  @ApiProperty({ example: 1 })
-  @IsNumber()
-  priority: number;
+  @IsEnum(RecommendationLevel, { each: true })
+  levels: RecommendationLevel[];
 }
 
 // Union type for all question DTOs
