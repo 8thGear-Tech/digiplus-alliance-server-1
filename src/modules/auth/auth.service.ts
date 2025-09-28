@@ -826,6 +826,7 @@ export class AuthService {
     if (verificationFor === 'password-reset') {
       user.is_verified_for_recovery = true;
       const payload = {
+        user: user._id,
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
