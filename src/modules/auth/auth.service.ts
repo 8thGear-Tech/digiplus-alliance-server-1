@@ -711,54 +711,54 @@ export class AuthService {
     };
   }
 
-  async forgotPassword(email: string): Promise<SignupResDto> {
-    const lowerCaseEmail = email.toLowerCase();
-    const user = await this.userRepository.findOne({ email: lowerCaseEmail });
+  // async forgotPassword(email: string): Promise<SignupResDto> {
+  //   const lowerCaseEmail = email.toLowerCase();
+  //   const user = await this.userRepository.findOne({ email: lowerCaseEmail });
 
-    if (!user) {
-      return {
-        success: true,
-        message:
-          'If the email is registered, a password reset link has been sent.',
-      };
-    }
+  //   if (!user) {
+  //     return {
+  //       success: true,
+  //       message:
+  //         'If the email is registered, a password reset link has been sent.',
+  //     };
+  //   }
 
-    const token = this.generateCode().toString();
-    const verificationFor = 'password-reset';
+  //   const token = this.generateCode().toString();
+  //   const verificationFor = 'password-reset';
 
-    const { fullToken, verificationLink } = await this.generateVerificationLink(
-      token,
-      lowerCaseEmail,
-      verificationFor,
-      'auth/reset-password',
-    );
+  //   const { fullToken, verificationLink } = await this.generateVerificationLink(
+  //     token,
+  //     lowerCaseEmail,
+  //     verificationFor,
+  //     'auth/reset-password',
+  //   );
 
-    await this.tokenQueryService.deleteMany({
-      userId: user._id,
-      type: verificationFor,
-    });
+  //   await this.tokenQueryService.deleteMany({
+  //     userId: user._id,
+  //     type: verificationFor,
+  //   });
 
-    await this.tokenQueryService.create({
-      value: fullToken.trim(),
-      type: verificationFor,
-      userType: user.role,
-      userId: user._id,
-      expiresIn: new Date(Date.now() + Constants.tokenExpiry),
-    });
+  //   await this.tokenQueryService.create({
+  //     value: fullToken.trim(),
+  //     type: verificationFor,
+  //     userType: user.role,
+  //     userId: user._id,
+  //     expiresIn: new Date(Date.now() + Constants.tokenExpiry),
+  //   });
 
-    const mailBody = forgotPasswordEmail(user, verificationLink);
+  //   const mailBody = forgotPasswordEmail(user, verificationLink);
 
-    await this.mailService.sendMail({
-      to: lowerCaseEmail,
-      subject: 'Password Reset Request',
-      html: mailBody,
-    });
+  //   await this.mailService.sendMail({
+  //     to: lowerCaseEmail,
+  //     subject: 'Password Reset Request',
+  //     html: mailBody,
+  //   });
 
-    return {
-      success: true,
-      message: 'A password reset link has been sent to your email.',
-    };
-  }
+  //   return {
+  //     success: true,
+  //     message: 'A password reset link has been sent to your email.',
+  //   };
+  // }
 
   async verifyEmail(
     verifyAccountDto: VerifyAccountDto,
@@ -850,62 +850,134 @@ export class AuthService {
     };
   }
 
+  // async resetPassword(
+  //   resetPasswordReqDto: ResetPasswordReqDto,
+  // ): Promise<SignupResDto> {
+  //   const { password, resetToken } = resetPasswordReqDto;
+  //   let email: string;
+  //   let userId: Types.ObjectId;
+
+  //   try {
+  //     const decoded = await this.jwtService.verifyAsync(resetToken);
+  //     console.log('🔍 Decoded resetToken:', decoded);
+  //     console.log('🔍 Type of decoded.user:', typeof decoded.user);
+  //     console.log('🔍 decoded.user value:', decoded.user);
+  //     email = decoded.email;
+  //     // Handle the ObjectId conversion properly
+  //     if (typeof decoded.user === 'string') {
+  //       userId = new Types.ObjectId(decoded.user);
+  //     } else {
+  //       userId = decoded.user as Types.ObjectId;
+  //     }
+  //     // userId = decoded.user as Types.ObjectId;
+  //     console.log('📧 Email:', email);
+  //     console.log('👤 UserId:', userId);
+  //   } catch (error) {
+  //     console.log('❌ Token verification error:', error);
+  //     throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
+  //       'Invalid or expired reset token',
+  //     );
+  //   }
+
+  //   const user = await this.userRepository.findOne({ email });
+
+  //   if (!user || !user.is_verified_for_recovery) {
+  //     throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
+  //       'User not authorized for reset or token invalid',
+  //     );
+  //   }
+
+  //   const saltOrRounds = this.SALT_ROUNDS;
+  //   const newHashedPassword = await bcrypt.hash(password, saltOrRounds);
+
+  //   await this.userRepository.update(
+  //     { _id: user._id },
+  //     {
+  //       password: newHashedPassword,
+  //       is_in_recovery: false,
+  //       is_verified_for_recovery: false,
+  //     },
+  //   );
+
+  //   await this.refreshTokenRepository.deleteMany({ user: user._id });
+
+  //   return {
+  //     success: true,
+  //     message:
+  //       'Password reset successfully. You can now log in with your new password.',
+  //   };
+  // }
+
+  async forgotPassword(email: string): Promise<SignupResDto> {
+    const user = await this.userRepository.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (!user) {
+      return {
+        success: true,
+        message:
+          'If the email is registered, a password reset link has been sent.',
+      };
+    }
+
+    // Generate reset token directly with user info
+    const resetToken = await this.jwtService.signAsync(
+      {
+        user: user._id,
+        email: user.email,
+        type: 'password-reset',
+      },
+      {
+        expiresIn: Constants.resetTokenExpiry,
+      },
+    );
+
+    const resetLink = `${process.env.CLIENT_URL}/auth/reset-password?token=${resetToken}`;
+
+    await this.mailService.sendMail({
+      to: email,
+      subject: 'Password Reset Request',
+      html: forgotPasswordEmail(user, resetLink),
+    });
+
+    return {
+      success: true,
+      message: 'A password reset link has been sent to your email.',
+    };
+  }
+
   async resetPassword(
     resetPasswordReqDto: ResetPasswordReqDto,
   ): Promise<SignupResDto> {
     const { password, resetToken } = resetPasswordReqDto;
-    let email: string;
-    let userId: Types.ObjectId;
 
     try {
       const decoded = await this.jwtService.verifyAsync(resetToken);
-      console.log('🔍 Decoded resetToken:', decoded);
-      console.log('🔍 Type of decoded.user:', typeof decoded.user);
-      console.log('🔍 decoded.user value:', decoded.user);
-      email = decoded.email;
-      // Handle the ObjectId conversion properly
-      if (typeof decoded.user === 'string') {
-        userId = new Types.ObjectId(decoded.user);
-      } else {
-        userId = decoded.user as Types.ObjectId;
+
+      if (decoded.type !== 'password-reset') {
+        throw new Error('Invalid token type');
       }
-      // userId = decoded.user as Types.ObjectId;
-      console.log('📧 Email:', email);
-      console.log('👤 UserId:', userId);
+
+      const user = await this.userRepository.findOne({ email: decoded.email });
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const newHashedPassword = await bcrypt.hash(password, this.SALT_ROUNDS);
+
+      await this.userRepository.update(
+        { _id: user._id },
+        { password: newHashedPassword },
+      );
+      await this.refreshTokenRepository.deleteMany({ user: user._id });
+
+      return { success: true, message: 'Password reset successfully.' };
     } catch (error) {
-      console.log('❌ Token verification error:', error);
       throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
         'Invalid or expired reset token',
       );
     }
-
-    const user = await this.userRepository.findOne({ email });
-
-    if (!user || !user.is_verified_for_recovery) {
-      throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
-        'User not authorized for reset or token invalid',
-      );
-    }
-
-    const saltOrRounds = this.SALT_ROUNDS;
-    const newHashedPassword = await bcrypt.hash(password, saltOrRounds);
-
-    await this.userRepository.update(
-      { _id: user._id },
-      {
-        password: newHashedPassword,
-        is_in_recovery: false,
-        is_verified_for_recovery: false,
-      },
-    );
-
-    await this.refreshTokenRepository.deleteMany({ user: user._id });
-
-    return {
-      success: true,
-      message:
-        'Password reset successfully. You can now log in with your new password.',
-    };
   }
 
   generateCode(): number {
