@@ -28,6 +28,13 @@ export class Service {
   @Prop({ type: Number, min: 0 })
   discounted_price?: number;
 
+  // In your Service schema
+  @Prop({
+    type: String,
+    enum: ['per_hour', 'per_project', 'one_time', 'per_day', 'per_month'],
+    default: 'one_time',
+  })
+  pricing_unit?: string;
   //changed by opeyemi
   // @Prop({ required: true, trim: true, maxlength: 500 })
   // subtitle: string;
