@@ -49,12 +49,15 @@ export class UserApplicationService {
         ? new Date(submission.end_date).toLocaleString()
         : null;
 
+      const serviceInfo = submission.serviceDetails || {};
+
       return {
         _id: submission._id,
         name,
         email: submission.responses['email'] || 'N/A',
         service: submission.service,
         service_type: submission.service_type,
+        service_image: serviceInfo.image || null,
         payment_amount: submission.payment_amount || null,
         status: submission.status,
         payment_status: submission.payment_status,
@@ -170,10 +173,61 @@ export class UserApplicationService {
     }
   }
 
+  // async getUserSubmissions(userId: string): Promise<any[]> {
+  //   const submissions = await this.submissionModel
+  //     .find({ userId })
+  //     .select('+start_date +end_date +timetable_url +payment_amount')
+  //     .exec();
+
+  //   return this.transformUserSubmissions(submissions);
+  // }
   async getUserSubmissions(userId: string): Promise<any[]> {
+    // Use aggregation to lookup service details
     const submissions = await this.submissionModel
-      .find({ userId })
-      .select('+start_date +end_date +timetable_url +payment_amount')
+      .aggregate([
+        // Match submissions for the specific user
+        {
+          $match: { userId: new Types.ObjectId(userId) },
+        },
+        // Lookup service details by service name
+        {
+          $lookup: {
+            from: 'services',
+            localField: 'service',
+            foreignField: 'name',
+            as: 'serviceDetails',
+          },
+        },
+        // Unwind the serviceDetails array (should be single element)
+        {
+          $unwind: {
+            path: '$serviceDetails',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        // Project the fields we need
+        {
+          $project: {
+            responses: 1,
+            service: 1,
+            service_type: 1,
+            payment_amount: 1,
+            status: 1,
+            payment_status: 1,
+            start_date: 1,
+            end_date: 1,
+            timetable_url: 1,
+            createdAt: 1,
+            serviceDetails: {
+              image: '$serviceDetails.image',
+              images: '$serviceDetails.images',
+              price: '$serviceDetails.price',
+              discounted_price: '$serviceDetails.discounted_price',
+              pricing_unit: '$serviceDetails.pricing_unit',
+            },
+          },
+        },
+      ])
       .exec();
 
     return this.transformUserSubmissions(submissions);
