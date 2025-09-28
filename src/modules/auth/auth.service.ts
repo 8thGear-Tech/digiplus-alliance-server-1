@@ -859,9 +859,21 @@ export class AuthService {
 
     try {
       const decoded = await this.jwtService.verifyAsync(resetToken);
+      console.log('🔍 Decoded resetToken:', decoded);
+      console.log('🔍 Type of decoded.user:', typeof decoded.user);
+      console.log('🔍 decoded.user value:', decoded.user);
       email = decoded.email;
-      userId = new Types.ObjectId(decoded.user);
+      // Handle the ObjectId conversion properly
+      if (typeof decoded.user === 'string') {
+        userId = new Types.ObjectId(decoded.user);
+      } else {
+        userId = decoded.user as Types.ObjectId;
+      }
+      // userId = decoded.user as Types.ObjectId;
+      console.log('📧 Email:', email);
+      console.log('👤 UserId:', userId);
     } catch (error) {
+      console.log('❌ Token verification error:', error);
       throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
         'Invalid or expired reset token',
       );
