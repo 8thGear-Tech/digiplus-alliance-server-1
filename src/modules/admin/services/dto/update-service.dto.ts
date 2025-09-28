@@ -9,7 +9,7 @@ import {
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ServicesTypes } from 'src/shared/enums';
+import { PricingUnit, ServicesTypes } from 'src/shared/enums';
 
 export class UpdateServiceDto {
   @ApiPropertyOptional({
@@ -62,6 +62,16 @@ export class UpdateServiceDto {
   @IsNumber()
   @IsPositive()
   discounted_price?: number;
+
+  @ApiProperty({
+    description: 'Pricing unit',
+    enum: PricingUnit,
+    example: PricingUnit.ONE_TIME,
+    default: PricingUnit.ONE_TIME,
+  })
+  @IsOptional()
+  @IsEnum(PricingUnit)
+  pricing_unit?: PricingUnit;
 
   @ApiPropertyOptional({
     description: 'Short description',

@@ -1,5 +1,6 @@
 import { ServiceDocument } from './../admin/services/schemas/service.schema';
 import { ServiceResponseDto } from './../admin/services/dto/service-response.dto';
+import { CurrencyUtil, PricingUnit } from 'src/shared/enums';
 
 export function toServiceResponse(
   service: ServiceDocument,
@@ -12,6 +13,17 @@ export function toServiceResponse(
     images: service.images || [],
     price: service.price,
     discounted_price: service.discounted_price,
+    formatted_discounted_price: service.discounted_price
+      ? CurrencyUtil.formatNairaWithUnit(
+          service.discounted_price,
+          (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+        )
+      : undefined,
+    pricing_unit: (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+    formatted_price: CurrencyUtil.formatNairaWithUnit(
+      service.price,
+      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+    ),
     // subtitle: service.subtitle,
     short_description: service.short_description,
     long_description: service.long_description,

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ServicesTypes } from 'src/shared/enums';
+import { PricingUnit, ServicesTypes } from 'src/shared/enums';
 
 export class ServiceResponseDto {
   @ApiProperty({
@@ -46,11 +46,31 @@ export class ServiceResponseDto {
   price: number;
 
   @ApiProperty({
+    description: 'Formatted price with currency and unit',
+    example: '₦100,000 per hour',
+  })
+  formatted_price: string;
+
+  @ApiProperty({
     required: false,
     description: 'Discounted price if applicable',
     example: 1800.0,
   })
   discounted_price?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Formatted discounted price with currency and unit',
+    example: '₦80,000 per hour',
+  })
+  formatted_discounted_price?: string;
+
+  @ApiProperty({
+    description: 'Pricing unit',
+    enum: PricingUnit,
+    example: PricingUnit.PER_HOUR,
+  })
+  pricing_unit: PricingUnit;
 
   //changed by opeyemi
   // @ApiProperty({
