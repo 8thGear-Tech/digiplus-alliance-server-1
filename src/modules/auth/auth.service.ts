@@ -644,8 +644,8 @@ export class AuthService {
         token,
         email,
         'registration',
-        // 'auth/verification',
-        '/',
+        'auth/verification',
+        // '/',
       );
 
     const userPayload: Partial<User> = {
