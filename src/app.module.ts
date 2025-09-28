@@ -32,6 +32,7 @@ import { BlogModule } from './modules/admin/blog/blog.module';
 import { ApplicationModule } from './modules/admin/application/application.module';
 import { UserApplicationModule } from './modules/business-owner/user-application.module';
 import { ServicesModule } from './modules/admin/services/services.module';
+import { ContactModule } from './modules/general/contact/contact.module';
 
 dotenv.config();
 @Module({
@@ -109,6 +110,7 @@ dotenv.config();
     ApplicationModule,
     UserApplicationModule,
     ServicesModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [
