@@ -135,6 +135,7 @@ export class AdminApplicationService {
       const firstName = submission.responses['firstname'] || 'N/A';
       const lastName = submission.responses['lastname'] || '';
       const email = submission.responses['email'] || 'N/A';
+      const specificService = submission.service;
 
       const paymentStatus = submission.payment_status || 'Not Paid';
 
@@ -144,10 +145,10 @@ export class AdminApplicationService {
         _id: submission._id,
         name,
         email,
+        service: specificService,
         service_type: submission.service_type,
         status: submission.status,
         timestamp: new Date(submission.createdAt).toLocaleString(),
-
         payment_status: paymentStatus,
       };
     });

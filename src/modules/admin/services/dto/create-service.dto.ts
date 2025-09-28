@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   IsNotEmpty,
   IsString,
@@ -9,9 +6,10 @@ import {
   Length,
   IsEnum,
   IsOptional,
+  ValidateIf,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ServicesTypes } from 'src/shared/enums';
 
 export class CreateServiceDto {
@@ -25,56 +23,77 @@ export class CreateServiceDto {
   @Transform(({ value }) => value?.trim())
   name: string;
 
-  @ApiProperty({ enum: ServicesTypes })
+  @ApiProperty({
+    enum: ServicesTypes,
+    description: 'Service type/category',
+  })
   @IsEnum(ServicesTypes)
   service_type: ServicesTypes;
 
-  @ApiProperty({ description: 'Main service image URL or base64' })
-  @IsNotEmpty()
-  @IsString()
-  image: string;
-
   @ApiProperty({
-    description: 'Additional images',
-    isArray: true,
-    type: String,
-    required: false,
+    description: 'Service base price',
+    example: 2000,
   })
-  @IsString({ each: true })
-  images?: string[];
-
-  @ApiProperty({ description: 'Service base price', example: 2000 })
   @IsNotEmpty()
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  //changed by opeyemi
   price: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Discounted price',
     example: 1500,
-    required: false,
   })
+  // @IsOptional()
+  // @Transform(({ value }) => {
+  //   console.log('Raw discounted_price value:', value, typeof value);
+  //   if (value === '' || value === null || value === undefined) {
+  //     console.log('Returning undefined');
+  //     return undefined;
+  //   }
+  //   const num = Number(value);
+  //   console.log('Converted to number:', num);
+  //   return num;
+  // })
+  // @ValidateIf((o, value) => {
+  //   console.log('ValidateIf check:', value, value !== undefined);
+  //   return value !== undefined;
+  // })
+  // @IsNumber()
+  // @IsPositive()
+  @IsOptional()
+  @ValidateIf(
+    (o, value) => value !== '' && value !== null && value !== undefined,
+  )
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
   discounted_price?: number;
 
-  @ApiProperty({ description: 'Short description', maxLength: 500 })
+  @ApiPropertyOptional({
+    description: 'Short description',
+    maxLength: 500,
+  })
   @IsOptional()
   @IsString()
   @Length(1, 500)
   short_description?: string;
 
-  @ApiProperty({ description: 'Detailed description' })
+  @ApiPropertyOptional({
+    description: 'Detailed description',
+  })
   @IsOptional()
   @IsString()
   long_description?: string;
-  //changed by opeyemi
-  // @ApiProperty({ description: 'Subtitle' })
-  // @IsNotEmpty()
-  // @IsString()
-  // @Length(1, 500)
-  // subtitle: string;
+
+  // No image fields here - they come from file uploads
+  @ApiProperty({
+    type: 'array',
+    items: {
+      type: 'string',
+      format: 'binary',
+    },
+    description: 'Image files to upload (first image becomes main image)',
+  })
+  images?: Express.Multer.File[];
 }
