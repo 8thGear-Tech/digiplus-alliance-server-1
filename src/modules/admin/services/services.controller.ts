@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Get,
@@ -11,7 +9,11 @@ import {
   Query,
   HttpStatus,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -19,11 +21,13 @@ import {
   ApiParam,
   ApiQuery,
   ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { ServicesService } from './services.service';
+import { ServiceResponseDto } from './dto/service-response.dto';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { ServiceResponseDto } from './dto/service-response.dto';
 import { JwtUserAuthGuard } from 'src/modules/auth/guards/jwt-user-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -38,17 +42,25 @@ import { ServiceTypesListDto } from 'src/modules/admin/services/dto/service-type
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
-  @Post()
+  @Post('with-images')
   @Roles(UserTypes.admin)
-  @ApiOperation({ summary: 'Create a new service (Admin only)' })
+  @UseInterceptors(FilesInterceptor('images', 10)) // Allow up to 10 images
+  @ApiOperation({
+    summary: 'Create a new service with image uploads (Admin only)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Service data with image files',
+    type: CreateServiceDto,
+  })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Service created successfully',
+    description: 'Service created successfully with uploaded images',
     type: ServiceResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid input data',
+    description: 'Invalid input data or image format',
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
@@ -64,9 +76,81 @@ export class ServicesController {
   })
   async create(
     @Body() createServiceDto: CreateServiceDto,
+    @UploadedFiles() images?: Express.Multer.File[],
   ): Promise<ServiceResponseDto> {
-    const services = await this.servicesService.create(createServiceDto);
-    return toServiceResponse(services);
+    const service = await this.servicesService.create(createServiceDto, images);
+    return toServiceResponse(service);
+  }
+
+  @Post(':id/upload-images')
+  @Roles(UserTypes.admin)
+  @UseInterceptors(FilesInterceptor('images', 10))
+  @ApiOperation({
+    summary: 'Upload images for an existing service (Admin only)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({
+    name: 'id',
+    description: 'Service unique identifier (MongoDB ObjectId)',
+    type: 'string',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        replaceExisting: {
+          type: 'boolean',
+          description: 'Whether to replace existing images or append new ones',
+          default: false,
+        },
+        images: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description: 'Image files to upload (max 10 files, 5MB each)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Images uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        urls: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid service ID format or image format',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Service not found',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Unauthorized access',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Insufficient permissions',
+  })
+  async uploadServiceImages(
+    @Param('id') id: string,
+    @UploadedFiles() images: Express.Multer.File[],
+    @Body('replaceExisting') replaceExisting?: boolean,
+  ): Promise<{ success: boolean; urls: string[] }> {
+    return await this.servicesService.uploadServiceImages(
+      id,
+      images,
+      replaceExisting || false,
+    );
   }
 
   @Get()
@@ -171,22 +255,28 @@ export class ServicesController {
     return toServiceResponse(services);
   }
 
-  @Patch(':id')
+  @Patch(':id/with-images')
   @Roles(UserTypes.admin)
-  @ApiOperation({ summary: 'Update service by ID (Admin only)' })
+  @UseInterceptors(FilesInterceptor('images', 10))
+  @ApiOperation({ summary: 'Update service with image uploads (Admin only)' })
+  @ApiConsumes('multipart/form-data')
   @ApiParam({
     name: 'id',
     description: 'Service unique identifier (MongoDB ObjectId)',
     type: 'string',
   })
+  @ApiBody({
+    description: 'Service update data with optional image files',
+    type: UpdateServiceDto,
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Service updated successfully',
+    description: 'Service updated successfully with uploaded images',
     type: ServiceResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid input data or service ID format',
+    description: 'Invalid input data, service ID format, or image format',
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -207,9 +297,53 @@ export class ServicesController {
   async update(
     @Param('id') id: string,
     @Body() updateServiceDto: UpdateServiceDto,
+    @UploadedFiles() images?: Express.Multer.File[],
   ): Promise<ServiceResponseDto> {
-    const services = await this.servicesService.update(id, updateServiceDto);
-    return toServiceResponse(services);
+    const service = await this.servicesService.update(
+      id,
+      updateServiceDto,
+      images,
+    );
+    return toServiceResponse(service);
+  }
+
+  @Patch(':id/main-image')
+  @Roles(UserTypes.admin)
+  @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({ summary: 'Update service main image (Admin only)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({
+    name: 'id',
+    description: 'Service unique identifier (MongoDB ObjectId)',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Main image updated successfully',
+    type: ServiceResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid service ID format or image format',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Service not found',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Unauthorized access',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Insufficient permissions',
+  })
+  async updateMainImage(
+    @Param('id') id: string,
+    @UploadedFile() image: Express.Multer.File,
+  ): Promise<ServiceResponseDto> {
+    const service = await this.servicesService.updateMainImage(id, image);
+    return toServiceResponse(service);
   }
 
   @Delete(':id')
