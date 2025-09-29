@@ -18,17 +18,22 @@ import { JwtModule } from '@nestjs/jwt';
       inject: [ConfigService],
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
+        const env = process.env.NODE_ENV;
+        const prefix =
+          env === 'staging'
+            ? 'staging'
+            : env === 'production'
+              ? 'production'
+              : 'development';
+
         return {
-          secret: configService.get('production.jwt.privateKey'),
-          // secret: configService.get('development.jwt.privateKey'),
+          secret: configService.get<string>(`${prefix}.jwt.privateKey`),
           signOptions: {
-            expiresIn: configService.get('production.jwt.expiresIn'),
+            expiresIn: configService.get<string>(`${prefix}.jwt.expiresIn`),
             algorithm: 'HS256',
           },
-          // signOptions: {
-          //   expiresIn: configService.get('development.jwt.expiresIn'),
-          //   algorithm: 'HS256',
-          // },
+          // signOptions: { algorithm: 'HS256' },
+          // signOptions: { expiresIn: configService.get('development.jwt.expiresIn'), algorithm: 'HS256' },
           verifyOptions: {
             algorithms: ['HS256'],
           },

@@ -134,8 +134,14 @@ export class AuthController {
 
     res.cookie(COOKIE_NAME, loginResponse.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure:
+        process.env.NODE_ENV === 'production' ||
+        process.env.NODE_ENV === 'staging',
+      sameSite:
+        process.env.NODE_ENV === 'production' ||
+        process.env.NODE_ENV === 'staging'
+          ? 'none'
+          : 'lax',
       path: '/',
       expires: cookieExpiresAt,
     });
@@ -174,7 +180,9 @@ export class AuthController {
 
     res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure:
+        process.env.NODE_ENV === 'production' ||
+        process.env.NODE_ENV === 'staging',
       sameSite: 'none',
     });
 

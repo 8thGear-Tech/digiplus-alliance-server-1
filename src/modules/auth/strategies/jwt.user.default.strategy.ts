@@ -26,10 +26,16 @@ export class JwtUserDefaultStrategy extends PassportStrategy(
     @Inject(Repositories.UserRepository)
     private readonly userRepository: BaseRepository<User>,
   ) {
+    const env = process.env.NODE_ENV;
+    const prefix =
+      env === 'staging'
+        ? 'staging'
+        : env === 'development'
+          ? 'development'
+          : 'production';
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      // secretOrKey: configService.get('development.jwt.privateKey'),
-      secretOrKey: configService.get('production.jwt.privateKey'),
+      secretOrKey: configService.get(`${prefix}.jwt.privateKey`),
     });
   }
 
