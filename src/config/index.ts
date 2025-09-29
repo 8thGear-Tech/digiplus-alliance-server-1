@@ -1,4 +1,5 @@
 import developmentConfig from './development';
+import stagingConfig from './staging';
 import productionConfig from './production';
 
-export { developmentConfig, productionConfig };
+export { developmentConfig, stagingConfig, productionConfig };
