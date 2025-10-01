@@ -22,6 +22,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { JwtService } from '@nestjs/jwt';
 import { UpdateBusinessProfileDto } from './dtos/update-business-profile.dto';
 import { UpdateAdminProfileDto } from './dtos/update-admin-profile.dto';
+import { UserAssessment } from '../assessment/schemas/user-assessment.schema';
 
 @Injectable()
 export class ProfileService {
@@ -36,6 +37,8 @@ export class ProfileService {
     // private readonly notificationRepository: BaseRepository<Notification>,
     // private readonly mailService: MailerService,
     private readonly uploadService: UploadService,
+    @Inject(Repositories.UserAssessmentRepository)
+    private readonly userAssessmentRepository: BaseRepository<UserAssessment>,
     // private readonly jwtService: JwtService,
   ) {}
 

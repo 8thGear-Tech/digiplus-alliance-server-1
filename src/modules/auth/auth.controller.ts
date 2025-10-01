@@ -37,6 +37,11 @@ import { RefreshResDto } from './dtos/refresh.dto';
 
 import { UnauthorizedException } from 'src/exceptions';
 import { ForgotPasswordReqDto } from './dtos/forgot-password.dto';
+import {
+  ChangePasswordReqDto,
+  ChangePasswordResDto,
+} from './dtos/change-password.dto';
+import { Types } from 'mongoose';
 
 const convertJwtExpiryToMs = (expiry: string): number => {
   const value = parseInt(expiry.slice(0, -1), 10);
@@ -112,6 +117,29 @@ export class AuthController {
   ) {
     // The DTO must contain the 'password' and 'resetToken' properties
     return this.authService.resetPassword(resetPasswordReqDto);
+  }
+
+  // change password
+  @ApiBearerAuth()
+  @UseGuards(JwtUserAuthGuard)
+  @ApiOperation({
+    summary: 'Change password for authenticated user',
+  })
+  @ApiOkResponse({
+    type: ChangePasswordResDto,
+    description: 'Password has been successfully changed.',
+  })
+  @HttpCode(200)
+  @Post('change-password')
+  async changePassword(
+    @GetUser() user,
+    @Body(ValidationPipe) changePasswordReqDto: ChangePasswordReqDto,
+  ): Promise<ChangePasswordResDto> {
+    if (!user || !user._id) {
+      throw UnauthorizedException.UNAUTHORIZED_ACCESS('User not authenticated');
+    }
+
+    return this.authService.changePassword(user._id, changePasswordReqDto);
   }
 
   // POST /auth/login
