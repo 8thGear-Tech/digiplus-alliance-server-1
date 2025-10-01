@@ -22,6 +22,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { JwtService } from '@nestjs/jwt';
 import { UpdateBusinessProfileDto } from './dtos/update-business-profile.dto';
 import { UpdateAdminProfileDto } from './dtos/update-admin-profile.dto';
+import { UserAssessment } from '../assessment/schemas/user-assessment.schema';
 
 @Injectable()
 export class ProfileService {
@@ -36,6 +37,8 @@ export class ProfileService {
     // private readonly notificationRepository: BaseRepository<Notification>,
     // private readonly mailService: MailerService,
     private readonly uploadService: UploadService,
+    @Inject(Repositories.UserAssessmentRepository)
+    private readonly userAssessmentRepository: BaseRepository<UserAssessment>,
     // private readonly jwtService: JwtService,
   ) {}
 
@@ -67,16 +70,77 @@ export class ProfileService {
     return updatedProfile;
   }
 
+  // async getBusinessProfile(userId: Identifier) {
+  //   const profile = await this.businessProfileRepository.findOne({
+  //     user_id: new Types.ObjectId(userId),
+  //   });
+  //   if (!profile)
+  //     throw BadRequestException.RESOURCE_NOT_FOUND(
+  //       'Profile not found for this user',
+  //     );
+
+  //   // Get assessment completion count
+  //   const assessmentCount = await this.userAssessmentRepository.count({
+  //     user_id: new Types.ObjectId(userId),
+  //   });
+
+  //   // Convert profile to plain object and add assessment count
+  //   const profileObject = profile.toObject ? profile.toObject() : profile;
+
+  //   return {
+  //     ...profileObject,
+  //     completed_assessments: assessmentCount,
+  //   };
+  //   // return profile;
+  // }
+
   async getBusinessProfile(userId: Identifier) {
+    // Convert ID once for reuse and validation
+    const objectIdUserId = new Types.ObjectId(userId);
+    const stringUserId = objectIdUserId.toString();
+
+    // LOGGING STEP 1: Confirm the ID Mongoose is using
+    console.log('DEBUG: Querying with user ID (string):', stringUserId);
+
     const profile = await this.businessProfileRepository.findOne({
-      user_id: new Types.ObjectId(userId),
+      user_id: objectIdUserId,
     });
-    if (!profile)
+
+    if (!profile) {
       throw BadRequestException.RESOURCE_NOT_FOUND(
         'Profile not found for this user',
       );
+    }
 
-    return profile;
+    // Attempt #1: Query using the repository (already done, still 0)
+    // Attempt #2 (New): Use Mongoose's built-in countDocuments if the repository allows access to the Model.
+    let assessmentCount = 0;
+
+    try {
+      // We will try the repository's count method one last time using the correct ObjectId type
+      const queryCriteria = { user_id: objectIdUserId };
+
+      assessmentCount =
+        await this.userAssessmentRepository.count(queryCriteria);
+    } catch (error) {
+      console.error(
+        'ERROR: userAssessmentRepository.count failed, attempting direct Model access.',
+        error,
+      );
+      // If the repository fails, you would typically use dependency injection
+      // to get the direct Mongoose Model here and call Model.countDocuments()
+
+      // **If assessmentCount is 0 here, the only explanation is a repository or setup issue.**
+    }
+
+    console.log('DEBUG: Final assessmentCount retrieved:', assessmentCount);
+
+    // Convert profile to plain object and add assessment count
+    const profileObject = profile.toObject ? profile.toObject() : profile;
+    return {
+      ...profileObject,
+      completed_assessments: assessmentCount,
+    };
   }
 
   async updateAdminProfile(

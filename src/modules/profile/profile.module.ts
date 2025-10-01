@@ -7,6 +7,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AssessmentModule } from '../assessment/assessment.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { JwtModule } from '@nestjs/jwt';
     MongooseModelsModule,
     CloudinaryModule,
     MailerModule,
+    AssessmentModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       imports: [ConfigModule],
@@ -32,8 +34,7 @@ import { JwtModule } from '@nestjs/jwt';
             expiresIn: configService.get<string>(`${prefix}.jwt.expiresIn`),
             algorithm: 'HS256',
           },
-          // signOptions: { algorithm: 'HS256' },
-          // signOptions: { expiresIn: configService.get('development.jwt.expiresIn'), algorithm: 'HS256' },
+
           verifyOptions: {
             algorithms: ['HS256'],
           },
@@ -43,5 +44,6 @@ import { JwtModule } from '@nestjs/jwt';
   ],
   controllers: [ProfileController],
   providers: [ProfileService],
+  //
 })
 export class ProfileModule {}
