@@ -577,6 +577,10 @@ import {
   otpEmail,
   registrationEmail,
 } from '../mailer/mailer.constants';
+import {
+  ChangePasswordReqDto,
+  ChangePasswordResDto,
+} from './dtos/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -711,55 +715,6 @@ export class AuthService {
     };
   }
 
-  // async forgotPassword(email: string): Promise<SignupResDto> {
-  //   const lowerCaseEmail = email.toLowerCase();
-  //   const user = await this.userRepository.findOne({ email: lowerCaseEmail });
-
-  //   if (!user) {
-  //     return {
-  //       success: true,
-  //       message:
-  //         'If the email is registered, a password reset link has been sent.',
-  //     };
-  //   }
-
-  //   const token = this.generateCode().toString();
-  //   const verificationFor = 'password-reset';
-
-  //   const { fullToken, verificationLink } = await this.generateVerificationLink(
-  //     token,
-  //     lowerCaseEmail,
-  //     verificationFor,
-  //     'auth/reset-password',
-  //   );
-
-  //   await this.tokenQueryService.deleteMany({
-  //     userId: user._id,
-  //     type: verificationFor,
-  //   });
-
-  //   await this.tokenQueryService.create({
-  //     value: fullToken.trim(),
-  //     type: verificationFor,
-  //     userType: user.role,
-  //     userId: user._id,
-  //     expiresIn: new Date(Date.now() + Constants.tokenExpiry),
-  //   });
-
-  //   const mailBody = forgotPasswordEmail(user, verificationLink);
-
-  //   await this.mailService.sendMail({
-  //     to: lowerCaseEmail,
-  //     subject: 'Password Reset Request',
-  //     html: mailBody,
-  //   });
-
-  //   return {
-  //     success: true,
-  //     message: 'A password reset link has been sent to your email.',
-  //   };
-  // }
-
   async verifyEmail(
     verifyAccountDto: VerifyAccountDto,
   ): Promise<SignupResDto & { resetToken?: string }> {
@@ -850,64 +805,6 @@ export class AuthService {
     };
   }
 
-  // async resetPassword(
-  //   resetPasswordReqDto: ResetPasswordReqDto,
-  // ): Promise<SignupResDto> {
-  //   const { password, resetToken } = resetPasswordReqDto;
-  //   let email: string;
-  //   let userId: Types.ObjectId;
-
-  //   try {
-  //     const decoded = await this.jwtService.verifyAsync(resetToken);
-  //     console.log('🔍 Decoded resetToken:', decoded);
-  //     console.log('🔍 Type of decoded.user:', typeof decoded.user);
-  //     console.log('🔍 decoded.user value:', decoded.user);
-  //     email = decoded.email;
-  //     // Handle the ObjectId conversion properly
-  //     if (typeof decoded.user === 'string') {
-  //       userId = new Types.ObjectId(decoded.user);
-  //     } else {
-  //       userId = decoded.user as Types.ObjectId;
-  //     }
-  //     // userId = decoded.user as Types.ObjectId;
-  //     console.log('📧 Email:', email);
-  //     console.log('👤 UserId:', userId);
-  //   } catch (error) {
-  //     console.log('❌ Token verification error:', error);
-  //     throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
-  //       'Invalid or expired reset token',
-  //     );
-  //   }
-
-  //   const user = await this.userRepository.findOne({ email });
-
-  //   if (!user || !user.is_verified_for_recovery) {
-  //     throw UnauthorizedException.INVALID_RESET_PASSWORD_TOKEN(
-  //       'User not authorized for reset or token invalid',
-  //     );
-  //   }
-
-  //   const saltOrRounds = this.SALT_ROUNDS;
-  //   const newHashedPassword = await bcrypt.hash(password, saltOrRounds);
-
-  //   await this.userRepository.update(
-  //     { _id: user._id },
-  //     {
-  //       password: newHashedPassword,
-  //       is_in_recovery: false,
-  //       is_verified_for_recovery: false,
-  //     },
-  //   );
-
-  //   await this.refreshTokenRepository.deleteMany({ user: user._id });
-
-  //   return {
-  //     success: true,
-  //     message:
-  //       'Password reset successfully. You can now log in with your new password.',
-  //   };
-  // }
-
   async forgotPassword(email: string): Promise<SignupResDto> {
     const user = await this.userRepository.findOne({
       email: email.toLowerCase(),
@@ -978,6 +875,55 @@ export class AuthService {
         'Invalid or expired reset token',
       );
     }
+  }
+
+  //change password
+  async changePassword(
+    userId: Types.ObjectId,
+    changePasswordReqDto: ChangePasswordReqDto,
+  ): Promise<ChangePasswordResDto> {
+    const { oldPassword, newPassword } = changePasswordReqDto;
+
+    console.log('Looking for user with ID:', userId);
+    console.log('ID type:', typeof userId);
+
+    // Find the user
+    const user = await this.userRepository.findOne({ _id: userId });
+    console.log('Found user:', user);
+    if (!user) {
+      throw UnauthorizedException.RESOURCE_NOT_FOUND('User not found');
+    }
+
+    // Verify the old password
+    const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isOldPasswordValid) {
+      throw UnauthorizedException.UNAUTHORIZED_ACCESS(
+        'Current password is incorrect',
+      );
+    }
+
+    // Check if new password is the same as old password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw BadRequestException.BAD_REQUEST(
+        'New password must be different from the current password',
+      );
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+
+    await this.userRepository.update(
+      { _id: userId },
+      { password: hashedNewPassword },
+    );
+
+    await this.refreshTokenRepository.deleteMany({ user: userId });
+
+    return {
+      success: true,
+      message:
+        'Password changed successfully. Please login again on all devices.',
+    };
   }
 
   generateCode(): number {

@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 console.log('From Config: ', process.env.STAGING_MONGODB_CONNECTION_URL);
 
-export default registerAs('development', () => ({
+export default registerAs('staging', () => ({
   mongodbConnectionUrl: process.env.STAGING_MONGODB_CONNECTION_URL,
   jwt: {
     privateKey: process.env.JWT_PRIVATE_KEY,
