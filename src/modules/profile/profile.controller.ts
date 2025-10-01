@@ -54,19 +54,33 @@ export class ProfileController {
     // return this.profileService.getBusinessProfile(user._id?.toString());
   }
 
-  @ApiOkResponse({
-    type: BusinessProfileResDto,
-  })
-  @HttpCode(200)
+  // @ApiOkResponse({
+  //   type: BusinessProfileResDto,
+  // })
+  // @HttpCode(200)
+  // @Patch('business')
+  // async updateBusinessProfile(
+  //   @GetUser() user,
+  //   @Body(ValidationPipe) businessProfile: UpdateBusinessProfileDto, // Corrected DTO
+  // ) {
+  //   return await this.profileService.updateBusinessProfile({
+  //     ...businessProfile,
+  //     userId: user._id,
+  //   });
+  // }
   @Patch('business')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateBusinessProfileDto })
+  @UseInterceptors(FileInterceptor('org_logo'))
   async updateBusinessProfile(
     @GetUser() user,
-    @Body(ValidationPipe) businessProfile: UpdateBusinessProfileDto, // Corrected DTO
+    @UploadedFile() file: Express.Multer.File,
+    @Body(ValidationPipe) businessProfile: UpdateBusinessProfileDto,
   ) {
-    return await this.profileService.updateBusinessProfile({
-      ...businessProfile,
-      userId: user._id,
-    });
+    return await this.profileService.updateBusinessProfile(
+      { ...businessProfile, userId: user._id }, // ✅ only DTO + userId
+      file, // ✅ pass file separately
+    );
   }
 
   // New endpoint for admins
@@ -104,7 +118,7 @@ export class ProfileController {
     schema: {
       type: 'object',
       properties: {
-        orgLogo: {
+        org_logo: {
           type: 'string',
           format: 'binary',
         },
@@ -112,7 +126,7 @@ export class ProfileController {
     },
   })
   @Post('uploadlogo')
-  @UseInterceptors(FileInterceptor('orgLogo'))
+  @UseInterceptors(FileInterceptor('org_logo'))
   async uploadLogo(@GetUser() user, @UploadedFile() file: Express.Multer.File) {
     return await this.profileService.uploadLogo(file, user._id);
   }

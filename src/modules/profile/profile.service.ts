@@ -42,11 +42,43 @@ export class ProfileService {
     // private readonly jwtService: JwtService,
   ) {}
 
+  // async updateBusinessProfile(
+  //   businessProfile: UpdateBusinessProfileDto & { userId: Identifier },
+  // ) {
+  //   const profile = await this.businessProfileRepository.findOne({
+  //     user_id: new Types.ObjectId(businessProfile.userId),
+  //   });
+
+  //   if (!profile) {
+  //     throw BadRequestException.RESOURCE_NOT_FOUND(
+  //       'Profile not found for this user',
+  //     );
+  //   }
+
+  //   const updatedProfile = await this.businessProfileRepository.update(
+  //     { user_id: new Types.ObjectId(businessProfile.userId) },
+  //     businessProfile,
+  //   );
+
+  //   if (businessProfile.email) {
+  //     await this.userRepository.update(
+  //       { _id: new Types.ObjectId(businessProfile.userId) },
+  //       { email: businessProfile.email },
+  //     );
+  //   }
+
+  //   return updatedProfile;
+  // }
+
   async updateBusinessProfile(
     businessProfile: UpdateBusinessProfileDto & { userId: Identifier },
+    file?: Express.Multer.File,
   ) {
+    const userObjectId = new Types.ObjectId(String(businessProfile.userId));
+
+    // 1. Find profile first
     const profile = await this.businessProfileRepository.findOne({
-      user_id: new Types.ObjectId(businessProfile.userId),
+      user_id: userObjectId,
     });
 
     if (!profile) {
@@ -55,21 +87,92 @@ export class ProfileService {
       );
     }
 
-    const updatedProfile = await this.businessProfileRepository.update(
-      { user_id: new Types.ObjectId(businessProfile.userId) },
-      businessProfile,
-    );
+    // 2. Destructure fields that belong to User
+    const { email, first_name, last_name, ...businessData } = businessProfile;
 
-    if (businessProfile.email) {
-      await this.userRepository.update(
-        { _id: new Types.ObjectId(businessProfile.userId) },
-        { email: businessProfile.email },
+    // 3. If file exists, upload and set logo_url
+    if (file) {
+      const { secure_url } = await this.uploadService.uploadImage(
+        file,
+        `business/${businessProfile.userId}`,
+        'logos',
       );
+      (businessData as any).logo_url = secure_url; // ✅ matches schema
     }
 
-    return updatedProfile;
+    // 4. Update business profile fields
+    await this.businessProfileRepository.update(
+      { user_id: userObjectId },
+      businessData,
+    );
+
+    // 5. Update user record if needed
+    const userUpdates: Partial<User> = {};
+    if (email) userUpdates.email = email;
+    if (first_name) userUpdates.first_name = first_name;
+    if (last_name) userUpdates.last_name = last_name;
+
+    if (Object.keys(userUpdates).length > 0) {
+      await this.userRepository.update({ _id: userObjectId }, userUpdates);
+    }
+
+    // 6. Return enriched profile using existing method
+    return this.getBusinessProfile(String(businessProfile.userId));
   }
 
+  // async updateBusinessProfile(
+  //   data: UpdateBusinessProfileDto & {
+  //     userId: Identifier;
+  //     file?: Express.Multer.File; // <-- add file support
+  //   },
+  // ) {
+  //   const profile = await this.businessProfileRepository.findOne({
+  //     user_id: new Types.ObjectId(data.userId),
+  //   });
+
+  //   if (!profile) {
+  //     throw BadRequestException.RESOURCE_NOT_FOUND(
+  //       'Profile not found for this user',
+  //     );
+  //   }
+
+  //   // --- 1. Handle logo upload if file is provided ---
+  //   let logoUrl: string | undefined;
+  //   if (data.file) {
+  //     const logoCloudPath = `business/${data.userId}`;
+  //     const { secure_url } = await this.uploadService.uploadImage(
+  //       data.file,
+  //       logoCloudPath,
+  //       'logos',
+  //     );
+  //     logoUrl = secure_url;
+  //   }
+
+  //   // --- 2. Update BusinessProfile ---
+  //   const updatePayload: any = { ...data };
+  //   delete updatePayload.file; // prevent saving file object to DB
+  //   if (logoUrl) updatePayload.logo_url = logoUrl;
+
+  //   const updatedProfile = await this.businessProfileRepository.update(
+  //     { user_id: new Types.ObjectId(data.userId) },
+  //     updatePayload,
+  //   );
+
+  //   // --- 3. Update user table (first_name, last_name, email) ---
+  //   const userUpdate: Partial<User> = {};
+  //   if (data.first_name) userUpdate['first_name'] = data.first_name;
+  //   if (data.last_name) userUpdate['last_name'] = data.last_name;
+  //   if (data.email) userUpdate['email'] = data.email;
+
+  //   if (Object.keys(userUpdate).length > 0) {
+  //     await this.userRepository.update(
+  //       { _id: new Types.ObjectId(data.userId) },
+  //       userUpdate,
+  //     );
+  //   }
+
+  //   return updatedProfile;
+  // }
   // async getBusinessProfile(userId: Identifier) {
   //   const profile = await this.businessProfileRepository.findOne({
   //     user_id: new Types.ObjectId(userId),
@@ -79,31 +182,13 @@ export class ProfileService {
   //       'Profile not found for this user',
   //     );
 
-  //   // Get assessment completion count
-  //   const assessmentCount = await this.userAssessmentRepository.count({
-  //     user_id: new Types.ObjectId(userId),
-  //   });
-
-  //   // Convert profile to plain object and add assessment count
-  //   const profileObject = profile.toObject ? profile.toObject() : profile;
-
-  //   return {
-  //     ...profileObject,
-  //     completed_assessments: assessmentCount,
-  //   };
-  //   // return profile;
+  //   return profile;
   // }
 
-  async getBusinessProfile(userId: Identifier) {
-    // Convert ID once for reuse and validation
-    const objectIdUserId = new Types.ObjectId(userId);
-    const stringUserId = objectIdUserId.toString();
-
-    // LOGGING STEP 1: Confirm the ID Mongoose is using
-    console.log('DEBUG: Querying with user ID (string):', stringUserId);
-
+  async getBusinessProfile(userId: string) {
+    // 1. Fetch business profile
     const profile = await this.businessProfileRepository.findOne({
-      user_id: objectIdUserId,
+      user_id: new Types.ObjectId(userId),
     });
 
     if (!profile) {
@@ -112,34 +197,17 @@ export class ProfileService {
       );
     }
 
-    // Attempt #1: Query using the repository (already done, still 0)
-    // Attempt #2 (New): Use Mongoose's built-in countDocuments if the repository allows access to the Model.
-    let assessmentCount = 0;
+    // 2. Fetch user record
+    const user = await this.userRepository.findOne({
+      _id: new Types.ObjectId(userId),
+    });
 
-    try {
-      // We will try the repository's count method one last time using the correct ObjectId type
-      const queryCriteria = { user_id: objectIdUserId };
-
-      assessmentCount =
-        await this.userAssessmentRepository.count(queryCriteria);
-    } catch (error) {
-      console.error(
-        'ERROR: userAssessmentRepository.count failed, attempting direct Model access.',
-        error,
-      );
-      // If the repository fails, you would typically use dependency injection
-      // to get the direct Mongoose Model here and call Model.countDocuments()
-
-      // **If assessmentCount is 0 here, the only explanation is a repository or setup issue.**
-    }
-
-    console.log('DEBUG: Final assessmentCount retrieved:', assessmentCount);
-
-    // Convert profile to plain object and add assessment count
-    const profileObject = profile.toObject ? profile.toObject() : profile;
+    // 3. Merge data into a single object
     return {
-      ...profileObject,
-      completed_assessments: assessmentCount,
+      ...profile.toObject(), // spreads all business profile fields
+      first_name: user?.first_name ?? null,
+      last_name: user?.last_name ?? null,
+      email: user?.email ?? profile.email, // fallback to profile email if needed
     };
   }
 
