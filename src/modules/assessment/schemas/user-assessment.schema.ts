@@ -41,6 +41,9 @@ export class UserAssessment {
   @Prop({ type: String })
   feedback?: string;
 
+  @Prop({ type: Boolean, default: false })
+  is_submitted?: boolean;
+
   @Prop({
     type: [
       {
