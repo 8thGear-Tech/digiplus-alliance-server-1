@@ -34,7 +34,6 @@ import { AssessmentModule } from '../assessment/assessment.module';
             expiresIn: configService.get<string>(`${prefix}.jwt.expiresIn`),
             algorithm: 'HS256',
           },
-
           verifyOptions: {
             algorithms: ['HS256'],
           },
