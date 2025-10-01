@@ -21,15 +21,6 @@ import {
 import {
   CreateAssessmentDto,
   CreateAssessmentResDto,
-  CreateCheckboxQuestionDto,
-  CreateDropdownQuestionDto,
-  CreateLongTextQuestionDto,
-  CreateModuleTitleDto,
-  CreateMultipleChoiceGridQuestionDto,
-  CreateMultipleChoiceQuestionDto,
-  CreateShortTextQuestionDto,
-  CreateWelcomeScreenDto,
-  // ServiceRecommendationDto,
 } from './dto/create-assessment.dto';
 import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
@@ -913,6 +904,7 @@ export class AssessmentService {
         instruction: createAssessmentDto.instruction,
         is_active: createAssessmentDto.is_active ?? true,
         is_published: false,
+        ia_submitted: false,
         created_by: new Types.ObjectId(userId),
         total_possible_points: 0,
       };
@@ -1581,11 +1573,41 @@ export class AssessmentService {
     }
   }
 
-  async getUserAssessments(userId: string): Promise<any> {
+  async getUserAssessments(
+    userId: string,
+    filters?: {
+      startDate?: string; // ISO date string
+      endDate?: string; // ISO date string
+      minScore?: number;
+      maxScore?: number;
+    },
+  ): Promise<any> {
     try {
       const filter: any = {
         user_id: new Types.ObjectId(userId),
       };
+
+      // 📅 Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        filter.completed_at = {};
+        if (filters.startDate) {
+          filter.completed_at.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          filter.completed_at.$lte = new Date(filters.endDate);
+        }
+      }
+
+      // 🏆 Score filtering
+      if (filters?.minScore || filters?.maxScore) {
+        filter.user_score = {};
+        if (filters.minScore !== undefined) {
+          filter.user_score.$gte = filters.minScore;
+        }
+        if (filters.maxScore !== undefined) {
+          filter.user_score.$lte = filters.maxScore;
+        }
+      }
 
       const assessments = await this.userAssessmentRepository.find(filter);
 
@@ -1819,11 +1841,9 @@ export class AssessmentService {
 
       // ✅ Use pre-calculated total_possible_points from DB
       const total_possible_points = assessment.total_possible_points || 0;
-
       // ✅ Calculate user’s score
       const userScore = this.calculateUserScore(questions, userResponses);
       const completedAt = new Date();
-
       // ✅ Determine user level & percentage score
       const percentage_score =
         total_possible_points > 0
@@ -1861,9 +1881,16 @@ export class AssessmentService {
           percentage_score,
           recommended_services: recommendedServices,
           completed_at: completedAt,
+          is_submitted: true,
         };
 
         await this.userAssessmentRepository.create(userAssessmentData);
+
+        // 🔥 Update assessment is_submitted flag
+        await this.userAssessmentRepository.update(
+          { _id: assessmentId },
+          { $set: { is_submitted: true, updated_at: new Date() } },
+        );
         this.logger.log(
           `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
         );
@@ -1880,6 +1907,7 @@ export class AssessmentService {
           recommended_services: recommendedServices,
           assessment_title: assessment.title,
           completed_at: completedAt.toISOString(),
+          is_submitted: true,
         },
       };
     } catch (error) {
