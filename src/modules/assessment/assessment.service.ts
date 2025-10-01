@@ -1581,11 +1581,41 @@ export class AssessmentService {
     }
   }
 
-  async getUserAssessments(userId: string): Promise<any> {
+  async getUserAssessments(
+    userId: string,
+    filters?: {
+      startDate?: string; // ISO date string
+      endDate?: string; // ISO date string
+      minScore?: number;
+      maxScore?: number;
+    },
+  ): Promise<any> {
     try {
       const filter: any = {
         user_id: new Types.ObjectId(userId),
       };
+
+      // 📅 Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        filter.completed_at = {};
+        if (filters.startDate) {
+          filter.completed_at.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          filter.completed_at.$lte = new Date(filters.endDate);
+        }
+      }
+
+      // 🏆 Score filtering
+      if (filters?.minScore || filters?.maxScore) {
+        filter.user_score = {};
+        if (filters.minScore !== undefined) {
+          filter.user_score.$gte = filters.minScore;
+        }
+        if (filters.maxScore !== undefined) {
+          filter.user_score.$lte = filters.maxScore;
+        }
+      }
 
       const assessments = await this.userAssessmentRepository.find(filter);
 

@@ -27,6 +27,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AssessmentService } from './assessment.service';
 import {
@@ -755,12 +756,65 @@ export class AssessmentController {
 
   @Get('user/submissions')
   @ApiOperation({ summary: 'Get current user assessment submissions' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    example: '2025-09-01',
+    description:
+      'Filter assessments completed on or after this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    example: '2025-09-30',
+    description:
+      'Filter assessments completed on or before this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'minScore',
+    required: false,
+    example: 30,
+    description: 'Minimum user score',
+  })
+  @ApiQuery({
+    name: 'maxScore',
+    required: false,
+    example: 80,
+    description: 'Maximum user score',
+  })
   @ApiResponse({
     status: 200,
     description: 'User assessments retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'User assessments retrieved successfully',
+        data: [
+          {
+            user_id: '68d76eea50c4b6fd7da5fc05',
+            assessment_id: '68d76eea50c4b6fd7da5fc06',
+            user_score: 45,
+            max_possible_score: 100,
+            percentage_score: 45,
+            completed_at: '2025-09-15T10:30:00.000Z',
+          },
+        ],
+      },
+    },
   })
-  async getUserAssessments(@Request() req): Promise<any> {
-    return this.assessmentService.getUserAssessments(req.user._id);
+  async getUserAssessments(
+    @Request() req,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('minScore') minScore?: number,
+    @Query('maxScore') maxScore?: number,
+  ): Promise<any> {
+    return this.assessmentService.getUserAssessments(req.user._id, {
+      startDate,
+      endDate,
+      minScore: minScore ? Number(minScore) : undefined,
+      maxScore: maxScore ? Number(maxScore) : undefined,
+    });
   }
 
   @Get('stats/:userId')
