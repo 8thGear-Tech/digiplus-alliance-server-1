@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -30,7 +31,7 @@ import { UserSubmission } from 'src/modules/business-owner/user-submission.schem
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
-import { BaseRepository } from 'src/modules/repository/base.repository';
+// import { BaseRepository } from 'src/modules/repository/base.repository';
 
 @Injectable()
 export class AdminApplicationService {
