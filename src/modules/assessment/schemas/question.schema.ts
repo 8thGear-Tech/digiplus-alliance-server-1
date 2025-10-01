@@ -65,6 +65,9 @@ export class Question {
   @Prop({ default: true })
   is_active: boolean;
 
+  @Prop({ default: 0 })
+  max_points: number;
+
   @Prop({ default: Date.now })
   created_at: Date;
 

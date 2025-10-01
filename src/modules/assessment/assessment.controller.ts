@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -11,9 +13,10 @@ import {
   Param,
   UseGuards,
   Request,
-  Put,
+  // Put,
   Patch,
   Logger,
+  Query,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -43,6 +46,7 @@ import {
   SubmitAssessmentResDto,
 } from './dto/submit-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
+import { PublishAssessmentDto } from './dto/publish-assessment.dto';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -525,6 +529,41 @@ export class AssessmentController {
     );
   }
 
+  @Patch(':id/publish')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Publish or Unpublish assessment (Admin only)',
+    description: 'Toggle assessment publication status with one endpoint',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment publication status updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found',
+  })
+  async togglePublishAssessment(
+    @Param('id') assessmentId: string,
+    @Body() body: PublishAssessmentDto,
+  ) {
+    return await this.assessmentService.togglePublishAssessment(
+      assessmentId,
+      body.is_published,
+    );
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -670,25 +709,8 @@ export class AssessmentController {
   // }
 
   // User Routes
-  // @Post('submit')
-  // @ApiOperation({ summary: 'Submit assessment answers' })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Assessment submitted successfully',
-  //   type: SubmitAssessmentResDto,
-  // })
-  // async submitAssessment(
-  //   @Body() submitAssessmentDto: SubmitAssessmentDto,
-  //   @Request() req,
-  // ): Promise<SubmitAssessmentResDto> {
-  //   return this.assessmentService.submitAssessment(
-  //     submitAssessmentDto,
-  //     req.user.user,
-  //   );
-  // }
 
   //added by opeyemi
-  // IN THE CONTROLLER
   @Post('submit')
   @ApiOperation({ summary: 'Submit assessment answers' })
   @ApiResponse({
@@ -738,8 +760,17 @@ export class AssessmentController {
     description: 'User assessments retrieved successfully',
   })
   async getUserAssessments(@Request() req): Promise<any> {
-    console.log('req.user:', req.user);
-    console.log('req.user.user:', req.user?.user);
     return this.assessmentService.getUserAssessments(req.user._id);
+  }
+
+  @Get('stats/:userId')
+  async getUserStats(
+    @Param('userId') userId: string,
+    @Query('year') year?: string,
+  ) {
+    return this.assessmentService.getUserMonthlyStats(
+      userId,
+      year ? +year : undefined,
+    );
   }
 }
