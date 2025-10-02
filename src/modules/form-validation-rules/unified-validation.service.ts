@@ -253,8 +253,10 @@ export class UnifiedValidationService {
       data_key: question._id?.toString(),
 
       // Default validation (no auto-detection for assessments)
-      auto_validation: ValidationRule.NONE,
-      manual_validation: ValidationRule.NONE,
+      // auto_validation: ValidationRule.NONE,
+      // manual_validation: ValidationRule.NONE,
+      auto_validation: question.auto_validation || ValidationRule.NONE,
+      manual_validation: question.manual_validation || ValidationRule.NONE,
     };
 
     // Type-specific mappings with FULL validation support
@@ -301,6 +303,7 @@ export class UnifiedValidationService {
           mapped.validation_params = {
             min_length: question.min_length,
             max_length: question.max_length,
+            error_message: question.validation_params?.error_message,
           };
         }
         break;
@@ -318,6 +321,7 @@ export class UnifiedValidationService {
           mapped.validation_params = {
             min_length: question.min_length,
             max_length: question.max_length,
+            error_message: question.validation_params?.error_message,
           };
         }
         break;
