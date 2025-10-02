@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { QuestionType, ValidationRule } from 'src/shared/enums';
+import { ValidationRule } from 'src/shared/enums';
+import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 
 // Validation parameters subdocument
 @Schema({ _id: false })
@@ -129,8 +130,11 @@ export class EmbeddedQuestion {
   @Prop([String])
   accepted_file_types?: string[];
 
-  @Prop({ default: false })
+  @Prop({ default: true })
   is_required: boolean;
+  //opeyemi
+  // @Prop({ default: false })
+  // is_required: boolean;
 
   @Prop({ required: true })
   step: number;

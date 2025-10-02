@@ -27,6 +27,15 @@ export class Assessment {
   @Prop({ default: Date.now })
   created_at: Date;
 
+  @Prop({ default: 0 })
+  total_possible_points: number;
+
+  @Prop({ default: false }) // Add this field
+  is_published: boolean;
+
+  @Prop() // Add published date
+  published_at?: Date;
+
   @Prop({ default: Date.now })
   updated_at: Date;
   _id: any;
