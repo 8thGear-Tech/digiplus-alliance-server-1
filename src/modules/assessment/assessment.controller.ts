@@ -802,6 +802,7 @@ export class AssessmentController {
       },
     },
   })
+
   async getUserAssessments(
     @Request() req,
     @Query('startDate') startDate?: string,
@@ -816,6 +817,8 @@ export class AssessmentController {
       maxScore: maxScore ? Number(maxScore) : undefined,
     });
   }
+
+ 
 
   @Get('stats/:userId')
   async getUserStats(

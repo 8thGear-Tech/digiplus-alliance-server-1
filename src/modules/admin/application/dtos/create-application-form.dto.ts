@@ -10,7 +10,8 @@ import {
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { QuestionType, ValidationRule } from 'src/shared/enums';
+import { ValidationRule } from 'src/shared/enums';
+import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 import { Types } from 'mongoose';
 
 export class ModuleDto {
@@ -101,7 +102,7 @@ export class QuestionDto {
 
   @ApiProperty({
     enum: QuestionType,
-    example: QuestionType.multiple_choice,
+    example: QuestionType.MULTIPLE_CHOICE,
     description: 'The type of question.',
   })
   @IsNotEmpty()

@@ -53,7 +53,7 @@ export class Question {
   @Prop({ type: [Object], default: [] })
   grid_rows: GridRow[];
 
-  @Prop({ default: false })
+  @Prop({ default: true })
   is_required: boolean;
 
   @Prop({ required: true })

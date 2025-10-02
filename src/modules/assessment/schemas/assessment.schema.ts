@@ -33,8 +33,10 @@ export class Assessment {
   @Prop({ default: false }) // Add this field
   is_published: boolean;
 
+
   @Prop({ default: false }) // Add this field
   is_submitted: boolean;
+
 
   @Prop() // Add published date
   published_at?: Date;

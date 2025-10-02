@@ -904,7 +904,9 @@ export class AssessmentService {
         instruction: createAssessmentDto.instruction,
         is_active: createAssessmentDto.is_active ?? true,
         is_published: false,
+
         ia_submitted: false,
+
         created_by: new Types.ObjectId(userId),
         total_possible_points: 0,
       };
@@ -960,7 +962,7 @@ export class AssessmentService {
           question: questionDto.question,
           description: questionDto.description,
           instruction: questionDto.instruction,
-          is_required: questionDto.is_required ?? false,
+          is_required: questionDto.is_required ?? true,
           step: questionDto.step,
           max_points: questionDto.max_points || 0,
           scoring_categories: questionDto.scoring_categories || [],
@@ -1968,5 +1970,4 @@ export class AssessmentService {
     }
   }
 
-  //above: added by opeyemi
 }

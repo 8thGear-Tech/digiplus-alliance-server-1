@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
   Injectable,
@@ -31,7 +26,6 @@ import { UserSubmission } from 'src/modules/business-owner/user-submission.schem
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
-// import { BaseRepository } from 'src/modules/repository/base.repository';
 
 @Injectable()
 export class AdminApplicationService {
@@ -89,8 +83,6 @@ export class AdminApplicationService {
           );
       }
     }
-    // If it is an existing question, we just return the payload from the DTO, keeping
-    // its existing auto_validation, placeholder, etc., unless the admin explicitly updated them in the DTO.
 
     return processedQuestion;
   }
@@ -155,84 +147,6 @@ export class AdminApplicationService {
     });
   }
 
-  // async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
-  //   const existingDataKeys: string[] = [];
-
-  //   const processedQuestions =
-  //     dto.questions?.map((question) => {
-  //       const processedQuestion = { ...question };
-
-  //       processedQuestion.data_key = this.questionDataKeyService.generate(
-  //         question.question,
-  //         existingDataKeys,
-  //       );
-
-  //       existingDataKeys.push(processedQuestion.data_key);
-
-  //       if (
-  //         (question.type === 'short_text' || question.type === 'long_text') &&
-  //         !question.manual_validation
-  //       ) {
-  //         const autoValidation =
-  //           this.questionValidationService.detectValidationRule(
-  //             question.question,
-  //           );
-  //         processedQuestion.auto_validation = autoValidation;
-
-  //         if (!question.placeholder && autoValidation !== 'none') {
-  //           processedQuestion.placeholder =
-  //             this.questionValidationService.getSuggestedPlaceholder(
-  //               autoValidation,
-  //             );
-  //         }
-
-  //         if (!question.instruction && autoValidation !== 'none') {
-  //           processedQuestion.instruction =
-  //             this.questionValidationService.getSuggestedInstruction(
-  //               autoValidation,
-  //             );
-  //         }
-  //       }
-  //       return processedQuestion;
-  //     }) || [];
-
-  //   const welcomeTitle = dto.welcome_title || 'new-form';
-  //   let newSlug = this.questionDataKeyService.generateSlug(welcomeTitle);
-
-  //   let slugExists = await this.applicationFormModel.findOne({ slug: newSlug });
-  //   let counter = 1;
-  //   while (slugExists) {
-  //     newSlug = `${this.questionDataKeyService.generateSlug(welcomeTitle)}-${counter}`;
-  //     slugExists = await this.applicationFormModel.findOne({ slug: newSlug });
-  //     counter++;
-  //   }
-
-  //   const processedDto = {
-  //     ...dto,
-  //     questions: processedQuestions,
-  //     slug: newSlug,
-  //   };
-
-  //   const newForm = new this.applicationFormModel({
-  //     ...processedDto,
-  //     isLive: false,
-  //   });
-
-  //   const savedForm = await newForm.save();
-
-  //   const cleanForm = savedForm.toObject();
-
-  //   if (cleanForm.questions) {
-  //     cleanForm.questions = cleanForm.questions.map((question) => {
-  //       const cleanQuestion = { ...question };
-  //       return cleanQuestion;
-  //     });
-  //   }
-
-  //   return cleanForm as ApplicationForm;
-  // }
-
-  // The original monolithic creation logic (now only used for initial form POST)
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
     const existingDataKeys: string[] = [];
 
@@ -267,129 +181,6 @@ export class AdminApplicationService {
     const savedForm = await newForm.save();
     return savedForm.toObject() as ApplicationForm;
   }
-
-  // --- The Refactored Update Logic (Now Add/Update ONLY) ---
-
-  // async updateForm(
-  //   id: string,
-  //   dto: UpdateApplicationFormDto,
-  // ): Promise<ApplicationForm> {
-  //   const form = await this.applicationFormModel.findById(id);
-  //   if (!form) {
-  //     throw new NotFoundException('Application form not found.');
-  //   }
-
-  //   // 1. Update top-level properties (welcome screens, isLive, etc.)
-  //   // Mongoose handles merging the top-level properties from the DTO.
-  //   Object.assign(form, dto);
-
-  //   if (dto.questions) {
-  //     // 1a. Create a map of existing questions by data_key for fast lookup
-  //     const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
-
-  //     // Collect all current data keys (for collision checking on new questions)
-  //     const currentDataKeys: string[] = form.questions
-  //       .map((q) => q.data_key)
-  //       .filter(Boolean) as string[];
-
-  //     // Populate map for existing items, using data_key as the unique identifier
-  //     for (const question of form.questions) {
-  //       if (question.data_key) {
-  //         existingQuestionsMap.set(question.data_key, question);
-  //       }
-  //     }
-
-  //     const newQuestionsToPush: EmbeddedQuestion[] = [];
-
-  //     for (const incomingQuestion of dto.questions) {
-  //       // A question is considered existing if it has a data_key that matches a question already in the form.
-  //       // We ensure incomingQuestion.data_key is present before checking the map
-  //       const isExisting =
-  //         incomingQuestion.data_key &&
-  //         existingQuestionsMap.has(incomingQuestion.data_key);
-
-  //       if (isExisting) {
-  //         // --- UPDATE EXISTING QUESTION IN-PLACE ---
-  //         // Use the non-null assertion operator (!) since we checked for its existence
-  //         const existingQuestion = existingQuestionsMap.get(
-  //           incomingQuestion.data_key!,
-  //         )!;
-
-  //         // Note: Since isNewQuestion will be false, processSingleQuestion won't regenerate data_key or auto-validation fields.
-  //         const updatedQuestion = this.processSingleQuestion(
-  //           incomingQuestion,
-  //           currentDataKeys,
-  //           false, // isNewQuestion = false
-  //         );
-
-  //         // Apply all updates from the DTO to the existing Mongoose subdocument
-  //         Object.assign(existingQuestion, updatedQuestion); // Safe because we asserted existingQuestion is not undefined
-  //       } else {
-  //         // --- CREATE/INSERT NEW QUESTION ---
-  //         // Since it is new (no data_key), process it to generate the data_key and auto_validation fields
-  //         const questionToSave = this.processSingleQuestion(
-  //           incomingQuestion,
-  //           currentDataKeys,
-  //           true, // isNewQuestion = true
-  //         );
-  //         // Push the newly created question to a temporary list to be appended later
-  //         newQuestionsToPush.push(questionToSave as EmbeddedQuestion);
-  //       }
-  //     }
-
-  //     // 2. APPEND NEW QUESTIONS: This preserves all existing questions (even those not sent in the DTO)
-  //     // and only adds the newly created ones.
-  //     form.questions.push(...newQuestionsToPush);
-  //   }
-
-  //   // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
-  //   if (dto.modules) {
-  //     // Use Map<string, any> since the EmbeddedModule type definition lacks the Mongoose _id for subdocuments
-  //     const existingModulesMap = new Map<string, any>();
-
-  //     // Map existing modules by their Mongoose _id for fast lookup
-  //     for (const module of form.modules) {
-  //       // Check for _id explicitly and cast to any if needed to satisfy TS compiler
-  //       if ((module as any)._id) {
-  //         // Use .toString() for Map key consistency
-  //         existingModulesMap.set((module as any)._id.toString(), module);
-  //       }
-  //     }
-
-  //     const newModulesToPush: any[] = [];
-
-  //     for (const incomingModule of dto.modules) {
-  //       // Cast incomingModule to any for _id access
-  //       const moduleWithId = incomingModule as any;
-
-  //       // A module is considered existing if it has an _id that matches a module already in the form.
-  //       const isExisting =
-  //         moduleWithId._id &&
-  //         existingModulesMap.has(moduleWithId._id.toString());
-
-  //       if (isExisting) {
-  //         // --- UPDATE EXISTING MODULE IN-PLACE ---
-  //         // Use non-null assertion as we checked for its existence
-  //         const existingModule = existingModulesMap.get(
-  //           moduleWithId._id!.toString(),
-  //         )!;
-
-  //         // Apply updates from the DTO to the existing Mongoose subdocument
-  //         Object.assign(existingModule, incomingModule);
-  //       } else {
-  //         // --- CREATE/INSERT NEW MODULE ---
-  //         // Mongoose will automatically assign a new _id when saved
-  //         newModulesToPush.push(incomingModule);
-  //       }
-  //     }
-
-  //     // Append only the newly created modules, preserving all existing ones.
-  //     form.modules.push(...newModulesToPush);
-  //   }
-
-  //   const updatedForm = await form.save();
-  //   return updatedForm.toObject() as ApplicationForm;
-  // }
 
   async updateForm(
     id: string,
@@ -465,15 +256,6 @@ export class AdminApplicationService {
         }
       }
 
-      // 2. RECONCILE: Replace the entire form.questions array with the new list.
-      // NOTE: Unlike the old logic, this now means any existing question not sent in dto.questions is DELETED.
-      // If the intent is to only add/update and not allow deletion via DTO, the original `push` logic was closer,
-      // but it had issues with ordering and tracking. For a robust array update, replacing the array is usually safer
-      // provided the DTO contains the full, desired list of questions.
-
-      // If the client only wants to ADD/UPDATE and NOT DELETE, we must merge.
-      // Let's stick to the spirit of "Add/Update ONLY" and merge, keeping questions not in the DTO.
-
       const questionsToKeep = form.questions.filter((q) => {
         // Keep questions that were NOT included in the incoming DTO (identified by data_key)
         return q.data_key && !keysEncounteredInDto.has(q.data_key);
@@ -481,15 +263,10 @@ export class AdminApplicationService {
 
       // The new array is the combination of the retained old questions + the updated/new questions from the DTO
       form.questions = [...questionsToKeep, ...updatedAndNewQuestions];
-
-      // To preserve ordering if the client sent the entire list, we might need a different array manipulation,
-      // but assuming the client only sends new/updated items (Add/Update ONLY), this merge works.
     }
 
     // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
     if (dto.modules) {
-      // FIX: Map existing modules by their client-provided temp_id, as the client is using this ID for tracking.
-      // This prevents duplication when the client re-sends modules without the Mongoose _id.
       const existingModulesMap = new Map<string, any>(); // Key: temp_id string
       const tempIdsEncounteredInDto = new Set<string>();
 
@@ -519,8 +296,6 @@ export class AdminApplicationService {
         } else {
           // --- CREATE/INSERT NEW MODULE ---
           updatedAndNewModules.push(incomingModule as EmbeddedModule);
-          // New modules won't have a temp_id we can rely on for conflict in the next loop,
-          // but we rely on Mongoose to handle the subdocument creation.
         }
       }
 
@@ -551,67 +326,6 @@ export class AdminApplicationService {
   async getAllForms(): Promise<ApplicationForm[]> {
     return this.applicationFormModel.find().exec();
   }
-
-  // async updateForm(
-  //   id: string,
-  //   dto: UpdateApplicationFormDto,
-  // ): Promise<ApplicationForm> {
-  //   const form = await this.applicationFormModel.findById(id);
-  //   if (!form) {
-  //     throw new NotFoundException('Application form not found.');
-  //   }
-
-  //   Object.assign(form, dto);
-
-  //   if (dto.questions) {
-  //     const incomingQuestionIds = new Set(
-  //       dto.questions.map((q) => q._id?.toString()).filter(Boolean),
-  //     );
-  //     form.questions = form.questions.filter((existingQuestion) =>
-  //       incomingQuestionIds.has(existingQuestion._id?.toString()),
-  //     );
-
-  //     dto.questions.forEach((incomingQuestion) => {
-  //       if (
-  //         (incomingQuestion.type === 'short_text' ||
-  //           incomingQuestion.type === 'long_text') &&
-  //         !incomingQuestion.manual_validation
-  //       ) {
-  //         const autoValidation =
-  //           this.questionValidationService.detectValidationRule(
-  //             incomingQuestion.question,
-  //           );
-  //         incomingQuestion.auto_validation = autoValidation;
-  //         if (!incomingQuestion.placeholder && autoValidation !== 'none') {
-  //           incomingQuestion.placeholder =
-  //             this.questionValidationService.getSuggestedPlaceholder(
-  //               autoValidation,
-  //             );
-  //         }
-  //         if (!incomingQuestion.instruction && autoValidation !== 'none') {
-  //           incomingQuestion.instruction =
-  //             this.questionValidationService.getSuggestedInstruction(
-  //               autoValidation,
-  //             );
-  //         }
-  //       }
-
-  //       if (incomingQuestion._id) {
-  //         const existingQuestion = form.questions.find((q) =>
-  //           q._id?.equals(incomingQuestion._id),
-  //         );
-  //         if (existingQuestion) {
-  //           Object.assign(existingQuestion, incomingQuestion);
-  //         }
-  //       } else {
-  //         form.questions.push(incomingQuestion as any);
-  //       }
-  //     });
-  //   }
-
-  //   const updatedForm = await form.save();
-  //   return updatedForm;
-  // }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
     const updatedForm = await this.applicationFormModel
@@ -679,24 +393,79 @@ export class AdminApplicationService {
     return updated;
   }
 
-  async getFormValidationRules(formId: string): Promise<any> {
-    const form = await this.applicationFormModel.findById(formId);
-    if (!form) {
-      throw new NotFoundException('Form not found');
-    }
+  // async getFormValidationRules(formId: string): Promise<any> {
+  //   const form = await this.applicationFormModel.findById(formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
 
-    const validationRules = form.questions.map((question) => ({
-      questionId: question._id,
-      step: question.step,
-      validation:
-        this.questionValidationService.generateFrontendValidation(question),
-    }));
+  //   const validationRules = form.questions.map((question) => ({
+  //     questionId: question._id,
+  //     step: question.step,
+  //     validation:
+  //       this.questionValidationService.generateFrontendValidation(question),
+  //   }));
 
-    return {
-      formId,
-      validationRules,
-    };
-  }
+  //   return {
+  //     formId,
+  //     validationRules,
+  //   };
+  // }
+
+  // async getFormValidationRules(
+  //   formId: string,
+  // ): Promise<FormValidationRulesResponseDto> {
+  //   const form = await this.applicationFormModel.findById(formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
+
+  //   const validationRules: QuestionValidationRuleDto[] = form.questions.map(
+  //     (question) => ({
+  //       data_key: question.data_key || '',
+  //       question: question.question,
+  //       type: question.type,
+  //       step: question.step,
+  //       validation:
+  //         this.questionValidationService.generateFrontendValidation(question),
+  //     }),
+  //   );
+
+  //   return {
+  //     formId: String(form._id), // Use String() instead of .toString()
+  //     formTitle: form.welcome_title,
+  //     validationRules,
+  //     totalQuestions: form.questions.length,
+  //   };
+  // }
+  // // 3. ADD this new validateInput method (replace the placeholder one):
+  // async validateInput(dto: ValidateInputDto): Promise<ValidationResultDto> {
+  //   const form = await this.applicationFormModel.findById(dto.formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
+
+  //   const question = form.questions.find(
+  //     (q) => q.data_key === dto.questionDataKey,
+  //   );
+
+  //   if (!question) {
+  //     throw new NotFoundException(
+  //       `Question with data_key "${dto.questionDataKey}" not found in this form`,
+  //     );
+  //   }
+
+  //   const validationResult = this.questionValidationService.validateUserInput(
+  //     dto.value,
+  //     question,
+  //   );
+
+  //   return {
+  //     isValid: validationResult.isValid,
+  //     errors: validationResult.errors,
+  //     field: dto.questionDataKey,
+  //   };
+  // }
 
   async getTrainingParticipants(trainingName?: string): Promise<any[]> {
     const filter: any = {
