@@ -259,6 +259,37 @@ export class UnifiedValidationService {
       manual_validation: question.manual_validation || ValidationRule.NONE,
     };
 
+    // ✅ KEY FIX: Detect validation for text fields dynamically
+    if (
+      (question.type === 'short_text' ||
+        question.type === 'long_text' ||
+        question.type === QuestionType.SHORT_TEXT ||
+        question.type === QuestionType.LONG_TEXT) &&
+      question.question
+    ) {
+      // Use stored validation if available, otherwise auto-detect
+      const storedValidation =
+        question.auto_validation || question.manual_validation;
+
+      if (storedValidation && storedValidation !== ValidationRule.NONE) {
+        // Use stored validation
+        mapped.auto_validation = storedValidation;
+        mapped.manual_validation = storedValidation;
+      } else {
+        // ✅ DETECT validation from question text
+        const detectedValidation =
+          this.questionValidationService.detectValidationRule(
+            question.question,
+          );
+        mapped.auto_validation = detectedValidation;
+        mapped.manual_validation = ValidationRule.NONE;
+      }
+    } else {
+      // Non-text fields don't need detection
+      mapped.auto_validation = ValidationRule.NONE;
+      mapped.manual_validation = ValidationRule.NONE;
+    }
+
     // Type-specific mappings with FULL validation support
     switch (question.type) {
       case 'multiple_choice':
