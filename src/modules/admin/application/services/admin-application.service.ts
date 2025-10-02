@@ -26,6 +26,13 @@ import { UserSubmission } from 'src/modules/business-owner/user-submission.schem
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
+// import {
+//   FormValidationRulesResponseDto,
+//   QuestionValidationRuleDto,
+//   ValidateInputDto,
+//   ValidationResultDto,
+// } from '../dtos/validation.dto';
+// import { BaseRepository } from 'src/modules/repository/base.repository';
 
 @Injectable()
 export class AdminApplicationService {
@@ -392,6 +399,80 @@ export class AdminApplicationService {
 
     return updated;
   }
+
+  // async getFormValidationRules(formId: string): Promise<any> {
+  //   const form = await this.applicationFormModel.findById(formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
+
+  //   const validationRules = form.questions.map((question) => ({
+  //     questionId: question._id,
+  //     step: question.step,
+  //     validation:
+  //       this.questionValidationService.generateFrontendValidation(question),
+  //   }));
+
+  //   return {
+  //     formId,
+  //     validationRules,
+  //   };
+  // }
+
+  // async getFormValidationRules(
+  //   formId: string,
+  // ): Promise<FormValidationRulesResponseDto> {
+  //   const form = await this.applicationFormModel.findById(formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
+
+  //   const validationRules: QuestionValidationRuleDto[] = form.questions.map(
+  //     (question) => ({
+  //       data_key: question.data_key || '',
+  //       question: question.question,
+  //       type: question.type,
+  //       step: question.step,
+  //       validation:
+  //         this.questionValidationService.generateFrontendValidation(question),
+  //     }),
+  //   );
+
+  //   return {
+  //     formId: String(form._id), // Use String() instead of .toString()
+  //     formTitle: form.welcome_title,
+  //     validationRules,
+  //     totalQuestions: form.questions.length,
+  //   };
+  // }
+  // // 3. ADD this new validateInput method (replace the placeholder one):
+  // async validateInput(dto: ValidateInputDto): Promise<ValidationResultDto> {
+  //   const form = await this.applicationFormModel.findById(dto.formId);
+  //   if (!form) {
+  //     throw new NotFoundException('Form not found');
+  //   }
+
+  //   const question = form.questions.find(
+  //     (q) => q.data_key === dto.questionDataKey,
+  //   );
+
+  //   if (!question) {
+  //     throw new NotFoundException(
+  //       `Question with data_key "${dto.questionDataKey}" not found in this form`,
+  //     );
+  //   }
+
+  //   const validationResult = this.questionValidationService.validateUserInput(
+  //     dto.value,
+  //     question,
+  //   );
+
+  //   return {
+  //     isValid: validationResult.isValid,
+  //     errors: validationResult.errors,
+  //     field: dto.questionDataKey,
+  //   };
+  // }
 
   async getTrainingParticipants(trainingName?: string): Promise<any[]> {
     const filter: any = {
