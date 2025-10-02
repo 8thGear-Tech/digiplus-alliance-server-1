@@ -9,7 +9,7 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types, Model } from 'mongoose';
-import { Repositories } from '../../shared/enums/db.enum';
+import { Repositories, ValidationRule } from '../../shared/enums/db.enum';
 import { BaseRepository } from '../repository/base.repository';
 import { AssessmentDocument } from './schemas/assessment.schema';
 import { AssessmentModuleDocument } from './schemas/assessment-module.schema';
@@ -26,6 +26,7 @@ import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
 import { ServicesService } from '../admin/services/services.service';
+import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 
 @Injectable()
 export class AssessmentService {
@@ -46,12 +47,55 @@ export class AssessmentService {
     private readonly userAssessmentModel: Model<UserAssessmentDocument>,
 
     //added by opeyemi
+    private questionValidationService: QuestionValidationService,
     private readonly servicesService: ServicesService,
   ) {}
 
   // Add these methods to your AssessmentService class
 
   //below: added by opeyemi
+
+  // In AssessmentService.createAssessment, before creating questions:
+
+  // Add this helper method to AssessmentService
+  private processAssessmentQuestion(questionDto: any): any {
+    const processedQuestion = { ...questionDto };
+
+    // Auto-detect validation for text fields
+    if (
+      (questionDto.type === QuestionType.SHORT_TEXT ||
+        questionDto.type === QuestionType.LONG_TEXT) &&
+      questionDto.question
+    ) {
+      const autoValidation =
+        this.questionValidationService.detectValidationRule(
+          questionDto.question,
+        );
+
+      if (autoValidation !== ValidationRule.NONE) {
+        processedQuestion.auto_validation = autoValidation;
+
+        // Add suggested placeholder if not provided
+        if (!processedQuestion.placeholder) {
+          processedQuestion.placeholder =
+            this.questionValidationService.getSuggestedPlaceholder(
+              autoValidation,
+            );
+        }
+
+        // Add suggested instruction if not provided
+        if (!processedQuestion.instruction) {
+          processedQuestion.instruction =
+            this.questionValidationService.getSuggestedInstruction(
+              autoValidation,
+            );
+        }
+      }
+    }
+
+    return processedQuestion;
+  }
+
   private async validateServiceRecommendations(
     serviceRecommendations: any[],
   ): Promise<void> {
@@ -945,6 +989,10 @@ export class AssessmentService {
       const createdQuestions: QuestionDocument[] = [];
 
       for (const questionDto of createAssessmentDto.questions) {
+        // Process the question to detect validation
+        const processedQuestionDto =
+          this.processAssessmentQuestion(questionDto);
+
         const moduleId = moduleMapping.get(questionDto.module_ref);
 
         if (!moduleId && questionDto.module_ref !== 'none') {
@@ -963,6 +1011,8 @@ export class AssessmentService {
           description: questionDto.description,
           instruction: questionDto.instruction,
           is_required: questionDto.is_required ?? true,
+          auto_validation:
+            processedQuestionDto.auto_validation || ValidationRule.NONE,
           step: questionDto.step,
           max_points: questionDto.max_points || 0,
           scoring_categories: questionDto.scoring_categories || [],
