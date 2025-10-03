@@ -11,6 +11,8 @@ import { QuestionValidationService } from '../admin/application/services/questio
 import { ValidationRule } from 'src/shared/enums';
 import { QuestionType } from '../assessment/enums/question-type.enum';
 import {
+  BatchValidateInputDto,
+  BatchValidationResultDto,
   FormType,
   GetValidationRulesDto,
   ValidateInputDto,
@@ -57,6 +59,33 @@ export class UnifiedValidationService {
         dto.value,
       );
     }
+  }
+
+  async validateBatchInput(
+    dto: BatchValidateInputDto,
+  ): Promise<BatchValidationResultDto> {
+    const results = await Promise.all(
+      dto.fields.map((field) =>
+        this.validateInput({
+          formId: dto.formId,
+          formType: dto.formType,
+          questionIdentifier: field.questionIdentifier,
+          value: field.value,
+        }),
+      ),
+    );
+
+    const validFields = results.filter((r) => r.isValid).length;
+    const invalidFields = results.length - validFields;
+
+    return {
+      isValid: invalidFields === 0,
+      totalFields: results.length,
+      validFields,
+      invalidFields,
+      formType: dto.formType,
+      results,
+    };
   }
 
   // ============================================

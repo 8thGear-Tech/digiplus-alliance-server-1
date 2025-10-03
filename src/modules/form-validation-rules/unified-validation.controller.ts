@@ -15,7 +15,10 @@ import { UnifiedValidationService } from './unified-validation.service';
 import {
   GetValidationRulesDto,
   ValidateInputDto,
+  BatchValidateInputDto,
   FormType,
+  SingleValidationResultDto,
+  BatchValidationResultDto,
 } from './unified-validation.dto';
 @ApiTags('Validation')
 @ApiBearerAuth()
@@ -520,7 +523,231 @@ export class UnifiedValidationController {
     status: 404,
     description: 'Form or question not found',
   })
-  async validateInput(@Body() dto: ValidateInputDto) {
+  // async validateInput(@Body() dto: ValidateInputDto) {
+  //   return this.unifiedValidationService.validateInput(dto);
+  // }
+  async validateInput(
+    @Body() dto: ValidateInputDto,
+  ): Promise<SingleValidationResultDto> {
     return this.unifiedValidationService.validateInput(dto);
+  }
+
+  // ============================================
+  // ✅ NEW: Batch Validation Endpoint
+  // ============================================
+
+  @Post('validate-batch')
+  @ApiOperation({
+    summary: '✅ NEW: Validate multiple fields at once (batch validation)',
+    description:
+      'Validates multiple form fields in a single request. Perfect for pre-submission validation, " +  "form auto-save features, or validating entire assessment responses before final submission. " +"Returns individual validation results for each field plus an overall validation status.',
+  })
+  @ApiBody({
+    type: BatchValidateInputDto,
+    examples: {
+      '[App] Complete Form Validation': {
+        summary: 'Application - Validate entire form',
+        value: {
+          formId: '507f1f77bcf86cd799439011',
+          formType: 'application',
+          fields: [
+            {
+              questionIdentifier: 'email',
+              value: 'john.doe@example.com',
+            },
+            {
+              questionIdentifier: 'phone_number',
+              value: '+1234567890',
+            },
+            {
+              questionIdentifier: 'first_name',
+              value: 'John',
+            },
+            {
+              questionIdentifier: 'age',
+              value: '25',
+            },
+            {
+              questionIdentifier: 'website',
+              value: 'https://example.com',
+            },
+          ],
+        },
+      },
+      '[App] Partial Validation (Some Invalid)': {
+        summary: 'Application - Mix of valid and invalid',
+        value: {
+          formId: '507f1f77bcf86cd799439011',
+          formType: 'application',
+          fields: [
+            {
+              questionIdentifier: 'email',
+              value: 'invalid-email',
+            },
+            {
+              questionIdentifier: 'phone_number',
+              value: 'abc-123',
+            },
+            {
+              questionIdentifier: 'first_name',
+              value: 'John123',
+            },
+          ],
+        },
+      },
+      '[Assessment] Complete Assessment Validation': {
+        summary: 'Assessment - Validate all responses',
+        value: {
+          formId: '68d76eea50c4b6fd7da5fc06',
+          formType: 'assessment',
+          fields: [
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc14',
+              value: 'opt-1',
+            },
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc16',
+              value: ['opt-1', 'opt-3', 'opt-5'],
+            },
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc18',
+              value: 'My Business Name',
+            },
+            {
+              questionIdentifier: '68d76eec50c4b6fd7da5fc1e',
+              value: {
+                'row-1': 'col-2',
+                'row-2': 'col-3',
+                'row-3': 'col-5',
+              },
+            },
+          ],
+        },
+      },
+      '[Assessment] Pre-Submit Validation': {
+        summary: 'Assessment - Check before submission',
+        value: {
+          formId: '68d76eea50c4b6fd7da5fc06',
+          formType: 'assessment',
+          fields: [
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc14',
+              value: null,
+            },
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc16',
+              value: [],
+            },
+            {
+              questionIdentifier: '68d76eeb50c4b6fd7da5fc18',
+              value: '',
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch validation results for all fields',
+    type: BatchValidationResultDto,
+    schema: {
+      oneOf: [
+        {
+          title: 'All Fields Valid',
+          example: {
+            isValid: true,
+            totalFields: 5,
+            validFields: 5,
+            invalidFields: 0,
+            formType: 'application',
+            results: [
+              {
+                isValid: true,
+                errors: [],
+                field: 'email',
+                formType: 'application',
+              },
+              {
+                isValid: true,
+                errors: [],
+                field: 'phone_number',
+                formType: 'application',
+              },
+              {
+                isValid: true,
+                errors: [],
+                field: 'first_name',
+                formType: 'application',
+              },
+              {
+                isValid: true,
+                errors: [],
+                field: 'age',
+                formType: 'application',
+              },
+              {
+                isValid: true,
+                errors: [],
+                field: 'website',
+                formType: 'application',
+              },
+            ],
+          },
+        },
+        {
+          title: 'Some Fields Invalid',
+          example: {
+            isValid: false,
+            totalFields: 3,
+            validFields: 1,
+            invalidFields: 2,
+            formType: 'application',
+            results: [
+              {
+                isValid: false,
+                errors: [
+                  {
+                    type: 'email',
+                    message: 'Please enter a valid email address',
+                    field: 'email',
+                  },
+                ],
+                field: 'email',
+                formType: 'application',
+              },
+              {
+                isValid: false,
+                errors: [
+                  {
+                    type: 'phone',
+                    message: 'Please enter a valid phone number',
+                    field: 'phone_number',
+                  },
+                ],
+                field: 'phone_number',
+                formType: 'application',
+              },
+              {
+                isValid: true,
+                errors: [],
+                field: 'first_name',
+                formType: 'application',
+              },
+            ],
+          },
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Form not found or one or more questions not found',
+  })
+  // async validateBatch(@Body() dto: Batch
+  async validateBatch(
+    @Body() dto: BatchValidateInputDto,
+  ): Promise<BatchValidationResultDto> {
+    return this.unifiedValidationService.validateBatchInput(dto);
   }
 }
