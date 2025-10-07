@@ -8,11 +8,14 @@ export class QuestionValidationService {
    * ✅ FIXED: Enhanced auto-detection with better pattern matching
    */
   detectValidationRule(questionText: string): ValidationRule {
+    console.log('⚙️ Running detectValidationRule for:', questionText);
     // const questionLower = questionText.toLowerCase().trim();
     const questionLower = questionText
       .replace(/[’‘]/g, "'")
       .trim()
       .toLowerCase();
+
+    console.log('Normalized text:', questionLower);
 
     // ✅ 0. SKIP NON-VALIDATION PHRASES (add this block)
     if (
