@@ -8,7 +8,18 @@ export class QuestionValidationService {
    * ✅ FIXED: Enhanced auto-detection with better pattern matching
    */
   detectValidationRule(questionText: string): ValidationRule {
-    const questionLower = questionText.toLowerCase().trim();
+    // const questionLower = questionText.toLowerCase().trim();
+    const questionLower = questionText
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    // ✅ 0. SKIP NON-VALIDATION PHRASES (add this block)
+    if (
+      /\bnot\s*applicable\b|\bnone\s*of\s*the\s*above\b/i.test(questionLower)
+    ) {
+      return ValidationRule.NONE;
+    }
 
     // ✅ PRIORITY ORDER MATTERS - More specific patterns first!
 
@@ -64,30 +75,10 @@ export class QuestionValidationService {
       return ValidationRule.URL;
     }
 
-    // 4. AGE/NUMERIC DETECTION (specific age/numeric questions)
-    const numberPatterns = [
-      /\bage\b/i,
-      /\byears\s*old\b/i,
-      /\bhow\s*old\b/i,
-      /\bnumber\s*of\s*(years|months|days|items|employees|staff)\b/i,
-      /\bhow\s*many\s*(years|months|employees|staff|items)\b/i,
-      /\bquantity\b/i,
-      /\bamount\s*\(/i, // "amount (in numbers)"
-      /\bcount\s*of\b/i,
-      /\btotal\s*\(/i,
-      /\bscore\b/i,
-      /\brating\s*\(/i,
-      /\byear\s*(founded|established|started)\b/i,
-    ];
-
-    if (numberPatterns.some((pattern) => pattern.test(questionLower))) {
-      return ValidationRule.NUMBER_ONLY;
-    }
-
-    // 5. ALPHABETIC DETECTION (names, countries, cities - NOT generic fields)
+    // 4. ALPHABETIC DETECTION (names, countries, cities - NOT generic fields)
     const alphabeticPatterns = [
-      /\b(first|last|full|middle)\s*name\b/i,
-      /\bcountry\s*name\b/i,
+      /\b(first|last|full|middle|contact|person|business|organization|company)\s*name\b/i,
+      /\bcountry\b/i, // ✅ Changed from "country name" to just "country"
       /\bcity\s*name\b/i,
       /\bstate\s*name\b/i,
       /\bnationality\b/i,
@@ -95,6 +86,27 @@ export class QuestionValidationService {
 
     if (alphabeticPatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.ALPHABETS_ONLY;
+    }
+
+    // 5. AGE/NUMERIC DETECTION (specific age/numeric questions)
+    const numberPatterns = [
+      /\bage\b/i,
+      /\byears?\s*old\b/i,
+      /\bhow\s*old\b/i,
+      /\bnumber\s*of\s*(years|months|days|items|employees|staff|branches|members)\b/i,
+      /\bhow\s*many\s*(years|months|employees|staff|items|branches|members)\b/i,
+      /\bquantity\b/i,
+      /\bamount\b/i,
+      /\bcount\s*of\b/i,
+      /\btotal\b/i,
+      /\bscore\b/i,
+      /\brating\b/i,
+      /\b(foundation|founding|established|founded|started|registration)\s*year\b/i,
+      /\byear\s*(foundation|founding|established|founded|started|registration)\b/i,
+    ];
+
+    if (numberPatterns.some((pattern) => pattern.test(questionLower))) {
+      return ValidationRule.NUMBER_ONLY;
     }
 
     // ✅ DEFAULT: No validation if pattern doesn't match
