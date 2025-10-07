@@ -5,89 +5,104 @@ import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 @Injectable()
 export class QuestionValidationService {
   /**
-   * Auto-detect validation rules based on question text
+   * ✅ FIXED: Enhanced auto-detection with better pattern matching
    */
   detectValidationRule(questionText: string): ValidationRule {
-    const questionLower = questionText.toLowerCase();
+    const questionLower = questionText.toLowerCase().trim();
 
-    // Email detection patterns
+    // ✅ PRIORITY ORDER MATTERS - More specific patterns first!
+
+    // 1. EMAIL DETECTION (most specific first)
     const emailPatterns = [
-      'email',
-      'e-mail',
-      'email address',
-      'electronic mail',
-      'mail address',
-      'email id',
-      'e-mail address',
+      /\bemail\s*address\b/i,
+      /\be-mail\s*address\b/i,
+      /\belectronic\s*mail\b/i,
+      /\bmail\s*address\b/i,
+      /\bemail\s*id\b/i,
+      /\be-?mail\b/i,
     ];
 
-    // Phone detection patterns
-    const phonePatterns = [
-      'phone',
-      'telephone',
-      'mobile',
-      'cell',
-      'contact number',
-      'phone number',
-      'mobile number',
-      'telephone number',
-      'contact info',
-      'whatsapp',
-      'call',
-    ];
-
-    // URL/Website detection patterns
-    const urlPatterns = [
-      'website',
-      'url',
-      'link',
-      'portfolio',
-      'blog',
-      'site',
-      'web address',
-      'homepage',
-      'social media',
-      'linkedin',
-      'github',
-      'twitter',
-    ];
-
-    // Number detection patterns
-    const numberPatterns = [
-      'age',
-      'years old',
-      'number of',
-      'how many',
-      'quantity',
-      'amount',
-      'count',
-      'total',
-      'score',
-      'rating',
-    ];
-
-    // Check patterns
-    if (emailPatterns.some((pattern) => questionLower.includes(pattern))) {
+    if (emailPatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.EMAIL;
     }
 
-    if (phonePatterns.some((pattern) => questionLower.includes(pattern))) {
+    // 2. PHONE DETECTION (before number detection!)
+    const phonePatterns = [
+      /\bphone\s*number\b/i,
+      /\bmobile\s*number\b/i,
+      /\btelephone\s*number\b/i,
+      /\bcontact\s*number\b/i,
+      /\bcell\s*number\b/i,
+      /\bcellphone\b/i,
+      /\bwhatsapp\s*number\b/i,
+      /\bphone\b/i,
+      /\bmobile\b/i,
+      /\btelephone\b/i,
+      /\bcall\s*number\b/i,
+    ];
+
+    if (phonePatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.PHONE;
     }
 
-    if (urlPatterns.some((pattern) => questionLower.includes(pattern))) {
+    // 3. URL/WEBSITE DETECTION (before generic patterns)
+    const urlPatterns = [
+      /\bwebsite\s*url\b/i,
+      /\bweb\s*address\b/i,
+      /\bsite\s*url\b/i,
+      /\bhomepage\b/i,
+      /\bportfolio\s*link\b/i,
+      /\bwebsite\b/i,
+      /\burl\b/i,
+      /\blink\b/i,
+      /\blinkedin\s*profile\b/i,
+      /\bgithub\s*profile\b/i,
+      /\bsocial\s*media\s*link\b/i,
+    ];
+
+    if (urlPatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.URL;
     }
 
-    if (numberPatterns.some((pattern) => questionLower.includes(pattern))) {
+    // 4. AGE/NUMERIC DETECTION (specific age/numeric questions)
+    const numberPatterns = [
+      /\bage\b/i,
+      /\byears\s*old\b/i,
+      /\bhow\s*old\b/i,
+      /\bnumber\s*of\s*(years|months|days|items|employees|staff)\b/i,
+      /\bhow\s*many\s*(years|months|employees|staff|items)\b/i,
+      /\bquantity\b/i,
+      /\bamount\s*\(/i, // "amount (in numbers)"
+      /\bcount\s*of\b/i,
+      /\btotal\s*\(/i,
+      /\bscore\b/i,
+      /\brating\s*\(/i,
+      /\byear\s*(founded|established|started)\b/i,
+    ];
+
+    if (numberPatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.NUMBER_ONLY;
     }
 
+    // 5. ALPHABETIC DETECTION (names, countries, cities - NOT generic fields)
+    const alphabeticPatterns = [
+      /\b(first|last|full|middle)\s*name\b/i,
+      /\bcountry\s*name\b/i,
+      /\bcity\s*name\b/i,
+      /\bstate\s*name\b/i,
+      /\bnationality\b/i,
+    ];
+
+    if (alphabeticPatterns.some((pattern) => pattern.test(questionLower))) {
+      return ValidationRule.ALPHABETS_ONLY;
+    }
+
+    // ✅ DEFAULT: No validation if pattern doesn't match
     return ValidationRule.NONE;
   }
 
   /**
-   * Generate frontend validation rules for form submission
+   * ✅ FIXED: Enhanced validation with better regex and error messages
    */
   generateFrontendValidation(question: any): any {
     const validationRule =
@@ -164,7 +179,7 @@ export class QuestionValidationService {
         break;
     }
 
-    // Text-based validation rules (only for short_text and long_text)
+    // ✅ FIXED: Text-based validation rules with enhanced regex and messages
     if (
       question.type === QuestionType.SHORT_TEXT ||
       question.type === QuestionType.LONG_TEXT
@@ -174,7 +189,8 @@ export class QuestionValidationService {
           validation.rules.push({
             type: 'email',
             message:
-              params.error_message || 'Please enter a valid email address',
+              params.error_message ||
+              'Please enter a valid email address (e.g., user@example.com)',
             pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
           });
           break;
@@ -183,24 +199,31 @@ export class QuestionValidationService {
           validation.rules.push({
             type: 'phone',
             message:
-              params.error_message || 'Please enter a valid phone number',
-            pattern: /^[\+]?[1-9][\d]{0,15}$/,
+              params.error_message ||
+              'Please enter a valid phone number (e.g., +2348012345678 or 08012345678)',
+            // ✅ FIXED: Enhanced regex to support Nigerian and international formats
+            pattern: /^(\+?\d{1,4}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{7,15}$/,
           });
           break;
 
         case ValidationRule.URL:
           validation.rules.push({
             type: 'url',
-            message: params.error_message || 'Please enter a valid URL',
+            message:
+              params.error_message ||
+              'Please enter a valid website URL (e.g., https://example.com or www.example.com)',
+            // ✅ FIXED: More flexible URL regex
             pattern:
-              /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/,
+              /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/,
           });
           break;
 
         case ValidationRule.NUMBER_ONLY:
           validation.rules.push({
             type: 'number',
-            message: params.error_message || 'Please enter numbers only',
+            message:
+              params.error_message ||
+              'Please enter numbers only (e.g., 25, 1000)',
             pattern: /^\d+$/,
           });
           break;
@@ -208,8 +231,11 @@ export class QuestionValidationService {
         case ValidationRule.ALPHABETS_ONLY:
           validation.rules.push({
             type: 'alphabets',
-            message: params.error_message || 'Please enter letters only',
-            pattern: /^[a-zA-Z\s]+$/,
+            message:
+              params.error_message ||
+              'Please enter letters only (no numbers or special characters)',
+            // ✅ FIXED: Allow spaces and basic punctuation
+            pattern: /^[a-zA-Z\s'-]+$/,
           });
           break;
       }
@@ -241,15 +267,15 @@ export class QuestionValidationService {
   getSuggestedPlaceholder(validationRule: ValidationRule): string {
     switch (validationRule) {
       case ValidationRule.EMAIL:
-        return 'e.g., john@example.com';
+        return 'e.g., user@example.com';
       case ValidationRule.PHONE:
-        return 'e.g., +1234567890';
+        return 'e.g., +2348012345678 or 08012345678';
       case ValidationRule.URL:
         return 'e.g., https://example.com';
       case ValidationRule.NUMBER_ONLY:
-        return 'Enter numbers only';
+        return 'e.g., 25';
       case ValidationRule.ALPHABETS_ONLY:
-        return 'Enter letters only';
+        return 'e.g., John Doe';
       default:
         return 'Enter your answer here';
     }
@@ -261,18 +287,23 @@ export class QuestionValidationService {
   getSuggestedInstruction(validationRule: ValidationRule): string {
     switch (validationRule) {
       case ValidationRule.EMAIL:
-        return 'Please provide a valid email address';
+        return 'Enter a valid email address';
       case ValidationRule.PHONE:
-        return 'Include country code';
+        return 'Enter phone number with country code (e.g., +234 or 0)';
       case ValidationRule.URL:
-        return 'Include http:// or https://';
+        return 'Enter website URL (http:// or https:// optional)';
       case ValidationRule.NUMBER_ONLY:
         return 'Numbers only, no letters or symbols';
+      case ValidationRule.ALPHABETS_ONLY:
+        return 'Letters only, no numbers or special characters';
       default:
         return '';
     }
   }
 
+  /**
+   * ✅ FIXED: Enhanced backend validation with better regex
+   */
   validateUserInput(
     value: any,
     question: any,
@@ -330,7 +361,6 @@ export class QuestionValidationService {
             });
             return { isValid: false, errors };
           }
-          // Check all rows are answered
           const requiredRows = question.grid_rows?.map((row) => row.id) || [];
           const answeredRows = Object.keys(value);
           const missingRows = requiredRows.filter(
@@ -339,12 +369,13 @@ export class QuestionValidationService {
           if (missingRows.length > 0) {
             errors.push({
               type: 'required_grid',
-              message: `Please answer all rows in the grid (${missingRows.length} row(s) remaining)`,
+              message: `Please answer all rows (${missingRows.length} remaining)`,
               field,
             });
             return { isValid: false, errors };
           }
           break;
+
         case QuestionType.FILE_UPLOAD:
           if (!value) {
             errors.push({
@@ -392,7 +423,7 @@ export class QuestionValidationService {
       }
     }
 
-    // Text-based validations (only for short_text and long_text)
+    // ✅ FIXED: Text-based validations with enhanced regex
     if (
       (question.type === QuestionType.SHORT_TEXT ||
         question.type === QuestionType.LONG_TEXT) &&
@@ -412,31 +443,40 @@ export class QuestionValidationService {
             errors.push({
               type: 'email',
               message:
-                params.error_message || 'Please enter a valid email address',
+                params.error_message ||
+                'Please enter a valid email address (e.g., user@example.com)',
               field,
             });
           }
           break;
 
         case ValidationRule.PHONE:
-          const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-          if (!phoneRegex.test(value.replace(/\s|-/g, ''))) {
+          // ✅ FIXED: Support Nigerian and international formats
+          // Allows: +2348012345678, 08012345678, +1 234 567 8900, etc.
+          const phoneRegex =
+            /^(\+?\d{1,4}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{7,15}$/;
+          const cleanedValue = value.replace(/[\s()-]/g, ''); // Remove formatting
+          if (!phoneRegex.test(cleanedValue)) {
             errors.push({
               type: 'phone',
               message:
-                params.error_message || 'Please enter a valid phone number',
+                params.error_message ||
+                'Please enter a valid phone number (e.g., +2348012345678 or 08012345678)',
               field,
             });
           }
           break;
 
         case ValidationRule.URL:
+          // ✅ FIXED: More flexible URL validation
           const urlRegex =
-            /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+            /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
           if (!urlRegex.test(value)) {
             errors.push({
               type: 'url',
-              message: params.error_message || 'Please enter a valid URL',
+              message:
+                params.error_message ||
+                'Please enter a valid website URL (e.g., https://example.com or www.example.com)',
               field,
             });
           }
@@ -447,18 +487,23 @@ export class QuestionValidationService {
           if (!numberRegex.test(value)) {
             errors.push({
               type: 'number',
-              message: params.error_message || 'Please enter numbers only',
+              message:
+                params.error_message ||
+                'Please enter numbers only (e.g., 25, 1000)',
               field,
             });
           }
           break;
 
         case ValidationRule.ALPHABETS_ONLY:
-          const alphabetRegex = /^[a-zA-Z\s]+$/;
+          // ✅ FIXED: Allow spaces, hyphens, and apostrophes for names
+          const alphabetRegex = /^[a-zA-Z\s'-]+$/;
           if (!alphabetRegex.test(value)) {
             errors.push({
               type: 'alphabets',
-              message: params.error_message || 'Please enter letters only',
+              message:
+                params.error_message ||
+                'Please enter letters only (no numbers or special characters)',
               field,
             });
           }
