@@ -101,23 +101,26 @@ export class QuestionValidationService {
       /\btotal\b/i,
       /\bscore\b/i,
       /\brating\b/i,
-      /\b(foundation|founding|established|founded|started|registration)\s*year\b/i,
-      /\byear\s*(foundation|founding|established|founded|started|registration)\b/i,
+      /(foundation|founding|established|founded|started|registration)['’]?\s*year/i,
+      /\byear\s*(of\s*)?(foundation|founding|established|founded|started|registration)/i,
     ];
 
     if (numberPatterns.some((pattern) => pattern.test(questionLower))) {
       return ValidationRule.NUMBER_ONLY;
     }
 
+    console.log(`Detected rule for: ${questionLower} => NONE`);
+
     // ✅ DEFAULT: No validation if pattern doesn't match
-    // return ValidationRule.NONE;''
+    return ValidationRule.NONE;
+    ('');
     // Default rule
-    const detectedRule = ValidationRule.NONE;
+    // const detectedRule = ValidationRule.NONE;
 
-    // ✅ Debug log
-    console.log('Detected rule for:', questionLower, '=>', detectedRule);
+    // // ✅ Debug log
+    // console.log('Detected rule for:', questionLower, '=>', detectedRule);
 
-    return detectedRule;
+    // return detectedRule;
   }
 
   /**
