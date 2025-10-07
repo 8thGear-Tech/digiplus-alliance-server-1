@@ -10,7 +10,7 @@ export class QuestionValidationService {
   detectValidationRule(questionText: string): ValidationRule {
     // const questionLower = questionText.toLowerCase().trim();
     const questionLower = questionText
-      .replace(/\s+/g, ' ')
+      .replace(/[’‘]/g, "'")
       .trim()
       .toLowerCase();
 
@@ -110,7 +110,14 @@ export class QuestionValidationService {
     }
 
     // ✅ DEFAULT: No validation if pattern doesn't match
-    return ValidationRule.NONE;
+    // return ValidationRule.NONE;''
+    // Default rule
+    const detectedRule = ValidationRule.NONE;
+
+    // ✅ Debug log
+    console.log('Detected rule for:', questionLower, '=>', detectedRule);
+
+    return detectedRule;
   }
 
   /**
