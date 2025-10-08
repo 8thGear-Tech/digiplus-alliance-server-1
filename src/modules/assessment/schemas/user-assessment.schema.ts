@@ -32,9 +32,6 @@ export class UserAssessment {
   @Prop({ type: Number, required: true })
   user_score: number;
 
-  // @Prop({ type: Number, required: true })
-  // total_score: number;
-
   @Prop({ type: Number, required: true })
   max_possible_score: number;
 
@@ -44,8 +41,10 @@ export class UserAssessment {
   @Prop({ type: String })
   feedback?: string;
 
-  // @Prop({ type: [String] })
-  // recommended_services: string[];
+
+  @Prop({ type: Boolean, default: false })
+  is_submitted?: boolean;
+
 
   @Prop({
     type: [

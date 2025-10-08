@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
 import { Module, ValidationError, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -10,7 +9,7 @@ import * as path from 'path';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { developmentConfig, productionConfig } from './config';
+import { developmentConfig, productionConfig, stagingConfig } from './config';
 
 import * as dotenv from 'dotenv';
 
@@ -33,31 +32,52 @@ import { ApplicationModule } from './modules/admin/application/application.modul
 import { UserApplicationModule } from './modules/business-owner/user-application.module';
 import { ServicesModule } from './modules/admin/services/services.module';
 import { ContactModule } from './modules/general/contact/contact.module';
+import { UnifiedValidationModule } from './modules/form-validation-rules/unified-validation.module';
 
 dotenv.config();
+
+// Helper function to get current environment
+const getEnvironment = (): 'development' | 'staging' | 'production' => {
+  const env = process.env.NODE_ENV;
+  if (env === 'staging') return 'staging';
+  if (env === 'production') return 'production';
+  return 'development';
+};
+
+// Helper function to load appropriate config
+const loadConfig = () => {
+  const env = getEnvironment();
+  switch (env) {
+    case 'staging':
+      return stagingConfig;
+    case 'production':
+      return productionConfig;
+    default:
+      return developmentConfig;
+  }
+};
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: path.resolve(__dirname, './../../.env'),
-      load:
-        process.env.NODE_ENV === 'development'
-          ? [developmentConfig]
-          : [productionConfig],
+      load: [loadConfig()],
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-        const uri = configService.get<string>(
-          process.env.NODE_ENV === 'production'
-            ? 'production.mongodbConnectionUrl'
-            : 'development.mongodbConnectionUrl',
-        );
+        const env = getEnvironment();
+        const uri = configService.get<string>(`${env}.mongodbConnectionUrl`);
 
         console.log('NODE_ENV:', process.env.NODE_ENV);
+        console.log('Resolved environment:', env);
         console.log('Resolved Mongo URI:', uri);
+
         if (!uri) {
-          throw new Error('MongoDB connection URI is undefined');
+          throw new Error(
+            `MongoDB connection URI is undefined for environment: ${env}`,
+          );
         }
         return { uri };
       },
@@ -66,20 +86,16 @@ dotenv.config();
     MailerModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-        let dev_env = process.env.NODE_ENV as 'development' | 'production';
-
-        if (dev_env !== 'development' && dev_env !== 'production') {
-          dev_env = 'development';
-        }
+        const env = getEnvironment();
 
         return {
           transport: {
-            host: configService.get<string>(`${dev_env}.mail.BREVO_HOST`),
-            port: configService.get<number>(`${dev_env}.mail.BREVO_PORT`),
+            host: configService.get<string>(`${env}.mail.BREVO_HOST`),
+            port: configService.get<number>(`${env}.mail.BREVO_PORT`),
             secure: false,
             auth: {
-              user: configService.get<string>(`${dev_env}.mail.BREVO_USER`),
-              pass: configService.get<string>(`${dev_env}.mail.BREVO_PASS`),
+              user: configService.get<string>(`${env}.mail.BREVO_USER`),
+              pass: configService.get<string>(`${env}.mail.BREVO_PASS`),
             },
             tls: {
               rejectUnauthorized: false,
@@ -111,6 +127,7 @@ dotenv.config();
     UserApplicationModule,
     ServicesModule,
     ContactModule,
+    UnifiedValidationModule,
   ],
   controllers: [AppController],
   providers: [

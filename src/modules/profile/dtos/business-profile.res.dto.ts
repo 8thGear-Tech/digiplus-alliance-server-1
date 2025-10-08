@@ -11,6 +11,13 @@ export class BusinessProfileResDto extends PartialType(
   })
   message: string;
 
+  @ApiProperty({
+    type: Number,
+    description: 'Number of assessments completed by the user',
+    example: 5,
+  })
+  completed_assessments: number;
+
   @ApiProperty({ type: String, description: 'Request status', example: true })
   success: boolean;
 }

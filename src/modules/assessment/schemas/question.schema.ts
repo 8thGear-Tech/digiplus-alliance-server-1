@@ -1,7 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { QuestionType } from '../enums/question-type.enum';
-import { DatabaseCollectionNames } from '../../../shared/enums/db.enum';
+import {
+  DatabaseCollectionNames,
+  ValidationRule,
+} from '../../../shared/enums/db.enum';
 
 export interface QuestionOption {
   id: string;
@@ -53,8 +56,21 @@ export class Question {
   @Prop({ type: [Object], default: [] })
   grid_rows: GridRow[];
 
-  @Prop({ default: false })
+  @Prop({ default: true })
   is_required: boolean;
+
+  @Prop({ enum: Object.values(ValidationRule), default: ValidationRule.NONE })
+  auto_validation?: ValidationRule;
+
+  @Prop({ enum: Object.values(ValidationRule) })
+  manual_validation?: ValidationRule;
+
+  @Prop({ type: Object })
+  validation_params?: {
+    min_length?: number;
+    max_length?: number;
+    error_message?: string;
+  };
 
   @Prop({ required: true })
   step: number;
@@ -64,6 +80,9 @@ export class Question {
 
   @Prop({ default: true })
   is_active: boolean;
+
+  @Prop({ default: 0 })
+  max_points: number;
 
   @Prop({ default: Date.now })
   created_at: Date;
