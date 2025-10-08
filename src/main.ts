@@ -30,6 +30,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'https://digiplus.africa',
+      'https://www.digiplus.africa',
       'https://digiplus-alliance-client.vercel.app',
       'https://digiplus-alliance-client-git-e47c15-digiplus-alliances-projects.vercel.app',
       'http:127.0.0.1:5500',
