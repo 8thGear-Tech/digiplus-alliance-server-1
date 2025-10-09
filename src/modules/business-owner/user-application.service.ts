@@ -173,23 +173,13 @@ export class UserApplicationService {
     }
   }
 
-  // async getUserSubmissions(userId: string): Promise<any[]> {
-  //   const submissions = await this.submissionModel
-  //     .find({ userId })
-  //     .select('+start_date +end_date +timetable_url +payment_amount')
-  //     .exec();
-
-  //   return this.transformUserSubmissions(submissions);
-  // }
   async getUserSubmissions(userId: string): Promise<any[]> {
-    // Use aggregation to lookup service details
     const submissions = await this.submissionModel
       .aggregate([
-        // Match submissions for the specific user
         {
           $match: { userId: new Types.ObjectId(userId) },
         },
-        // Lookup service details by service name
+
         {
           $lookup: {
             from: 'services',
@@ -198,14 +188,14 @@ export class UserApplicationService {
             as: 'serviceDetails',
           },
         },
-        // Unwind the serviceDetails array (should be single element)
+
         {
           $unwind: {
             path: '$serviceDetails',
             preserveNullAndEmptyArrays: true,
           },
         },
-        // Project the fields we need
+
         {
           $project: {
             responses: 1,
@@ -236,19 +226,17 @@ export class UserApplicationService {
   async getSubmissionStatusCounts(
     userId: string,
   ): Promise<Record<string, number>> {
-    // 1. Define the Mongoose aggregation pipeline
     const pipeline = [
-      // Stage 1: Filter by authenticated user's ID
       {
         $match: {
-          userId: new Types.ObjectId(userId), // Assuming userId is stored as ObjectId
+          userId: new Types.ObjectId(userId),
         },
       },
-      // Stage 2: Group by status and count the results in each group
+
       {
         $group: {
-          _id: '$status', // Group documents by the 'status' field
-          count: { $sum: 1 }, // Count the documents in each group
+          _id: '$status',
+          count: { $sum: 1 },
         },
       },
     ];

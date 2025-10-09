@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,11 +22,14 @@ import {
   ApplicationStatus,
   PaymentStatus,
   ValidationRule,
+  Repositories,
 } from 'src/shared/enums';
 import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
+import { BaseRepository } from 'src/modules/repository/base.repository';
+import { UserAssessment } from 'src/modules/assessment/schemas/user-assessment.schema';
 
 @Injectable()
 export class AdminApplicationService {
@@ -34,7 +38,10 @@ export class AdminApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(UserSubmission.name)
     private submissionModel: Model<UserSubmission>,
-    // private readonly userSubmissionRepository: BaseRepository<UserSubmission>,
+    @Inject(Repositories.UserSubmissionRepository)
+    private readonly userSubmissionRepository: BaseRepository<UserSubmission>,
+    @Inject(Repositories.UserAssessmentRepository)
+    private readonly userAssessmentRepository: BaseRepository<UserAssessment>,
     @InjectModel(Service.name)
     private serviceModel: Model<Service>,
     private questionValidationService: QuestionValidationService,
@@ -49,21 +56,19 @@ export class AdminApplicationService {
   ): any {
     const processedQuestion = { ...question };
 
-    // 1. DATA KEY GENERATION: Only run if it's a new question or the data_key is missing
     if (isNewQuestion || !processedQuestion.data_key) {
       processedQuestion.data_key = this.questionDataKeyService.generate(
         question.question,
         existingDataKeys,
       );
-      // IMPORTANT: Add the newly generated key to the list to prevent collisions in the current batch.
+
       existingDataKeys.push(processedQuestion.data_key);
     }
 
-    // 2. AUTO-VALIDATION: Only run if it's a new question and is a text type
     if (
       isNewQuestion &&
       (question.type === 'short_text' || question.type === 'long_text') &&
-      !question.manual_validation // Don't auto-validate if manual validation is set
+      !question.manual_validation
     ) {
       const autoValidation =
         this.questionValidationService.detectValidationRule(question.question);
@@ -195,16 +200,12 @@ export class AdminApplicationService {
     Object.assign(form, dto);
 
     if (dto.questions) {
-      // 1a. Create a map of existing questions by data_key for fast lookup
-      // CRITICAL NOTE: The client MUST send the data_key for existing questions to avoid duplication.
       const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
 
-      // Collect all current data keys from the form's state (for collision checking on new questions)
       const currentDataKeys: string[] = form.questions
         .map((q) => q.data_key)
         .filter(Boolean) as string[];
 
-      // Populate map for existing items, using data_key as the unique identifier
       for (const question of form.questions) {
         if (question.data_key) {
           existingQuestionsMap.set(question.data_key, question);
@@ -223,30 +224,24 @@ export class AdminApplicationService {
           // --- UPDATE EXISTING QUESTION IN-PLACE ---
           const existingQuestion = existingQuestionsMap.get(dataKey!)!;
 
-          // Process the question to apply auto-validation updates if needed, but not to regenerate the data_key
-          // We pass currentDataKeys, but since we set isNewQuestion=false, it won't be used for generation.
           const updatedQuestion = this.processSingleQuestion(
             incomingQuestion,
             currentDataKeys,
             false, // isNewQuestion = false
           );
 
-          // Apply all updates from the DTO to the existing Mongoose subdocument
           Object.assign(existingQuestion, updatedQuestion);
 
           // Add the now-updated existing question to our new list
           updatedAndNewQuestions.push(existingQuestion);
           keysEncounteredInDto.add(dataKey!);
         } else {
-          // --- CREATE/INSERT NEW QUESTION ---
-          // Since it is new (no data_key or no match), process it to generate the data_key and auto_validation fields
           const questionToSave = this.processSingleQuestion(
             incomingQuestion,
-            currentDataKeys, // Pass current keys for collision check
-            true, // isNewQuestion = true
+            currentDataKeys,
+            true,
           );
 
-          // IMPORTANT: Add the generated data_key to the set to prevent collision with other new questions in the same DTO batch
           if (questionToSave.data_key) {
             currentDataKeys.push(questionToSave.data_key);
             keysEncounteredInDto.add(questionToSave.data_key);
@@ -504,17 +499,11 @@ export class AdminApplicationService {
     return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
   }
 
-  // async getTotalApplicationsCount(): Promise<number> {
-  //   // Counts all documents in the submissions collection
-  //   return this.userSubmissionRepository.count({});
-  // }
+  async getTotalApplicationsCount(): Promise<number> {
+    return this.userSubmissionRepository.count({});
+  }
 
-  // --- NEW: Get total assessments completed count for admin dashboard ---
-  // async getTotalAssessmentsCompletedCount(): Promise<number> {
-  //   // Assuming 'status' is used to define 'completed' assessments.
-  //   // Adjust logic if 'assessmentCompleted' is a boolean field.
-  //   return this.submissionRepository.countDocuments({
-  //     status: ApplicationStatus.Completed,
-  //   });
-  // }
+  async getTotalAssessmentsCompletedCount(): Promise<number> {
+    return this.userAssessmentRepository.count({});
+  }
 }

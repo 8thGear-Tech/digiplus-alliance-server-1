@@ -42,34 +42,6 @@ export class ProfileService {
     // private readonly jwtService: JwtService,
   ) {}
 
-  // async updateBusinessProfile(
-  //   businessProfile: UpdateBusinessProfileDto & { userId: Identifier },
-  // ) {
-  //   const profile = await this.businessProfileRepository.findOne({
-  //     user_id: new Types.ObjectId(businessProfile.userId),
-  //   });
-
-  //   if (!profile) {
-  //     throw BadRequestException.RESOURCE_NOT_FOUND(
-  //       'Profile not found for this user',
-  //     );
-  //   }
-
-  //   const updatedProfile = await this.businessProfileRepository.update(
-  //     { user_id: new Types.ObjectId(businessProfile.userId) },
-  //     businessProfile,
-  //   );
-
-  //   if (businessProfile.email) {
-  //     await this.userRepository.update(
-  //       { _id: new Types.ObjectId(businessProfile.userId) },
-  //       { email: businessProfile.email },
-  //     );
-  //   }
-
-  //   return updatedProfile;
-  // }
-
   async updateBusinessProfile(
     businessProfile: UpdateBusinessProfileDto & { userId: Identifier },
     file?: Express.Multer.File,
@@ -119,71 +91,6 @@ export class ProfileService {
     // 6. Return enriched profile using existing method
     return this.getBusinessProfile(String(businessProfile.userId));
   }
-
-  // async updateBusinessProfile(
-  //   data: UpdateBusinessProfileDto & {
-  //     userId: Identifier;
-  //     file?: Express.Multer.File; // <-- add file support
-  //   },
-  // ) {
-  //   const profile = await this.businessProfileRepository.findOne({
-  //     user_id: new Types.ObjectId(data.userId),
-  //   });
-
-  //   if (!profile) {
-  //     throw BadRequestException.RESOURCE_NOT_FOUND(
-  //       'Profile not found for this user',
-  //     );
-  //   }
-
-  //   // --- 1. Handle logo upload if file is provided ---
-  //   let logoUrl: string | undefined;
-  //   if (data.file) {
-  //     const logoCloudPath = `business/${data.userId}`;
-  //     const { secure_url } = await this.uploadService.uploadImage(
-  //       data.file,
-  //       logoCloudPath,
-  //       'logos',
-  //     );
-  //     logoUrl = secure_url;
-  //   }
-
-  //   // --- 2. Update BusinessProfile ---
-  //   const updatePayload: any = { ...data };
-  //   delete updatePayload.file; // prevent saving file object to DB
-  //   if (logoUrl) updatePayload.logo_url = logoUrl;
-
-  //   const updatedProfile = await this.businessProfileRepository.update(
-  //     { user_id: new Types.ObjectId(data.userId) },
-  //     updatePayload,
-  //   );
-
-  //   // --- 3. Update user table (first_name, last_name, email) ---
-  //   const userUpdate: Partial<User> = {};
-  //   if (data.first_name) userUpdate['first_name'] = data.first_name;
-  //   if (data.last_name) userUpdate['last_name'] = data.last_name;
-  //   if (data.email) userUpdate['email'] = data.email;
-
-  //   if (Object.keys(userUpdate).length > 0) {
-  //     await this.userRepository.update(
-  //       { _id: new Types.ObjectId(data.userId) },
-  //       userUpdate,
-  //     );
-  //   }
-
-  //   return updatedProfile;
-  // }
-  // async getBusinessProfile(userId: Identifier) {
-  //   const profile = await this.businessProfileRepository.findOne({
-  //     user_id: new Types.ObjectId(userId),
-  //   });
-  //   if (!profile)
-  //     throw BadRequestException.RESOURCE_NOT_FOUND(
-  //       'Profile not found for this user',
-  //     );
-
-  //   return profile;
-  // }
 
   async getBusinessProfile(userId: string) {
     // 1. Fetch business profile
