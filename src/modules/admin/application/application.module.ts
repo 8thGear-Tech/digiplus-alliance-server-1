@@ -26,10 +26,10 @@ import { RepositoryModule } from 'src/modules/repository/repository.module';
       { name: Service.name, schema: ServiceSchema },
     ]),
 
-    // RepositoryModule,
     CloudinaryModule,
-    // RepositoryModule,
+    RepositoryModule,
   ],
+
   controllers: [AdminApplicationController],
   providers: [
     AdminApplicationService,

@@ -1,11 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types, Model } from 'mongoose';
@@ -75,7 +67,6 @@ export class AssessmentService {
       if (autoValidation !== ValidationRule.NONE) {
         processedQuestion.auto_validation = autoValidation;
 
-        // Add suggested placeholder if not provided
         if (!processedQuestion.placeholder) {
           processedQuestion.placeholder =
             this.questionValidationService.getSuggestedPlaceholder(
@@ -2019,5 +2010,4 @@ export class AssessmentService {
       throw BadRequestException.BAD_REQUEST('Failed to retrieve monthly stats');
     }
   }
-
 }

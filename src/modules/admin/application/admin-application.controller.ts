@@ -40,12 +40,6 @@ import { QuestionDataKeyService } from './services/question-data-key.service';
 import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
-// import {
-//   FormValidationRulesResponseDto,
-//   ValidateInputDto,
-//   ValidationResultDto,
-// } from './dtos/validation.dto';
-// import { AdminMetrics, UserService } from 'src/modules/user/user.service';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -55,7 +49,6 @@ export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
     private readonly questionDataKeyService: QuestionDataKeyService,
-    // private readonly userService: UserService,
   ) {}
 
   @Post()
@@ -552,25 +545,4 @@ export class AdminApplicationController {
       file,
     );
   }
-
-  //admin metrics
-  // @Get('metrics')
-  // @ApiOperation({
-  //   summary:
-  //     'Admin: Get key system metrics (Total Users, Applications, Assessments)',
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Dashboard metrics retrieved successfully.',
-  //   schema: {
-  //     example: {
-  //       totalUsers: 1500,
-  //       totalApplications: 2500,
-  //       // totalAssessmentsCompleted: 980,
-  //     },
-  //   },
-  // })
-  // async getAdminMetrics(): Promise<AdminMetrics> {
-  //   return this.userService.getAdminMetrics();
-  // }
 }
