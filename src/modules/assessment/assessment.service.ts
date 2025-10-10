@@ -1829,6 +1829,32 @@ export class AssessmentService {
     userId?: string,
   ) {
     try {
+      // === 🧠 Step 1: Enforce 2-week retake rule ===
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
+
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
+          const diffInDays = Math.floor(
+            (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
+          );
+
+          if (diffInDays < 14) {
+            const nextEligibleDate = new Date(
+              completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+            );
+            throw BadRequestException.BAD_REQUEST(
+              `You can only retake this assessment every 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
+            );
+          }
+        }
+      }
+
       const assessmentData = await this.getAssessmentById(assessmentId);
 
       if (!assessmentData?.data) {
@@ -1942,61 +1968,19 @@ export class AssessmentService {
       };
     } catch (error) {
       this.logger.error('Error submitting assessment:', error);
+
+      // ✅ Don't override the original message if it's already a handled error
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // ✅ Also handle native NestJS HttpException (optional)
+      if (error.getStatus && error.getStatus() === 400) {
+        throw error;
+      }
       throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
     }
   }
-
-  // async getUserMonthlyStats(userId: string, year?: number): Promise<any> {
-  //   try {
-  //     const filter: any = {
-  //       user_id: new Types.ObjectId(userId),
-  //     };
-
-  //     if (year) {
-  //       filter.completed_at = {
-  //         $gte: new Date(`${year}-01-01T00:00:00.000Z`),
-  //         $lte: new Date(`${year}-12-31T23:59:59.999Z`),
-  //       };
-  //     }
-
-  //     const stats = await this.userAssessmentModel.aggregate([
-  //       { $match: filter },
-  //       {
-  //         $group: {
-  //           _id: { $month: '$completed_at' },
-  //           totalScore: { $sum: '$user_score' },
-  //           submissions: { $sum: 1 },
-  //         },
-  //       },
-  //       { $sort: { _id: 1 } },
-  //     ]);
-
-  //     // 📊 Fill all 12 months with default 0
-  //     const allMonths = Array.from({ length: 12 }, (_, i) => ({
-  //       month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
-  //         new Date(2025, i),
-  //       ),
-  //       score: 0,
-  //     }));
-
-  //     // Replace with averages where data exists
-  //     stats.forEach((s) => {
-  //       const monthIndex = s._id - 1;
-  //       allMonths[monthIndex].score = Math.round(
-  //         s.totalScore / s.submissions, // average score for the month
-  //       );
-  //     });
-
-  //     return {
-  //       success: true,
-  //       message: 'Monthly stats retrieved successfully',
-  //       data: allMonths,
-  //     };
-  //   } catch (error) {
-  //     this.logger.error('Error getting monthly stats:', error);
-  //     throw BadRequestException.BAD_REQUEST('Failed to retrieve monthly stats');
-  //   }
-  // }
 
   async getUserMonthlyStats(userId: string, year?: number): Promise<any> {
     try {
