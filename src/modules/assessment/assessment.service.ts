@@ -1,15 +1,14 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types, Model } from 'mongoose';
-import { Repositories } from '../../shared/enums/db.enum';
+import { Repositories, ValidationRule } from '../../shared/enums/db.enum';
 import { BaseRepository } from '../repository/base.repository';
 import { AssessmentDocument } from './schemas/assessment.schema';
 import { AssessmentModuleDocument } from './schemas/assessment-module.schema';
@@ -29,6 +28,7 @@ import { QuestionType } from './enums/question-type.enum';
 import { ServicesService } from '../admin/services/services.service';
 import { assessmentCompletionEmail } from '../mailer/mailer.constants';
 import { User } from '../user/user.schema';
+import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 
 @Injectable()
 export class AssessmentService {
@@ -51,12 +51,54 @@ export class AssessmentService {
     private readonly userRepository: BaseRepository<User>,
     private readonly mailService: MailerService,
     //added by opeyemi
+    private questionValidationService: QuestionValidationService,
     private readonly servicesService: ServicesService,
   ) {}
 
   // Add these methods to your AssessmentService class
 
   //below: added by opeyemi
+
+  // In AssessmentService.createAssessment, before creating questions:
+
+  // Add this helper method to AssessmentService
+  private processAssessmentQuestion(questionDto: any): any {
+    const processedQuestion = { ...questionDto };
+
+    // Auto-detect validation for text fields
+    if (
+      (questionDto.type === QuestionType.SHORT_TEXT ||
+        questionDto.type === QuestionType.LONG_TEXT) &&
+      questionDto.question
+    ) {
+      const autoValidation =
+        this.questionValidationService.detectValidationRule(
+          questionDto.question,
+        );
+
+      if (autoValidation !== ValidationRule.NONE) {
+        processedQuestion.auto_validation = autoValidation;
+
+        if (!processedQuestion.placeholder) {
+          processedQuestion.placeholder =
+            this.questionValidationService.getSuggestedPlaceholder(
+              autoValidation,
+            );
+        }
+
+        // Add suggested instruction if not provided
+        if (!processedQuestion.instruction) {
+          processedQuestion.instruction =
+            this.questionValidationService.getSuggestedInstruction(
+              autoValidation,
+            );
+        }
+      }
+    }
+
+    return processedQuestion;
+  }
+
   private async validateServiceRecommendations(
     serviceRecommendations: any[],
   ): Promise<void> {
@@ -909,7 +951,9 @@ export class AssessmentService {
         instruction: createAssessmentDto.instruction,
         is_active: createAssessmentDto.is_active ?? true,
         is_published: false,
+
         ia_submitted: false,
+
         created_by: new Types.ObjectId(userId),
         total_possible_points: 0,
       };
@@ -948,6 +992,10 @@ export class AssessmentService {
       const createdQuestions: QuestionDocument[] = [];
 
       for (const questionDto of createAssessmentDto.questions) {
+        // Process the question to detect validation
+        const processedQuestionDto =
+          this.processAssessmentQuestion(questionDto);
+
         const moduleId = moduleMapping.get(questionDto.module_ref);
 
         if (!moduleId && questionDto.module_ref !== 'none') {
@@ -965,7 +1013,9 @@ export class AssessmentService {
           question: questionDto.question,
           description: questionDto.description,
           instruction: questionDto.instruction,
-          is_required: questionDto.is_required ?? false,
+          is_required: questionDto.is_required ?? true,
+          auto_validation:
+            processedQuestionDto.auto_validation || ValidationRule.NONE,
           step: questionDto.step,
           max_points: questionDto.max_points || 0,
           scoring_categories: questionDto.scoring_categories || [],
@@ -2105,43 +2155,4 @@ export class AssessmentService {
       throw BadRequestException.BAD_REQUEST('Failed to retrieve monthly stats');
     }
   }
-
-  // async checkRetakeEligibility(
-  //   userId: string,
-  //   assessmentId: string,
-  // ): Promise<any> {
-  //   try {
-  //     const lastSubmission = await this.userAssessmentRepository.findOne({
-  //       user_id: new Types.ObjectId(userId),
-  //       assessment_id: new Types.ObjectId(assessmentId),
-  //     });
-
-  //     if (!lastSubmission) {
-  //       return {
-  //         success: true,
-  //         message: 'User can take assessment',
-  //         data: { canRetake: true, nextRetakeDate: null },
-  //       };
-  //     }
-
-  //     const retakePeriod = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-  //     const nextRetakeDate = new Date(
-  //       lastSubmission.completed_at.getTime() + retakePeriod,
-  //     );
-  //     const canRetake = new Date() >= nextRetakeDate;
-
-  //     return {
-  //       success: true,
-  //       message: canRetake
-  //         ? 'User can retake assessment'
-  //         : 'User must wait before retaking',
-  //       data: { canRetake, nextRetakeDate },
-  //     };
-  //   } catch (error) {
-  //     this.logger.error('Error checking retake eligibility:', error);
-  //     throw BadRequestException.BAD_REQUEST(
-  //       'Failed to check retake eligibility',
-  //     );
-  //   }
-  // }
 }

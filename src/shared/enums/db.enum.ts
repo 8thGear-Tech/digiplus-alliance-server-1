@@ -157,16 +157,16 @@ export enum ServicesTypes {
   innovation_and_co_creation_labs = 'Innovation & Co-creation Labs',
 }
 
-export enum QuestionType {
-  welcome_screen = 'welcome_screen',
-  multiple_choice = 'multiple_choice',
-  checkbox = 'checkbox',
-  short_text = 'short_text',
-  long_text = 'long_text',
-  dropdown = 'dropdown',
-  multiple_choice_grid = 'multiple_choice_grid',
-  file_upload = 'file_upload',
-}
+// export enum QuestionType {
+//   welcome_screen = 'welcome_screen',
+//   multiple_choice = 'multiple_choice',
+//   checkbox = 'checkbox',
+//   short_text = 'short_text',
+//   long_text = 'long_text',
+//   dropdown = 'dropdown',
+//   multiple_choice_grid = 'multiple_choice_grid',
+//   file_upload = 'file_upload',
+// }
 
 // src/shared/enums.ts
 

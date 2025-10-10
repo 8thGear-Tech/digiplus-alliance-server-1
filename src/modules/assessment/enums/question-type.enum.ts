@@ -7,4 +7,5 @@ export enum QuestionType {
   LONG_TEXT = 'long_text',
   DROPDOWN = 'dropdown',
   MULTIPLE_CHOICE_GRID = 'multiple_choice_grid',
+  FILE_UPLOAD = 'file_upload',
 }

@@ -5,6 +5,7 @@ import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
 import { ServicesModule } from '../admin/services/services.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { MailerModule } from '../mailer/mailer.module';
     MailerModule,
   ],
   controllers: [AssessmentController],
-  providers: [AssessmentService],
-  exports: [AssessmentService],
+  providers: [AssessmentService, QuestionValidationService],
+  exports: [AssessmentService, QuestionValidationService],
 })
 export class AssessmentModule {}

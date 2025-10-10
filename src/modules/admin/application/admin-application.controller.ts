@@ -40,7 +40,6 @@ import { QuestionDataKeyService } from './services/question-data-key.service';
 import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
-// import { AdminMetrics, UserService } from 'src/modules/user/user.service';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -50,7 +49,6 @@ export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
     private readonly questionDataKeyService: QuestionDataKeyService,
-    // private readonly userService: UserService,
   ) {}
 
   @Post()
@@ -436,21 +434,6 @@ export class AdminApplicationController {
     );
   }
 
-  @Get('validation-rules/:id')
-  @ApiOperation({ summary: 'Get validation rules for a form' })
-  async getFormValidationRules(@Param('id') id: string) {
-    return this.adminApplicationService.getFormValidationRules(id);
-  }
-
-  @Post('validate-input')
-  @ApiOperation({ summary: 'Validate user input against question rules' })
-  async validateInput(
-    @Body() dto: { questionId: string; value: string; formId: string },
-  ) {
-    const form = await this.adminApplicationService.getApplicationList({});
-    return { isValid: true, errors: [] };
-  }
-
   @Get('trainings/participants')
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -562,25 +545,4 @@ export class AdminApplicationController {
       file,
     );
   }
-
-  //admin metrics
-  // @Get('metrics')
-  // @ApiOperation({
-  //   summary:
-  //     'Admin: Get key system metrics (Total Users, Applications, Assessments)',
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Dashboard metrics retrieved successfully.',
-  //   schema: {
-  //     example: {
-  //       totalUsers: 1500,
-  //       totalApplications: 2500,
-  //       // totalAssessmentsCompleted: 980,
-  //     },
-  //   },
-  // })
-  // async getAdminMetrics(): Promise<AdminMetrics> {
-  //   return this.userService.getAdminMetrics();
-  // }
 }

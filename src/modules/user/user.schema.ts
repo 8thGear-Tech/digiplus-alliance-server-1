@@ -8,7 +8,7 @@ export interface User extends Document {
   role: UserTypes;
   first_name: string;
   last_name: string;
-  business_name?: string; // Corrected: Made optional in the interface
+  business_name?: string;
   profile_picture?: string;
   is_verified: boolean;
   locked_until?: Date | null;
@@ -17,6 +17,7 @@ export interface User extends Document {
   login_attempts?: number;
   phone_number?: string;
   is_active?: boolean;
+  last_login?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -77,6 +78,9 @@ export const UserSchema: Schema<User> = new Schema<User>(
     is_active: {
       type: Boolean,
       default: true,
+    },
+    last_login: {
+      type: String,
     },
   },
   {

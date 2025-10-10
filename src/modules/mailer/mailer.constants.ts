@@ -226,18 +226,18 @@ export const ZEPTOMAIL_CONFIG = {
     user: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',
     pass: process.env.ZEPTOMAIL_PASSWORD,
   },
-  // Additional settings to prevent connection issues
-  requireTLS: true,
-  tls: {
-    ciphers: 'SSLv3',
-    rejectUnauthorized: false,
-  },
-  // Increase timeouts to handle slow connections
-  connectionTimeout: 120000, // 2 minutes
-  greetingTimeout: 60000, // 1 minute
-  socketTimeout: 120000, // 2 minutes
-  debug: process.env.NODE_ENV === 'development',
-  logger: process.env.NODE_ENV === 'development',
+  // // Additional settings to prevent connection issues
+  // requireTLS: true,
+  // tls: {
+  //   ciphers: 'SSLv3',
+  //   rejectUnauthorized: false,
+  // },
+  // // Increase timeouts to handle slow connections
+  // connectionTimeout: 120000, // 2 minutes
+  // greetingTimeout: 60000, // 1 minute
+  // socketTimeout: 120000, // 2 minutes
+  // debug: process.env.NODE_ENV === 'development',
+  // logger: process.env.NODE_ENV === 'development',
 };
 
 export const DEFAULT_FROM_EMAIL =
