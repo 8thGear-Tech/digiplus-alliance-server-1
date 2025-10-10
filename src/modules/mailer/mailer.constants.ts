@@ -86,6 +86,137 @@ export const contactFormAdminEmail = (contact: Contact) => {
     </html>`;
 };
 
+export const assessmentCompletionEmail = (
+  user: User,
+  assessmentTitle: string,
+  userScore: number,
+  totalPoints: number,
+  percentage: number,
+  userLevel: string,
+  recommendedServices: { name: string; description?: string }[],
+) => {
+  const servicesList = recommendedServices?.length
+    ? `
+      <div style="background-color: #f1f8f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0;"><strong>Based on your results, we recommend:</strong></p>
+        <ul style="padding-left: 20px; margin: 0;">
+          ${recommendedServices
+            .map(
+              (s) => `
+              <li style="margin-bottom: 8px;">
+                <span style="font-weight: bold; color: #28a745;">${s.name}</span>
+                ${s.description ? ` – <span>${s.description}</span>` : ''}
+              </li>`,
+            )
+            .join('')}
+        </ul>
+      </div>
+    `
+    : `
+      <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0;">No specific recommendations available at this time. Keep up the progress! 🚀</p>
+      </div>
+    `;
+
+  return `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #007bff;">Assessment Completed 🎉</h2>
+          <p>Hello ${user.first_name || 'there'},</p>
+          <p>
+            Congratulations! You have successfully completed the assessment:
+            <strong>${assessmentTitle}</strong>.
+          </p>
+
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Your Score:</strong> ${userScore} / ${totalPoints}</p>
+            <p><strong>Percentage:</strong> ${percentage.toFixed(2)}%</p>
+            <p><strong>Level:</strong> ${userLevel}</p>
+          </div>
+
+          ${servicesList}
+
+          <p style="margin-top: 20px;">Keep up the good work and continue improving 🚀</p>
+
+          <p style="margin-top: 30px;">
+            Best regards,<br />
+            <strong>The DigiPlus Alliance Team</strong>
+          </p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+export const applicationUserEmail = (
+  user: User,
+  service: string,
+  responses: Record<string, any>,
+  formQuestions: Map<string, { question: string }>,
+) => {
+  return `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #28a745;">Application Submitted ✅</h2>
+          <p>Hello ${user.first_name || 'there'},</p>
+          <p>Thank you for submitting your application for <strong>${service}</strong>.</p>
+          <p>We have received your application and will process it shortly.</p>
+
+          <h3>Summary of your responses:</h3>
+          <ul>
+            ${Object.entries(responses)
+              .map(
+                ([key, val]) =>
+                  `<li><strong>${formQuestions.get(key)?.question}:</strong> ${val}</li>`,
+              )
+              .join('')}
+          </ul>
+
+          <p style="margin-top: 30px;">
+            Best regards,<br />
+            <strong>The DigiPlus Alliance Team</strong>
+          </p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+export const applicationAdminEmail = (
+  user: User | null,
+  service: string,
+  responses: Record<string, any>,
+  formQuestions: Map<string, { question: string }>,
+  paymentAmount: number,
+) => {
+  return `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #dc3545;">New Application Received 📩</h2>
+          <p>A new application has been submitted for <strong>${service}</strong>.</p>
+
+          <p><strong>User:</strong> ${user?.first_name || ''} ${user?.last_name || ''} (${user?.email || 'N/A'})</p>
+
+          <h3>Responses:</h3>
+          <ul>
+            ${Object.entries(responses)
+              .map(
+                ([key, val]) =>
+                  `<li><strong>${formQuestions.get(key)?.question}:</strong> ${val}</li>`,
+              )
+              .join('')}
+          </ul>
+
+          <p><strong>Payment Amount:</strong> ₦${paymentAmount}</p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 // FIXED: Added missing secure property and better configuration
 export const ZEPTOMAIL_CONFIG = {
   host: process.env.ZEPTOMAIL_HOST || 'smtp.zeptomail.com',

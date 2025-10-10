@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,7 +15,14 @@ import { ApplicationForm } from '../admin/application/schemas/application-form.s
 import { FormListItemDto } from './form-list-item.dto';
 import { Service } from '../admin/services/schemas/service.schema';
 import { ApplicationStatus } from 'src/shared/enums';
+import {
+  applicationAdminEmail,
+  applicationUserEmail,
+} from '../mailer/mailer.constants';
+import { Repositories } from '../../shared/enums/db.enum';
 import { BaseRepository } from '../repository/base.repository';
+import { User } from '../user/user.schema';
+import { MailerService } from '../mailer/mailer.service';
 
 type FormProjection = {
   _id: string;
@@ -31,6 +40,9 @@ export class UserApplicationService {
     private submissionModel: Model<UserSubmission>,
     @InjectModel(Service.name)
     private serviceModel: Model<Service>,
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
+    private readonly mailService: MailerService,
   ) {}
 
   private transformUserSubmissions(submissions: any[]): any[] {
@@ -166,6 +178,41 @@ export class UserApplicationService {
 
     try {
       const savedSubmission = await newSubmission.save();
+
+      // ✅ Fetch user details
+      const user = await this.userRepository.findById(userId);
+
+      // 📧 Send confirmation email to user
+      if (user?.email) {
+        const userMailBody = applicationUserEmail(
+          user,
+          service,
+          responses,
+          formQuestions,
+        );
+
+        await this.mailService.sendMail({
+          to: user.email,
+          subject: `Application Submitted - ${service}`,
+          html: userMailBody,
+        });
+      }
+
+      // 📧 Send notification email to admin
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@digiplus.com';
+      const adminMailBody = applicationAdminEmail(
+        user,
+        service,
+        responses,
+        formQuestions,
+        selectedService.price,
+      );
+
+      await this.mailService.sendMail({
+        to: adminEmail,
+        subject: `New Application - ${service}`,
+        html: adminMailBody,
+      });
       return savedSubmission;
     } catch (error) {
       console.error('Failed to save submission:', error.message);

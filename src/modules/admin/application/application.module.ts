@@ -16,7 +16,6 @@ import { QuestionDataKeyService } from './services/question-data-key.service';
 import { Service, ServiceSchema } from '../services/schemas/service.schema';
 
 import { CloudinaryModule } from 'src/modules/cloudinary/cloudinary.module';
-import { RepositoryModule } from 'src/modules/repository/repository.module';
 
 @Module({
   imports: [

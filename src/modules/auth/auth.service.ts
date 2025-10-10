@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 // /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 // import * as bcrypt from 'bcryptjs';
@@ -560,10 +562,10 @@ import { UnauthorizedException } from '../../exceptions/unauthorized.exception';
 //   registrationEmail,
 // } from '../mailer/mailer.constants';
 import { VerifyAccountDto } from './dtos/verify-email.dto';
-import { ResendEmailCodeReqDto } from './dtos/resend-email.dto';
+// import { ResendEmailCodeReqDto } from './dtos/resend-email.dto';
 import { ResetPasswordReqDto } from './dtos/reset-password.dto';
 import { User } from '../user/user.schema';
-import { UserService } from '../user/user.service';
+// import { UserService } from '../user/user.service';
 import { Types } from 'mongoose';
 import { Repositories, UserTypes } from 'src/shared/enums';
 import { BaseRepository } from '../repository/base.repository';

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Inject, Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,7 +13,6 @@ export interface AdminMetrics {
   // totalApplications: number;
   // totalAssessmentsCompleted: number;
 }
-
 
 @Injectable()
 export class UserService {
@@ -57,5 +57,4 @@ export class UserService {
       // totalAssessmentsCompleted,
     };
   }
-
 }

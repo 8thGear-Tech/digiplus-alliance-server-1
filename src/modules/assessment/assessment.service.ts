@@ -14,6 +14,7 @@ import { BaseRepository } from '../repository/base.repository';
 import { AssessmentDocument } from './schemas/assessment.schema';
 import { AssessmentModuleDocument } from './schemas/assessment-module.schema';
 import { QuestionDocument } from './schemas/question.schema';
+import { MailerService } from '../mailer/mailer.service';
 import {
   UserAssessment,
   UserAssessmentDocument,
@@ -26,6 +27,8 @@ import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
 import { ServicesService } from '../admin/services/services.service';
+import { assessmentCompletionEmail } from '../mailer/mailer.constants';
+import { User } from '../user/user.schema';
 
 @Injectable()
 export class AssessmentService {
@@ -44,7 +47,9 @@ export class AssessmentService {
     private readonly serviceRecommendationRepository: BaseRepository<any>,
     @InjectModel(UserAssessment.name)
     private readonly userAssessmentModel: Model<UserAssessmentDocument>,
-
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
+    private readonly mailService: MailerService,
     //added by opeyemi
     private readonly servicesService: ServicesService,
   ) {}
@@ -1896,6 +1901,31 @@ export class AssessmentService {
         );
       }
 
+      // 📧 Send confirmation email
+      const user = userId ? await this.userRepository.findById(userId) : null;
+
+      if (user?.email) {
+        const mailBody = assessmentCompletionEmail(
+          user,
+          assessment.title,
+          userScore,
+          total_possible_points,
+          percentage_score,
+          userLevel,
+          recommendedServices.map((service: any) => ({
+            name: service.service_name || service.name,
+            description: service.description,
+          })),
+        );
+
+        await this.mailService.sendMail({
+          to: user.email,
+          subject: `Assessment Completed - ${assessment.title}`,
+          text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
+          html: mailBody,
+        });
+      }
+
       return {
         success: true,
         message: 'Assessment completed successfully',
@@ -1916,8 +1946,62 @@ export class AssessmentService {
     }
   }
 
+  // async getUserMonthlyStats(userId: string, year?: number): Promise<any> {
+  //   try {
+  //     const filter: any = {
+  //       user_id: new Types.ObjectId(userId),
+  //     };
+
+  //     if (year) {
+  //       filter.completed_at = {
+  //         $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+  //         $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+  //       };
+  //     }
+
+  //     const stats = await this.userAssessmentModel.aggregate([
+  //       { $match: filter },
+  //       {
+  //         $group: {
+  //           _id: { $month: '$completed_at' },
+  //           totalScore: { $sum: '$user_score' },
+  //           submissions: { $sum: 1 },
+  //         },
+  //       },
+  //       { $sort: { _id: 1 } },
+  //     ]);
+
+  //     // 📊 Fill all 12 months with default 0
+  //     const allMonths = Array.from({ length: 12 }, (_, i) => ({
+  //       month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+  //         new Date(2025, i),
+  //       ),
+  //       score: 0,
+  //     }));
+
+  //     // Replace with averages where data exists
+  //     stats.forEach((s) => {
+  //       const monthIndex = s._id - 1;
+  //       allMonths[monthIndex].score = Math.round(
+  //         s.totalScore / s.submissions, // average score for the month
+  //       );
+  //     });
+
+  //     return {
+  //       success: true,
+  //       message: 'Monthly stats retrieved successfully',
+  //       data: allMonths,
+  //     };
+  //   } catch (error) {
+  //     this.logger.error('Error getting monthly stats:', error);
+  //     throw BadRequestException.BAD_REQUEST('Failed to retrieve monthly stats');
+  //   }
+  // }
+
   async getUserMonthlyStats(userId: string, year?: number): Promise<any> {
     try {
+      const currentYear = year || new Date().getFullYear();
+
       const filter: any = {
         user_id: new Types.ObjectId(userId),
       };
@@ -1936,6 +2020,15 @@ export class AssessmentService {
             _id: { $month: '$completed_at' },
             totalScore: { $sum: '$user_score' },
             submissions: { $sum: 1 },
+            assessmentDetails: {
+              $push: {
+                assessment_id: '$assessment_id',
+                user_score: '$user_score',
+                max_possible_score: '$max_possible_score',
+                percentage_score: '$percentage_score',
+                completed_at: '$completed_at',
+              },
+            },
           },
         },
         { $sort: { _id: 1 } },
@@ -1944,23 +2037,84 @@ export class AssessmentService {
       // 📊 Fill all 12 months with default 0
       const allMonths = Array.from({ length: 12 }, (_, i) => ({
         month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
-          new Date(2025, i),
+          new Date(currentYear, i),
         ),
+        year: currentYear,
         score: 0,
+        submissions: 0,
+        submission_details: [],
       }));
 
-      // Replace with averages where data exists
+      // Replace with actual data where it exists
       stats.forEach((s) => {
         const monthIndex = s._id - 1;
-        allMonths[monthIndex].score = Math.round(
-          s.totalScore / s.submissions, // average score for the month
+
+        const submissionDetails = s.assessmentDetails.map(
+          (assessment: any) => ({
+            assessment_id: assessment.assessment_id,
+            user_score: assessment.user_score,
+            max_possible_score: assessment.max_possible_score,
+            percentage_score: assessment.percentage_score,
+            completed_at: assessment.completed_at,
+            completed_date: new Date(
+              assessment.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              assessment.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+          }),
         );
+
+        allMonths[monthIndex] = {
+          month: allMonths[monthIndex].month,
+          year: currentYear,
+          score: Math.round(s.totalScore / s.submissions),
+          submissions: s.submissions,
+          submission_details: submissionDetails,
+        };
       });
+
+      const totalSubmissions = stats.reduce((sum, s) => sum + s.submissions, 0);
+      const overallAverageScore =
+        totalSubmissions > 0
+          ? Math.round(
+              stats.reduce((sum, s) => sum + s.totalScore, 0) /
+                totalSubmissions,
+            )
+          : 0;
 
       return {
         success: true,
         message: 'Monthly stats retrieved successfully',
-        data: allMonths,
+        data: {
+          year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            overall_average_score: overallAverageScore,
+            months_active: stats.length,
+          },
+          monthly_breakdown: allMonths,
+          generated_at: new Date().toISOString(),
+          generated_date: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
+          generated_time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        },
       };
     } catch (error) {
       this.logger.error('Error getting monthly stats:', error);
@@ -1968,5 +2122,42 @@ export class AssessmentService {
     }
   }
 
-  //above: added by opeyemi
+  // async checkRetakeEligibility(
+  //   userId: string,
+  //   assessmentId: string,
+  // ): Promise<any> {
+  //   try {
+  //     const lastSubmission = await this.userAssessmentRepository.findOne({
+  //       user_id: new Types.ObjectId(userId),
+  //       assessment_id: new Types.ObjectId(assessmentId),
+  //     });
+
+  //     if (!lastSubmission) {
+  //       return {
+  //         success: true,
+  //         message: 'User can take assessment',
+  //         data: { canRetake: true, nextRetakeDate: null },
+  //       };
+  //     }
+
+  //     const retakePeriod = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+  //     const nextRetakeDate = new Date(
+  //       lastSubmission.completed_at.getTime() + retakePeriod,
+  //     );
+  //     const canRetake = new Date() >= nextRetakeDate;
+
+  //     return {
+  //       success: true,
+  //       message: canRetake
+  //         ? 'User can retake assessment'
+  //         : 'User must wait before retaking',
+  //       data: { canRetake, nextRetakeDate },
+  //     };
+  //   } catch (error) {
+  //     this.logger.error('Error checking retake eligibility:', error);
+  //     throw BadRequestException.BAD_REQUEST(
+  //       'Failed to check retake eligibility',
+  //     );
+  //   }
+  // }
 }
