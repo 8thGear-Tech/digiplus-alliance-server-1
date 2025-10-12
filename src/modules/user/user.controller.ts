@@ -8,7 +8,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { User } from './user.schema';
-import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApplicationStatus, UserTypes } from 'src/shared/enums';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';

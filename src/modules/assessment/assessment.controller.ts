@@ -28,6 +28,7 @@ import {
   ApiBody,
   ApiParam,
   ApiQuery,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { AssessmentService } from './assessment.service';
 import {
@@ -46,8 +47,13 @@ import {
   SubmitAssessmentDto,
   SubmitAssessmentResDto,
 } from './dto/submit-assessment.dto';
+import {
+  GetUserStatsParamsDto,
+  GetUserStatsQueryDto,
+} from './dto/get-user-stats.dto';
 import { BadRequestException } from 'src/exceptions';
 import { PublishAssessmentDto } from './dto/publish-assessment.dto';
+import { UserStatsResponseDto } from './dto/user-stats-response.dto';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -802,7 +808,6 @@ export class AssessmentController {
       },
     },
   })
-
   async getUserAssessments(
     @Request() req,
     @Query('startDate') startDate?: string,
@@ -818,16 +823,18 @@ export class AssessmentController {
     });
   }
 
- 
-
   @Get('stats/:userId')
+  @ApiOkResponse({
+    description: 'Monthly user assessment statistics retrieved successfully',
+    type: UserStatsResponseDto,
+  })
   async getUserStats(
-    @Param('userId') userId: string,
-    @Query('year') year?: string,
-  ) {
+    @Param() params: GetUserStatsParamsDto,
+    @Query() query: GetUserStatsQueryDto,
+  ): Promise<UserStatsResponseDto> {
     return this.assessmentService.getUserMonthlyStats(
-      userId,
-      year ? +year : undefined,
+      params.userId,
+      query.year ? +query.year : undefined,
     );
   }
 }
