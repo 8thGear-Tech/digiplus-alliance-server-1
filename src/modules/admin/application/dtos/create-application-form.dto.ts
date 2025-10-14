@@ -59,9 +59,9 @@ export class OptionDto {
   @IsString()
   text: string;
 
-  // @ApiProperty({ example: 'cs' })
-  // @IsString()
-  // value: string;
+  @ApiProperty({ example: 'cs' })
+  @IsString()
+  value: string;
 }
 
 // Grid column structure
