@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Controller,
   Post,
@@ -27,17 +28,13 @@ import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
 } from './dtos/create-application-form.dto';
-import {
-  ApplicationForm,
-  EmbeddedQuestion,
-} from './schemas/application-form.schema';
+import { ApplicationForm } from './schemas/application-form.schema';
 import { GetApplicationsDto } from './dtos/get-applications.dto';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
 import { QuestionDataKeyService } from './services/question-data-key.service';
-import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
 
@@ -283,6 +280,80 @@ export class AdminApplicationController {
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
     return this.adminApplicationService.createForm(dto);
+  }
+
+  @Get('submission-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get application submission statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application submission statistics retrieved successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Application submission stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_applications: 256,
+            months_with_submissions: 10,
+            average_applications_per_month: 26,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              month_number: 1,
+              year: 2025,
+              total_applications: 25,
+              application_details: [
+                {
+                  _id: '507f1f77bcf86cd799439011',
+                  userId: '507f1f77bcf86cd799439012',
+                  service_type: 'Business Registration',
+                  status: 'pending',
+                  payment_status: 'paid',
+                  created_date: 'January 15, 2025',
+                  created_time: '10:30 AM',
+                },
+              ],
+            },
+            // ... rest of months
+          ],
+          breakdown_by_status: [
+            { status: 'pending', count: 120 },
+            { status: 'approved', count: 80 },
+            { status: 'rejected', count: 56 },
+          ],
+          breakdown_by_service_type: [
+            { service_type: 'Business Registration', count: 150 },
+            { service_type: 'Tax Compliance', count: 106 },
+          ],
+          breakdown_by_payment_status: [
+            { payment_status: 'paid', count: 200 },
+            { payment_status: 'pending', count: 56 },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getApplicationSubmissionStats(
+    @Query('year') year?: number,
+  ): Promise<any> {
+    return this.adminApplicationService.getApplicationSubmissionStats(year);
   }
 
   @Get('forms')
