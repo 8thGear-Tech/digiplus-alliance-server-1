@@ -2448,4 +2448,132 @@ export class AssessmentService {
       );
     }
   }
+
+  async getAllAssessmentsMonthlyStats(year?: number): Promise<any> {
+    try {
+      const currentYear = year || new Date().getFullYear();
+
+      // 🧮 Filter for completed assessments within the given year
+      const filter: any = {};
+      if (year) {
+        filter.completed_at = {
+          $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+          $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+        };
+      }
+
+      const stats = await this.userAssessmentModel.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: { $month: '$completed_at' },
+            totalScore: { $sum: '$user_score' },
+            submissions: { $sum: 1 },
+            assessmentDetails: {
+              $push: {
+                assessment_id: '$assessment_id',
+                user_id: '$user_id',
+                user_score: '$user_score',
+                max_possible_score: '$max_possible_score',
+                percentage_score: '$percentage_score',
+                completed_at: '$completed_at',
+              },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]);
+
+      // 📆 Initialize all 12 months with defaults
+      const allMonths = Array.from({ length: 12 }, (_, i) => ({
+        month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+          new Date(currentYear, i),
+        ),
+        year: currentYear,
+        average_score: 0,
+        submissions: 0,
+        submission_details: [],
+      }));
+
+      // 🧩 Populate actual data for months with submissions
+      stats.forEach((s) => {
+        const monthIndex = s._id - 1;
+
+        const submissionDetails = s.assessmentDetails.map(
+          (assessment: any) => ({
+            assessment_id: assessment.assessment_id,
+            user_id: assessment.user_id,
+            user_score: assessment.user_score,
+            max_possible_score: assessment.max_possible_score,
+            percentage_score: Number(
+              (assessment.percentage_score || 0).toFixed(2),
+            ),
+            completed_date: new Date(
+              assessment.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              assessment.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+          }),
+        );
+
+        allMonths[monthIndex] = {
+          month: allMonths[monthIndex].month,
+          year: currentYear,
+          average_score: Math.round(s.totalScore / s.submissions),
+          submissions: s.submissions,
+          submission_details: submissionDetails,
+        };
+      });
+
+      // 📊 Summary calculations
+      const totalSubmissions = stats.reduce((sum, s) => sum + s.submissions, 0);
+      const overallAverageScore =
+        totalSubmissions > 0
+          ? Math.round(
+              stats.reduce((sum, s) => sum + s.totalScore, 0) /
+                totalSubmissions,
+            )
+          : 0;
+
+      return {
+        success: true,
+        message: 'All assessment submission stats retrieved successfully',
+        data: {
+          year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            overall_average_score: overallAverageScore,
+            months_with_submissions: stats.length,
+          },
+          monthly_breakdown: allMonths,
+          generated_at: new Date().toISOString(),
+          generated_date: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
+          generated_time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting all assessment stats:', error);
+      throw BadRequestException.BAD_REQUEST(
+        'Failed to retrieve assessment stats',
+      );
+    }
+  }
 }

@@ -593,136 +593,6 @@ export class AssessmentController {
     return this.assessmentService.getAvailableAssessments();
   }
 
-  @Get(':id')
-  @UseGuards(JwtUserAuthGuard)
-  @ApiOperation({ summary: 'Get assessment by ID with modules and questions' })
-  @ApiResponse({
-    status: 200,
-    description: 'Assessment retrieved successfully',
-  })
-  async getAssessmentById(
-    @Param('id') assesssmentId: string,
-    @Request() req: any, // ✅ Get from authenticated request
-    // @Query('userId') userId: string,
-  ): Promise<any> {
-    const userId = req.user?.id || req.user?._id;
-    return this.assessmentService.getAssessmentById(assesssmentId, userId);
-  }
-
-  @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserTypes.admin)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Update an assessment (Admin only)',
-    description:
-      'Update an existing assessment with its modules, questions, and service recommendations. Only admins can update assessments.',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Assessment ID',
-    type: 'string',
-    example: '507f1f77bcf86cd799439011',
-  })
-  @ApiBody({
-    type: UpdateAssessmentDto,
-    description: 'Assessment update data',
-    examples: {
-      basicUpdate: {
-        summary: 'Basic assessment update',
-        value: {
-          title: 'Updated Digital Maturity Assessment',
-          description: 'Updated description for better clarity',
-          is_active: true,
-        },
-      },
-      addNewQuestion: {
-        summary: 'Add new question to assessment',
-        value: {
-          questions: [
-            {
-              type: 'multiple_choice',
-              question: 'How would you rate your AI adoption?',
-              step: 15,
-              module_ref: 'module-1',
-              options: [
-                { id: 'ai-1', text: 'No AI tools', points: 1 },
-                { id: 'ai-2', text: 'Basic AI tools', points: 3 },
-                { id: 'ai-3', text: 'Advanced AI', points: 5 },
-              ],
-            },
-          ],
-        },
-      },
-      updateExistingQuestion: {
-        summary: 'Update existing question',
-        value: {
-          questions: [
-            {
-              id: '507f1f77bcf86cd799439013',
-              question: 'Updated: What is your digital skill level?',
-              options: [
-                { id: 'opt-1', text: 'Beginner', points: 2 },
-                { id: 'opt-2', text: 'Intermediate', points: 5 },
-                { id: 'opt-3', text: 'Advanced', points: 8 },
-                { id: 'opt-4', text: 'Expert', points: 10 },
-              ],
-            },
-          ],
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Assessment updated successfully',
-    type: UpdateAssessmentResDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad Request - Invalid data provided',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Can only update own assessments',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Assessment not found',
-  })
-  async updateAssessment(
-    @Param('id') assessmentId: string,
-    @Body() updateAssessmentDto: UpdateAssessmentDto,
-  ): Promise<UpdateAssessmentResDto> {
-    return await this.assessmentService.updateAssessment(
-      assessmentId,
-      updateAssessmentDto,
-    );
-  }
-
-  // @Put('questions/:questionId')
-  // @UseGuards(RolesGuard)
-  // @Roles(UserTypes.admin)
-  // @ApiOperation({ summary: 'Update question (Admin only)' })
-  // @ApiResponse({ status: 200, description: 'Question updated successfully' })
-  // async updateQuestion(
-  //   @Param('questionId') questionId: string,
-  //   @Body() updateData: any,
-  // ): Promise<any> {
-  //   return this.assessmentService.updateQuestion(questionId, updateData);
-  // }
-
-  // @Delete('questions/:questionId')
-  // @UseGuards(RolesGuard)
-  // @Roles(UserTypes.admin)
-  // @ApiOperation({ summary: 'Delete question (Admin only)' })
-  // @ApiResponse({ status: 200, description: 'Question deleted successfully' })
-  // async deleteQuestion(@Param('questionId') questionId: string): Promise<any> {
-  //   return this.assessmentService.deleteQuestion(questionId);
-  // }
-
-  // User Routes
-
   //added by opeyemi
   @Post('submit')
   @ApiOperation({ summary: 'Submit assessment answers' })
@@ -827,6 +697,66 @@ export class AssessmentController {
       minScore: minScore ? Number(minScore) : undefined,
       maxScore: maxScore ? Number(maxScore) : undefined,
     });
+  }
+
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get system-wide assessment submission statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiOkResponse({
+    description:
+      'System-wide monthly assessment statistics retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'All assessment submission stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_submissions: 1024,
+            overall_average_score: 78,
+            months_with_submissions: 10,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              year: 2025,
+              average_score: 80,
+              submissions: 120,
+              submission_details: [
+                {
+                  assessment_id: '507f1f77bcf86cd799439011',
+                  user_id: '507f1f77bcf86cd799439012',
+                  user_score: 40,
+                  max_possible_score: 50,
+                  percentage_score: 80,
+                  completed_date: 'January 15, 2025',
+                  completed_time: '10:30 AM',
+                },
+              ],
+            },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getAllAssessmentsMonthlyStats(
+    @Query('year') year?: number,
+  ): Promise<any> {
+    return this.assessmentService.getAllAssessmentsMonthlyStats(year);
   }
 
   @Get('stats/:userId')
@@ -990,6 +920,113 @@ export class AssessmentController {
         maxScore: maxScore ? Number(maxScore) : undefined,
         search,
       },
+    );
+  }
+
+  @Get(':id')
+  @UseGuards(JwtUserAuthGuard)
+  @ApiOperation({ summary: 'Get assessment by ID with modules and questions' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment retrieved successfully',
+  })
+  async getAssessmentById(
+    @Param('id') assesssmentId: string,
+    @Request() req: any, // ✅ Get from authenticated request
+    // @Query('userId') userId: string,
+  ): Promise<any> {
+    const userId = req.user?.id || req.user?._id;
+    return this.assessmentService.getAssessmentById(assesssmentId, userId);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update an assessment (Admin only)',
+    description:
+      'Update an existing assessment with its modules, questions, and service recommendations. Only admins can update assessments.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    type: 'string',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiBody({
+    type: UpdateAssessmentDto,
+    description: 'Assessment update data',
+    examples: {
+      basicUpdate: {
+        summary: 'Basic assessment update',
+        value: {
+          title: 'Updated Digital Maturity Assessment',
+          description: 'Updated description for better clarity',
+          is_active: true,
+        },
+      },
+      addNewQuestion: {
+        summary: 'Add new question to assessment',
+        value: {
+          questions: [
+            {
+              type: 'multiple_choice',
+              question: 'How would you rate your AI adoption?',
+              step: 15,
+              module_ref: 'module-1',
+              options: [
+                { id: 'ai-1', text: 'No AI tools', points: 1 },
+                { id: 'ai-2', text: 'Basic AI tools', points: 3 },
+                { id: 'ai-3', text: 'Advanced AI', points: 5 },
+              ],
+            },
+          ],
+        },
+      },
+      updateExistingQuestion: {
+        summary: 'Update existing question',
+        value: {
+          questions: [
+            {
+              id: '507f1f77bcf86cd799439013',
+              question: 'Updated: What is your digital skill level?',
+              options: [
+                { id: 'opt-1', text: 'Beginner', points: 2 },
+                { id: 'opt-2', text: 'Intermediate', points: 5 },
+                { id: 'opt-3', text: 'Advanced', points: 8 },
+                { id: 'opt-4', text: 'Expert', points: 10 },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment updated successfully',
+    type: UpdateAssessmentResDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid data provided',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Can only update own assessments',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found',
+  })
+  async updateAssessment(
+    @Param('id') assessmentId: string,
+    @Body() updateAssessmentDto: UpdateAssessmentDto,
+  ): Promise<UpdateAssessmentResDto> {
+    return await this.assessmentService.updateAssessment(
+      assessmentId,
+      updateAssessmentDto,
     );
   }
 }
