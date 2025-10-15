@@ -29,8 +29,8 @@ export class EmbeddedOption {
   @Prop({ required: true })
   text: string;
 
-  //   @Prop({ required: true })
-  //   value: string;
+  @Prop({ required: false })
+  value?: string;
 }
 const EmbeddedOptionSchema = SchemaFactory.createForClass(EmbeddedOption);
 
