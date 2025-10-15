@@ -56,6 +56,18 @@ export class AdminApplicationService {
   ): any {
     const processedQuestion = { ...question };
 
+    // ✅ ADD THIS VALIDATION
+    if (question.type === 'checkbox') {
+      const min = question.min_selections;
+      const max = question.max_selections;
+
+      if (min != null && max != null && min > max) {
+        throw new BadRequestException(
+          `Checkbox question "${question.question}": min_selections (${min}) cannot exceed max_selections (${max})`,
+        );
+      }
+    }
+
     if (isNewQuestion || !processedQuestion.data_key) {
       processedQuestion.data_key = this.questionDataKeyService.generate(
         question.question,
