@@ -54,8 +54,8 @@ export class EmbeddedGridColumn {
   @Prop({ required: true })
   text: string;
 
-  @Prop({ required: true })
-  value: number;
+  @Prop({ required: false })
+  value?: number;
 }
 const EmbeddedGridColumnSchema =
   SchemaFactory.createForClass(EmbeddedGridColumn);

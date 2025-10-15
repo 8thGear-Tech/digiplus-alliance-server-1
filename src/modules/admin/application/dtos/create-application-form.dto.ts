@@ -74,9 +74,10 @@ export class GridColumnDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
   @IsNumber()
-  value: number;
+  value?: number;
 }
 
 // Grid row structure
