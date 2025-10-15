@@ -110,11 +110,10 @@ export class EmbeddedQuestion {
   @Prop({ type: [EmbeddedOptionSchema] })
   options?: EmbeddedOption[];
 
-  // For checkbox - minimum selections required
+  // For checkbox - minimum and maximum selections required
   @Prop()
   min_selections?: number;
 
-  // *** NEW: For multiple_choice - maximum selections allowed ***
   @Prop()
   max_selections?: number;
 

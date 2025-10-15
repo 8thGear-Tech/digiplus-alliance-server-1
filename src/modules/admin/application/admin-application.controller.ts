@@ -268,7 +268,7 @@ export class AdminApplicationController {
             {
               type: 'file_upload',
               question: 'Please upload your resume.',
-              acceptedFileTypes: ['.pdf', '.docx'],
+              accepted_file_types: ['.pdf', '.docx'],
               is_required: true,
               step: 1,
               module_ref: 'documents-module',
