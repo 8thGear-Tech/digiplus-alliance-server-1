@@ -105,7 +105,7 @@ export class UserService {
     // }
 
     // Filter users based on submission criteria if applicable
-    let filteredUsers = users;
+    const filteredUsers = users;
     // if (userIdsFromSubmissions !== null) {
     //   filteredUsers = users.filter((user) =>
     //     userIdsFromSubmissions!.includes(user._id.toString()),
@@ -204,6 +204,115 @@ export class UserService {
       totalUsers,
       totalApplications,
       totalAssessmentsCompleted,
+    };
+  }
+
+  // Add this method to user.service.ts
+
+  async getUserRegistrationStats(year?: number): Promise<any> {
+    const currentYear = year || new Date().getFullYear();
+
+    // Filter for users created in the specified year
+    const filter: any = {
+      createdAt: {
+        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
+        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+      },
+    };
+
+    // Aggregate users by month
+    const stats = await this.userRepository.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { $month: '$createdAt' },
+          totalUsers: { $sum: 1 },
+          userDetails: {
+            $push: {
+              _id: '$_id',
+              email: '$email',
+              first_name: '$first_name',
+              last_name: '$last_name',
+              business_name: '$business_name',
+              created_at: '$createdAt',
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill all 12 months with default 0
+    const allMonths = Array.from({ length: 12 }, (_, i) => ({
+      month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+        new Date(currentYear, i),
+      ),
+      month_number: i + 1,
+      year: currentYear,
+      total_users: 0,
+      user_details: [],
+    }));
+
+    // Replace with actual data where it exists
+    stats.forEach((s) => {
+      const monthIndex = s._id - 1;
+
+      const userDetails = s.userDetails.map((user: any) => ({
+        _id: user._id,
+        email: user.email,
+        name:
+          `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'N/A',
+        business_name: user.business_name || 'N/A',
+        created_date: new Date(user.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        created_time: new Date(user.created_at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }),
+      }));
+
+      allMonths[monthIndex] = {
+        month: allMonths[monthIndex].month,
+        month_number: monthIndex + 1,
+        year: currentYear,
+        total_users: s.totalUsers,
+        user_details: userDetails,
+      };
+    });
+
+    const totalUsers = stats.reduce((sum, s) => sum + s.totalUsers, 0);
+    const monthsWithActivity = stats.length;
+    const averageUsersPerMonth =
+      monthsWithActivity > 0 ? Math.round(totalUsers / monthsWithActivity) : 0;
+
+    return {
+      success: true,
+      message: 'User registration stats retrieved successfully',
+      data: {
+        year: currentYear,
+        summary: {
+          total_new_users: totalUsers,
+          months_with_registrations: monthsWithActivity,
+          average_users_per_month: averageUsersPerMonth,
+        },
+        monthly_breakdown: allMonths,
+        generated_at: new Date().toISOString(),
+        generated_date: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        generated_time: new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }),
+      },
     };
   }
 }

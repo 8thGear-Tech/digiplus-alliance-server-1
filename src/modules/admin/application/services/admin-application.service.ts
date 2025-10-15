@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   BadRequestException,
   Inject,
@@ -222,7 +227,7 @@ export class AdminApplicationService {
 
         if (isExisting) {
           // --- UPDATE EXISTING QUESTION IN-PLACE ---
-          const existingQuestion = existingQuestionsMap.get(dataKey!)!;
+          const existingQuestion = existingQuestionsMap.get(dataKey)!;
 
           const updatedQuestion = this.processSingleQuestion(
             incomingQuestion,
@@ -234,7 +239,7 @@ export class AdminApplicationService {
 
           // Add the now-updated existing question to our new list
           updatedAndNewQuestions.push(existingQuestion);
-          keysEncounteredInDto.add(dataKey!);
+          keysEncounteredInDto.add(dataKey);
         } else {
           const questionToSave = this.processSingleQuestion(
             incomingQuestion,
@@ -505,5 +510,164 @@ export class AdminApplicationService {
 
   async getTotalAssessmentsCompletedCount(): Promise<number> {
     return this.userAssessmentRepository.count({});
+  }
+  // Add this method to your admin-application.service.ts or wherever getApplicationList is located
+
+  async getApplicationSubmissionStats(year?: number): Promise<any> {
+    const currentYear = year || new Date().getFullYear();
+
+    // Filter for applications submitted in the specified year
+    const filter: any = {
+      createdAt: {
+        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
+        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+      },
+    };
+
+    // Aggregate applications by month
+    const stats = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { $month: '$createdAt' },
+          totalApplications: { $sum: 1 },
+          applicationDetails: {
+            $push: {
+              _id: '$_id',
+              userId: '$userId',
+              service_type: '$service_type',
+              status: '$status',
+              payment_status: '$payment_status',
+              created_at: '$createdAt',
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill all 12 months with default 0
+    const allMonths = Array.from({ length: 12 }, (_, i) => ({
+      month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+        new Date(currentYear, i),
+      ),
+      month_number: i + 1,
+      year: currentYear,
+      total_applications: 0,
+      application_details: [],
+    }));
+
+    // Replace with actual data where it exists
+    stats.forEach((s) => {
+      const monthIndex = s._id - 1;
+
+      const applicationDetails = s.applicationDetails.map((app: any) => ({
+        _id: app._id,
+        userId: app.userId,
+        service_type: app.service_type || 'N/A',
+        status: app.status,
+        payment_status: app.payment_status,
+        created_date: new Date(app.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        created_time: new Date(app.created_at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }),
+      }));
+
+      allMonths[monthIndex] = {
+        month: allMonths[monthIndex].month,
+        month_number: monthIndex + 1,
+        year: currentYear,
+        total_applications: s.totalApplications,
+        application_details: applicationDetails,
+      };
+    });
+
+    const totalApplications = stats.reduce(
+      (sum, s) => sum + s.totalApplications,
+      0,
+    );
+    const monthsWithActivity = stats.length;
+    const averageApplicationsPerMonth =
+      monthsWithActivity > 0
+        ? Math.round(totalApplications / monthsWithActivity)
+        : 0;
+
+    // Get breakdown by status
+    const statusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Get breakdown by service type
+    const serviceTypeBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$service_type',
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    // Get breakdown by payment status
+    const paymentStatusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$payment_status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return {
+      success: true,
+      message: 'Application submission stats retrieved successfully',
+      data: {
+        year: currentYear,
+        summary: {
+          total_applications: totalApplications,
+          months_with_submissions: monthsWithActivity,
+          average_applications_per_month: averageApplicationsPerMonth,
+        },
+        monthly_breakdown: allMonths,
+        breakdown_by_status: statusBreakdown.map((item) => ({
+          status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_service_type: serviceTypeBreakdown.map((item) => ({
+          service_type: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_payment_status: paymentStatusBreakdown.map((item) => ({
+          payment_status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        generated_at: new Date().toISOString(),
+        generated_date: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        generated_time: new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }),
+      },
+    };
   }
 }

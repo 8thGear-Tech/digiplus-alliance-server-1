@@ -7,11 +7,11 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { User } from './user.schema';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { ApplicationStatus, UserTypes } from 'src/shared/enums';
+import { UserTypes } from 'src/shared/enums';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';
 import { GetUsersQueryDto } from './dto/user.dto';
+import { RolesGuard } from 'src/common/guards/roles.guard';
 
 @ApiTags('Admin / Users')
 @ApiBearerAuth()
@@ -105,5 +105,73 @@ export class UserController {
   })
   async getAdminMetrics(): Promise<AdminMetrics> {
     return this.userService.getAdminMetrics();
+  }
+
+  // Add this endpoint to user.controller.ts
+
+  @Get('registration-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get user registration statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User registration statistics retrieved successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'User registration stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_new_users: 156,
+            months_with_registrations: 10,
+            average_users_per_month: 16,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              month_number: 1,
+              year: 2025,
+              total_users: 12,
+              user_details: [
+                {
+                  _id: '507f1f77bcf86cd799439011',
+                  email: 'user@example.com',
+                  name: 'John Doe',
+                  business_name: 'Acme Corp',
+                  created_at: '2025-01-15T10:30:00.000Z',
+                  created_date: 'January 15, 2025',
+                  created_time: '10:30 AM',
+                },
+              ],
+            },
+            {
+              month: 'Feb',
+              month_number: 2,
+              year: 2025,
+              total_users: 18,
+              user_details: [],
+            },
+            // ... rest of months
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getUserRegistrationStats(@Query('year') year?: number): Promise<any> {
+    return this.userService.getUserRegistrationStats(year);
   }
 }

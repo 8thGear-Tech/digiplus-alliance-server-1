@@ -594,13 +594,19 @@ export class AssessmentController {
   }
 
   @Get(':id')
+  @UseGuards(JwtUserAuthGuard)
   @ApiOperation({ summary: 'Get assessment by ID with modules and questions' })
   @ApiResponse({
     status: 200,
     description: 'Assessment retrieved successfully',
   })
-  async getAssessmentById(@Param('id') id: string): Promise<any> {
-    return this.assessmentService.getAssessmentById(id);
+  async getAssessmentById(
+    @Param('id') assesssmentId: string,
+    @Request() req: any, // ✅ Get from authenticated request
+    // @Query('userId') userId: string,
+  ): Promise<any> {
+    const userId = req.user?.id || req.user?._id;
+    return this.assessmentService.getAssessmentById(assesssmentId, userId);
   }
 
   @Patch(':id')
@@ -835,6 +841,155 @@ export class AssessmentController {
     return this.assessmentService.getUserMonthlyStats(
       params.userId,
       query.year ? +query.year : undefined,
+    );
+  }
+  @Get('admin/submitted-assessments')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Get all submitted assessments with user details (Admin only)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+    description: 'Page number for pagination',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 10,
+    description: 'Number of items per page',
+  })
+  @ApiQuery({
+    name: 'assessment_id',
+    required: false,
+    example: '68d76eea50c4b6fd7da5fc06',
+    description: 'Filter by specific assessment ID',
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: false,
+    example: '68d76eea50c4b6fd7da5fc05',
+    description: 'Filter by specific user ID',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    example: '2025-09-01',
+    description:
+      'Filter assessments completed on or after this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    example: '2025-09-30',
+    description:
+      'Filter assessments completed on or before this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'minScore',
+    required: false,
+    example: 30,
+    description: 'Minimum user score',
+  })
+  @ApiQuery({
+    name: 'maxScore',
+    required: false,
+    example: 80,
+    description: 'Maximum user score',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    example: 'John Doe',
+    description: 'Search by user name or email',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Submitted assessments retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Submitted assessments retrieved successfully',
+        data: {
+          submissions: [
+            {
+              submission_id: '68d76eea50c4b6fd7da5fc07',
+              assessment: {
+                _id: '68d76eea50c4b6fd7da5fc06',
+                title: 'Mental Health Assessment',
+                description: 'Comprehensive mental health evaluation',
+                total_possible_points: 100,
+                is_published: true,
+              },
+              user: {
+                _id: '68d76eea50c4b6fd7da5fc05',
+                first_name: 'John',
+                last_name: 'Doe',
+                email: 'john.doe@example.com',
+                phone_number: '+2348012345678',
+                profile_picture: 'https://example.com/profile.jpg',
+                organization: 'ABC Corporation',
+              },
+              scores: {
+                user_score: 45,
+                max_possible_score: 100,
+                percentage_score: 45,
+              },
+              completed_at: '2025-09-15T10:30:00.000Z',
+              completed_date: 'September 15, 2025',
+              completed_time: '10:30 AM',
+              time_taken_seconds: 1200,
+            },
+          ],
+          pagination: {
+            current_page: 1,
+            per_page: 10,
+            total_items: 50,
+            total_pages: 5,
+            has_next_page: true,
+            has_previous_page: false,
+          },
+          statistics: {
+            total_submissions: 50,
+            average_score: 67.5,
+            highest_score: 95,
+            lowest_score: 30,
+            average_percentage: 67.5,
+          },
+          filters_applied: {
+            startDate: '2025-09-01',
+            endDate: '2025-09-30',
+          },
+          generated_at: '2025-10-14T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  async getSubmittedAssessments(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('assessment_id') assessment_id?: string,
+    @Query('user_id') user_id?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('minScore') minScore?: number,
+    @Query('maxScore') maxScore?: number,
+    @Query('search') search?: string,
+  ): Promise<any> {
+    return this.assessmentService.getSubmittedAssessments(
+      page || 1,
+      limit || 10,
+      {
+        assessment_id,
+        user_id,
+        startDate,
+        endDate,
+        minScore: minScore ? Number(minScore) : undefined,
+        maxScore: maxScore ? Number(maxScore) : undefined,
+        search,
+      },
     );
   }
 }

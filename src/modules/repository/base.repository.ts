@@ -164,6 +164,10 @@ export class BaseRepository<T> {
     return this.model.countDocuments(filter).exec();
   }
 
+  async aggregate(pipeline: any[]): Promise<any[]> {
+    return this.model.aggregate(pipeline).exec();
+  }
+
   async findByIdAndUpdate(
     id: string,
     update: UpdateQuery<T>,

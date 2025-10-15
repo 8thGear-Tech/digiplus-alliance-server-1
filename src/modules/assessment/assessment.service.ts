@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
@@ -1360,11 +1361,48 @@ export class AssessmentService {
     }
   }
 
-  async getAssessmentById(assessmentId: string): Promise<any> {
+  async getAssessmentById(assessmentId: string, userId?: string): Promise<any> {
     try {
       const assessment = await this.assessmentRepository.findById(assessmentId);
       if (!assessment) {
+        // ✅ Throw directly - no 'error' variable exists here
         throw BadRequestException.RESOURCE_NOT_FOUND('Assessment not found');
+      }
+
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
+
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
+
+          const nextEligibleDate = new Date(
+            completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+          );
+
+          if (now <= nextEligibleDate) {
+            const daysRemaining = Math.ceil(
+              (nextEligibleDate.getTime() - now.getTime()) /
+                (1000 * 60 * 60 * 24),
+            );
+
+            throw BadRequestException.BAD_REQUEST(
+              `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
+                'en-US',
+                {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                },
+              )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
+            );
+          }
+        }
       }
 
       const moduleFilter: any = {
@@ -1378,7 +1416,6 @@ export class AssessmentService {
       const modules = await this.assessmentModuleRepository.find(moduleFilter);
       const questions = await this.questionRepository.find(questionFilter);
 
-      // Get service recommendations (when repository is available)
       const serviceRecommendations =
         await this.serviceRecommendationRepository.find({
           assessment_id: new Types.ObjectId(assessmentId),
@@ -1399,11 +1436,21 @@ export class AssessmentService {
           modules: moduleArray,
           questions: sortedQuestions,
           service_recommendations: serviceRecommendations,
-          // total_possible_points: assessment.total_possible_points || 0,
         },
       };
     } catch (error) {
       this.logger.error('Error getting assessment:', error);
+
+      // ✅ Handle already-thrown exceptions properly
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // ✅ Handle NestJS HttpException
+      if (error?.getStatus && typeof error.getStatus === 'function') {
+        throw error;
+      }
+
       throw BadRequestException.BAD_REQUEST('Failed to retrieve assessment');
     }
   }
@@ -1642,7 +1689,7 @@ export class AssessmentService {
         user_id: new Types.ObjectId(userId),
       };
 
-      // 📅 Date filtering
+      // Date filtering
       if (filters?.startDate || filters?.endDate) {
         filter.completed_at = {};
         if (filters.startDate) {
@@ -1959,7 +2006,7 @@ export class AssessmentService {
           answers,
           user_score: userScore,
           max_possible_score: total_possible_points,
-          percentage_score,
+          percentage_score: Number((percentage_score || 0).toFixed(2)),
           recommended_services: recommendedServices,
           completed_at: completedAt,
           is_submitted: true,
@@ -2008,7 +2055,7 @@ export class AssessmentService {
         data: {
           user_score: userScore,
           total_possible_points,
-          percentage_score,
+          percentage_score: Number((percentage_score || 0).toFixed(2)),
           user_level: userLevel,
           recommended_services: recommendedServices,
           assessment_title: assessment.title,
@@ -2088,7 +2135,9 @@ export class AssessmentService {
             assessment_id: assessment.assessment_id,
             user_score: assessment.user_score,
             max_possible_score: assessment.max_possible_score,
-            percentage_score: assessment.percentage_score,
+            percentage_score: Number(
+              (assessment.percentage_score || 0).toFixed(2),
+            ),
             completed_at: assessment.completed_at,
             completed_date: new Date(
               assessment.completed_at,
@@ -2153,6 +2202,250 @@ export class AssessmentService {
     } catch (error) {
       this.logger.error('Error getting monthly stats:', error);
       throw BadRequestException.BAD_REQUEST('Failed to retrieve monthly stats');
+    }
+  }
+
+  async getSubmittedAssessments(
+    page: number = 1,
+    limit: number = 10,
+    filters?: {
+      assessment_id?: string;
+      user_id?: string;
+      startDate?: string; // ISO date string
+      endDate?: string; // ISO date string
+      minScore?: number;
+      maxScore?: number;
+      search?: string; // Search by user name
+    },
+  ): Promise<any> {
+    try {
+      const skip = (page - 1) * limit;
+      const filter: any = {};
+
+      // 🎯 Assessment filtering
+      if (filters?.assessment_id) {
+        filter.assessment_id = new Types.ObjectId(filters.assessment_id);
+      }
+
+      // 👤 User filtering
+      if (filters?.user_id) {
+        filter.user_id = new Types.ObjectId(filters.user_id);
+      }
+
+      // 📅 Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        filter.completed_at = {};
+        if (filters.startDate) {
+          filter.completed_at.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          filter.completed_at.$lte = new Date(filters.endDate);
+        }
+      }
+
+      // 🏆 Score filtering
+      if (filters?.minScore !== undefined || filters?.maxScore !== undefined) {
+        filter.user_score = {};
+        if (filters.minScore !== undefined) {
+          filter.user_score.$gte = filters.minScore;
+        }
+        if (filters.maxScore !== undefined) {
+          filter.user_score.$lte = filters.maxScore;
+        }
+      }
+
+      // Build aggregation pipeline
+      const pipeline: any[] = [
+        { $match: filter },
+        {
+          $lookup: {
+            from: 'users', // Your users collection name
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user_details',
+          },
+        },
+        {
+          $lookup: {
+            from: 'assessments', // Your assessments collection name
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessment_details',
+          },
+        },
+        {
+          $unwind: {
+            path: '$user_details',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessment_details',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+      ];
+
+      // 🔍 Name search filtering (after lookup)
+      if (filters?.search) {
+        const searchRegex = new RegExp(filters.search, 'i');
+        pipeline.push({
+          $match: {
+            $or: [
+              { 'user_details.first_name': searchRegex },
+              { 'user_details.last_name': searchRegex },
+              { 'user_details.email': searchRegex },
+              {
+                $expr: {
+                  $regexMatch: {
+                    input: {
+                      $concat: [
+                        '$user_details.first_name',
+                        ' ',
+                        '$user_details.last_name',
+                      ],
+                    },
+                    regex: filters.search,
+                    options: 'i',
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      // Get total count for pagination (before skip/limit)
+      const countPipeline = [...pipeline, { $count: 'total' }];
+      const countResult =
+        await this.userAssessmentModel.aggregate(countPipeline);
+      const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+
+      // Add sorting, pagination, and projection
+      pipeline.push(
+        { $sort: { completed_at: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 1,
+            assessment_id: 1,
+            user_id: 1,
+            user_score: 1,
+            max_possible_score: 1,
+            percentage_score: 1,
+            completed_at: 1,
+            submitted_at: 1,
+            time_taken_seconds: 1,
+            // User details
+            user: {
+              _id: '$user_details._id',
+              first_name: '$user_details.first_name',
+              last_name: '$user_details.last_name',
+              email: '$user_details.email',
+              phone_number: '$user_details.phone_number',
+              profile_picture: '$user_details.profile_picture',
+              organization: '$user_details.organization',
+            },
+            // Assessment details
+            assessment: {
+              _id: '$assessment_details._id',
+              title: '$assessment_details.title',
+              description: '$assessment_details.description',
+              total_possible_points:
+                '$assessment_details.total_possible_points',
+              is_published: '$assessment_details.is_published',
+            },
+          },
+        },
+      );
+      // Fetch submissions
+      const submissions = await this.userAssessmentModel.aggregate(pipeline);
+
+      // Calculate statistics (using original filter without search)
+      const stats = await this.userAssessmentModel.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            total_submissions: { $sum: 1 },
+            average_score: { $avg: '$user_score' },
+            highest_score: { $max: '$user_score' },
+            lowest_score: { $min: '$user_score' },
+            average_percentage: { $avg: '$percentage_score' },
+          },
+        },
+      ]);
+
+      const statistics =
+        stats.length > 0
+          ? stats[0]
+          : {
+              total_submissions: 0,
+              average_score: 0,
+              highest_score: 0,
+              lowest_score: 0,
+              average_percentage: 0,
+            };
+
+      return {
+        success: true,
+        message: 'Submitted assessments retrieved successfully',
+        data: {
+          submissions: submissions.map((submission) => ({
+            submission_id: submission._id,
+            assessment: submission.assessment,
+            user: submission.user,
+            scores: {
+              user_score: submission.user_score,
+              max_possible_score: submission.max_possible_score,
+              percentage_score: Number(
+                (submission.percentage_score || 0).toFixed(2),
+              ),
+            },
+            completed_at: submission.completed_at,
+            completed_date: new Date(
+              submission.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              submission.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+            time_taken_seconds: submission.time_taken_seconds,
+          })),
+          pagination: {
+            current_page: page,
+            per_page: limit,
+            total_items: totalCount,
+            total_pages: Math.ceil(totalCount / limit),
+            has_next_page: page < Math.ceil(totalCount / limit),
+            has_previous_page: page > 1,
+          },
+          statistics: {
+            total_submissions: statistics.total_submissions,
+            average_score: Math.round(statistics.average_score * 100) / 100,
+            highest_score: statistics.highest_score,
+            lowest_score: statistics.lowest_score,
+            average_percentage:
+              Math.round(statistics.average_percentage * 100) / 100,
+          },
+          filters_applied: filters || {},
+          generated_at: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting submitted assessments:', error);
+      throw BadRequestException.BAD_REQUEST(
+        'Failed to retrieve submitted assessments',
+      );
     }
   }
 }

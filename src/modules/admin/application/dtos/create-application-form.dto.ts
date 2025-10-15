@@ -9,7 +9,7 @@ import {
   IsNumber,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { ValidationRule } from 'src/shared/enums';
 import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 import { Types } from 'mongoose';
