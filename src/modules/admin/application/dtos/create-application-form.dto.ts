@@ -62,9 +62,14 @@ export class OptionDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 'cs' })
+  @ApiProperty({
+    example: 'cs',
+    description: 'Optional value for the option',
+    required: false,
+  })
+  @IsOptional()
   @IsString()
-  value: string;
+  value?: string;
 }
 
 // Grid column structure
