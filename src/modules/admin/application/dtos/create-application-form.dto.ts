@@ -59,9 +59,9 @@ export class OptionDto {
   @IsString()
   text: string;
 
-  // @ApiProperty({ example: 'cs' })
-  // @IsString()
-  // value: string;
+  @ApiProperty({ example: 'cs' })
+  @IsString()
+  value: string;
 }
 
 // Grid column structure
@@ -74,9 +74,10 @@ export class GridColumnDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
   @IsNumber()
-  value: number;
+  value?: number;
 }
 
 // Grid row structure
