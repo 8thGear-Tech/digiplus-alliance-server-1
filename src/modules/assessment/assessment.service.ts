@@ -1263,6 +1263,27 @@ export class AssessmentService {
             'Cannot publish assessment without questions',
           );
         }
+
+        // ✅ Auto-unpublish any currently published assessment
+        const currentlyPublished = await this.assessmentRepository.findOne({
+          is_published: true,
+          _id: { $ne: new Types.ObjectId(assessmentId) },
+        });
+
+        if (currentlyPublished) {
+          await this.assessmentRepository.update(
+            { _id: currentlyPublished._id },
+            {
+              is_published: false,
+              is_active: false,
+              updated_at: new Date(),
+            },
+          );
+
+          this.logger.log(
+            `Auto-unpublished assessment "${currentlyPublished.title}" to publish "${assessment.title}"`,
+          );
+        }
       }
 
       // Update status
@@ -2097,6 +2118,20 @@ export class AssessmentService {
       const stats = await this.userAssessmentModel.aggregate([
         { $match: filter },
         {
+          $lookup: {
+            from: 'assessments',
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessmentInfo',
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessmentInfo',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
           $group: {
             _id: { $month: '$completed_at' },
             totalScore: { $sum: '$user_score' },
@@ -2104,6 +2139,7 @@ export class AssessmentService {
             assessmentDetails: {
               $push: {
                 assessment_id: '$assessment_id',
+                assessment_title: '$assessmentInfo.title',
                 user_score: '$user_score',
                 max_possible_score: '$max_possible_score',
                 percentage_score: '$percentage_score',
@@ -2132,7 +2168,8 @@ export class AssessmentService {
 
         const submissionDetails = s.assessmentDetails.map(
           (assessment: any) => ({
-            assessment_id: assessment.assessment_id,
+            assessment_name:
+              assessment.assessment_title || 'Unnamed Assessment',
             user_score: assessment.user_score,
             max_possible_score: assessment.max_possible_score,
             percentage_score: Number(
@@ -2208,55 +2245,13 @@ export class AssessmentService {
   async getSubmittedAssessments(
     page: number = 1,
     limit: number = 10,
-    filters?: {
-      assessment_id?: string;
-      user_id?: string;
-      startDate?: string; // ISO date string
-      endDate?: string; // ISO date string
-      minScore?: number;
-      maxScore?: number;
-      search?: string; // Search by user name
-    },
+    search?: string,
   ): Promise<any> {
     try {
       const skip = (page - 1) * limit;
-      const filter: any = {};
-
-      // 🎯 Assessment filtering
-      if (filters?.assessment_id) {
-        filter.assessment_id = new Types.ObjectId(filters.assessment_id);
-      }
-
-      // 👤 User filtering
-      if (filters?.user_id) {
-        filter.user_id = new Types.ObjectId(filters.user_id);
-      }
-
-      // 📅 Date filtering
-      if (filters?.startDate || filters?.endDate) {
-        filter.completed_at = {};
-        if (filters.startDate) {
-          filter.completed_at.$gte = new Date(filters.startDate);
-        }
-        if (filters.endDate) {
-          filter.completed_at.$lte = new Date(filters.endDate);
-        }
-      }
-
-      // 🏆 Score filtering
-      if (filters?.minScore !== undefined || filters?.maxScore !== undefined) {
-        filter.user_score = {};
-        if (filters.minScore !== undefined) {
-          filter.user_score.$gte = filters.minScore;
-        }
-        if (filters.maxScore !== undefined) {
-          filter.user_score.$lte = filters.maxScore;
-        }
-      }
 
       // Build aggregation pipeline
       const pipeline: any[] = [
-        { $match: filter },
         {
           $lookup: {
             from: 'users', // Your users collection name
@@ -2288,14 +2283,16 @@ export class AssessmentService {
       ];
 
       // 🔍 Name search filtering (after lookup)
-      if (filters?.search) {
-        const searchRegex = new RegExp(filters.search, 'i');
+      if (search) {
+        const searchRegex = new RegExp(search, 'i');
         pipeline.push({
           $match: {
             $or: [
               { 'user_details.first_name': searchRegex },
               { 'user_details.last_name': searchRegex },
               { 'user_details.email': searchRegex },
+              { 'user_details.business_name': searchRegex },
+              { 'assessment_details.title': searchRegex },
               {
                 $expr: {
                   $regexMatch: {
@@ -2306,7 +2303,7 @@ export class AssessmentService {
                         '$user_details.last_name',
                       ],
                     },
-                    regex: filters.search,
+                    regex: search,
                     options: 'i',
                   },
                 },
@@ -2345,6 +2342,7 @@ export class AssessmentService {
               last_name: '$user_details.last_name',
               email: '$user_details.email',
               phone_number: '$user_details.phone_number',
+              business_name: '$user_details.business_name',
               profile_picture: '$user_details.profile_picture',
               organization: '$user_details.organization',
             },
@@ -2365,7 +2363,7 @@ export class AssessmentService {
 
       // Calculate statistics (using original filter without search)
       const stats = await this.userAssessmentModel.aggregate([
-        { $match: filter },
+        // { $match: filter },
         {
           $group: {
             _id: null,
@@ -2437,7 +2435,7 @@ export class AssessmentService {
             average_percentage:
               Math.round(statistics.average_percentage * 100) / 100,
           },
-          filters_applied: filters || {},
+          filters_applied: search || {},
           generated_at: new Date().toISOString(),
         },
       };
@@ -2465,14 +2463,27 @@ export class AssessmentService {
       const stats = await this.userAssessmentModel.aggregate([
         { $match: filter },
         {
+          $lookup: {
+            from: 'assessments',
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessmentInfo',
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessmentInfo',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
           $group: {
             _id: { $month: '$completed_at' },
             totalScore: { $sum: '$user_score' },
             submissions: { $sum: 1 },
             assessmentDetails: {
               $push: {
-                assessment_id: '$assessment_id',
-                user_id: '$user_id',
+                assessment_title: '$assessmentInfo.title',
                 user_score: '$user_score',
                 max_possible_score: '$max_possible_score',
                 percentage_score: '$percentage_score',
@@ -2501,8 +2512,8 @@ export class AssessmentService {
 
         const submissionDetails = s.assessmentDetails.map(
           (assessment: any) => ({
-            assessment_id: assessment.assessment_id,
-            user_id: assessment.user_id,
+            assessment_name:
+              assessment.assessment_title || 'Unnamed Assessment',
             user_score: assessment.user_score,
             max_possible_score: assessment.max_possible_score,
             percentage_score: Number(
@@ -2574,6 +2585,91 @@ export class AssessmentService {
       throw BadRequestException.BAD_REQUEST(
         'Failed to retrieve assessment stats',
       );
+    }
+  }
+
+  async deleteAssessment(assessmentId: string): Promise<any> {
+    try {
+      if (!Types.ObjectId.isValid(assessmentId)) {
+        throw BadRequestException.BAD_REQUEST('Invalid assessment ID format');
+      }
+
+      const assessment = await this.assessmentRepository.findById(assessmentId);
+
+      if (!assessment) {
+        throw new NotFoundException('Assessment not found');
+      }
+
+      // ✅ Prevent deletion of published assessments
+      if (assessment.is_published) {
+        throw BadRequestException.BAD_REQUEST(
+          'Cannot delete a published assessment. Please unpublish it first.',
+        );
+      }
+
+      // ✅ Check if there are any user submissions for this assessment
+      const submissionsCount = await this.userAssessmentModel.countDocuments({
+        assessment_id: new Types.ObjectId(assessmentId),
+      });
+
+      if (submissionsCount > 0) {
+        throw BadRequestException.BAD_REQUEST(
+          `Cannot delete this assessment. It has ${submissionsCount} user submission(s). Consider unpublishing instead.`,
+        );
+      }
+
+      // Delete related data in order
+      const assessmentObjectId = new Types.ObjectId(assessmentId);
+
+      // 1. Delete all questions
+      const deletedQuestions = await this.questionRepository.deleteMany({
+        assessment_id: assessmentObjectId,
+      });
+
+      // 2. Delete all modules
+      const deletedModules = await this.assessmentModuleRepository.deleteMany({
+        assessment_id: assessmentObjectId,
+      });
+
+      // 3. Delete service recommendations
+      const deletedRecommendations =
+        await this.serviceRecommendationRepository.deleteMany({
+          assessment_id: assessmentObjectId,
+        });
+
+      // 4. Finally, delete the assessment itself
+      await this.assessmentRepository.delete({
+        _id: assessmentObjectId,
+      });
+
+      this.logger.log(
+        `Assessment ${assessmentId} deleted successfully along with ${deletedQuestions.deletedCount} questions, ${deletedModules.deletedCount} modules, and ${deletedRecommendations.deletedCount} recommendations`,
+      );
+
+      return {
+        success: true,
+        message: 'Assessment deleted successfully',
+        data: {
+          deleted_assessment_id: assessmentId,
+          deleted_assessment_title: assessment.title,
+          deleted_items: {
+            questions: deletedQuestions.deletedCount || 0,
+            modules: deletedModules.deletedCount || 0,
+            recommendations: deletedRecommendations.deletedCount || 0,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error deleting assessment:', error);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      throw BadRequestException.BAD_REQUEST('Failed to delete assessment');
     }
   }
 }

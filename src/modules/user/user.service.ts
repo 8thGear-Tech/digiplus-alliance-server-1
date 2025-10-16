@@ -258,7 +258,7 @@ export class UserService {
       const monthIndex = s._id - 1;
 
       const userDetails = s.userDetails.map((user: any) => ({
-        _id: user._id,
+        // _id: user._id,
         email: user.email,
         name:
           `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'N/A',

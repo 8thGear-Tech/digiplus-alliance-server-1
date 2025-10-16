@@ -17,6 +17,7 @@ import {
   Patch,
   Logger,
   Query,
+  Delete,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -773,6 +774,7 @@ export class AssessmentController {
       query.year ? +query.year : undefined,
     );
   }
+
   @Get('admin/submitted-assessments')
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
@@ -790,44 +792,6 @@ export class AssessmentController {
     required: false,
     example: 10,
     description: 'Number of items per page',
-  })
-  @ApiQuery({
-    name: 'assessment_id',
-    required: false,
-    example: '68d76eea50c4b6fd7da5fc06',
-    description: 'Filter by specific assessment ID',
-  })
-  @ApiQuery({
-    name: 'user_id',
-    required: false,
-    example: '68d76eea50c4b6fd7da5fc05',
-    description: 'Filter by specific user ID',
-  })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    example: '2025-09-01',
-    description:
-      'Filter assessments completed on or after this date (ISO format)',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    example: '2025-09-30',
-    description:
-      'Filter assessments completed on or before this date (ISO format)',
-  })
-  @ApiQuery({
-    name: 'minScore',
-    required: false,
-    example: 30,
-    description: 'Minimum user score',
-  })
-  @ApiQuery({
-    name: 'maxScore',
-    required: false,
-    example: 80,
-    description: 'Maximum user score',
   })
   @ApiQuery({
     name: 'search',
@@ -900,26 +864,12 @@ export class AssessmentController {
   async getSubmittedAssessments(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('assessment_id') assessment_id?: string,
-    @Query('user_id') user_id?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('minScore') minScore?: number,
-    @Query('maxScore') maxScore?: number,
     @Query('search') search?: string,
   ): Promise<any> {
     return this.assessmentService.getSubmittedAssessments(
       page || 1,
       limit || 10,
-      {
-        assessment_id,
-        user_id,
-        startDate,
-        endDate,
-        minScore: minScore ? Number(minScore) : undefined,
-        maxScore: maxScore ? Number(maxScore) : undefined,
-        search,
-      },
+      search,
     );
   }
 
@@ -1028,5 +978,56 @@ export class AssessmentController {
       assessmentId,
       updateAssessmentDto,
     );
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete an assessment and all related data',
+    description:
+      'Deletes an assessment along with all its questions, modules, and service recommendations. Cannot delete published assessments or assessments with user submissions.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment deleted successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Assessment deleted successfully',
+        data: {
+          deleted_assessment_id: '507f1f77bcf86cd799439011',
+          deleted_assessment_title: 'Business Readiness Assessment',
+          deleted_items: {
+            questions: 25,
+            modules: 5,
+            recommendations: 10,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Cannot delete published assessment or assessment with submissions.',
+    schema: {
+      example: {
+        code: 400,
+        message:
+          'Cannot delete a published assessment. Please unpublish it first.',
+        success: false,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found.',
+  })
+  async deleteAssessment(@Param('id') assessmentId: string): Promise<any> {
+    return this.assessmentService.deleteAssessment(assessmentId);
   }
 }
