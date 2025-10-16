@@ -575,7 +575,7 @@ export class AdminApplicationService {
 
       const applicationDetails = s.applicationDetails.map((app: any) => ({
         _id: app._id,
-        userId: app.userId,
+        // userId: app.userId,
         service_type: app.service_type || 'N/A',
         status: app.status,
         payment_status: app.payment_status,
