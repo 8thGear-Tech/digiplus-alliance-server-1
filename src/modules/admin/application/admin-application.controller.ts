@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -654,5 +655,34 @@ export class AdminApplicationController {
       updateDto,
       file,
     );
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Delete an application form',
+    description:
+      'Permanently deletes an application form. The form must be unpublished and have no associated submissions.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Form deleted successfully.',
+    schema: {
+      example: {
+        message: 'Application form deleted successfully.',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Form not found.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete live form or form with submissions.',
+  })
+  async deleteForm(@Param('id') id: string): Promise<{ message: string }> {
+    return this.adminApplicationService.deleteForm(id);
   }
 }
