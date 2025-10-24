@@ -4,10 +4,16 @@ import { AssessmentController } from './assessment.controller';
 import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
 import { ServicesModule } from '../admin/services/services.module';
+import { MailerModule } from '../mailer/mailer.module';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 
 @Module({
-  imports: [RepositoryModule, MongooseModelsModule, ServicesModule],
+  imports: [
+    RepositoryModule,
+    MongooseModelsModule,
+    ServicesModule,
+    MailerModule,
+  ],
   controllers: [AssessmentController],
   providers: [AssessmentService, QuestionValidationService],
   exports: [AssessmentService, QuestionValidationService],

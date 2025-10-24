@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,7 +15,14 @@ import { ApplicationForm } from '../admin/application/schemas/application-form.s
 import { FormListItemDto } from './form-list-item.dto';
 import { Service } from '../admin/services/schemas/service.schema';
 import { ApplicationStatus } from 'src/shared/enums';
+import {
+  applicationAdminEmail,
+  applicationUserEmail,
+} from '../mailer/mailer.constants';
+import { Repositories } from '../../shared/enums/db.enum';
 import { BaseRepository } from '../repository/base.repository';
+import { User } from '../user/user.schema';
+import { MailerService } from '../mailer/mailer.service';
 
 type FormProjection = {
   _id: string;
@@ -31,6 +40,9 @@ export class UserApplicationService {
     private submissionModel: Model<UserSubmission>,
     @InjectModel(Service.name)
     private serviceModel: Model<Service>,
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
+    private readonly mailService: MailerService,
   ) {}
 
   private transformUserSubmissions(submissions: any[]): any[] {
@@ -166,6 +178,41 @@ export class UserApplicationService {
 
     try {
       const savedSubmission = await newSubmission.save();
+
+      // ✅ Fetch user details
+      const user = await this.userRepository.findById(userId);
+
+      // 📧 Send confirmation email to user
+      if (user?.email) {
+        const userMailBody = applicationUserEmail(
+          user,
+          service,
+          responses,
+          formQuestions,
+        );
+
+        await this.mailService.sendMail({
+          to: user.email,
+          subject: `Application Submitted - ${service}`,
+          html: userMailBody,
+        });
+      }
+
+      // 📧 Send notification email to admin
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@digiplus.com';
+      const adminMailBody = applicationAdminEmail(
+        user,
+        service,
+        responses,
+        formQuestions,
+        selectedService.price,
+      );
+
+      await this.mailService.sendMail({
+        to: adminEmail,
+        subject: `New Application - ${service}`,
+        html: adminMailBody,
+      });
       return savedSubmission;
     } catch (error) {
       console.error('Failed to save submission:', error.message);
@@ -173,23 +220,13 @@ export class UserApplicationService {
     }
   }
 
-  // async getUserSubmissions(userId: string): Promise<any[]> {
-  //   const submissions = await this.submissionModel
-  //     .find({ userId })
-  //     .select('+start_date +end_date +timetable_url +payment_amount')
-  //     .exec();
-
-  //   return this.transformUserSubmissions(submissions);
-  // }
   async getUserSubmissions(userId: string): Promise<any[]> {
-    // Use aggregation to lookup service details
     const submissions = await this.submissionModel
       .aggregate([
-        // Match submissions for the specific user
         {
           $match: { userId: new Types.ObjectId(userId) },
         },
-        // Lookup service details by service name
+
         {
           $lookup: {
             from: 'services',
@@ -198,14 +235,14 @@ export class UserApplicationService {
             as: 'serviceDetails',
           },
         },
-        // Unwind the serviceDetails array (should be single element)
+
         {
           $unwind: {
             path: '$serviceDetails',
             preserveNullAndEmptyArrays: true,
           },
         },
-        // Project the fields we need
+
         {
           $project: {
             responses: 1,
@@ -236,19 +273,17 @@ export class UserApplicationService {
   async getSubmissionStatusCounts(
     userId: string,
   ): Promise<Record<string, number>> {
-    // 1. Define the Mongoose aggregation pipeline
     const pipeline = [
-      // Stage 1: Filter by authenticated user's ID
       {
         $match: {
-          userId: new Types.ObjectId(userId), // Assuming userId is stored as ObjectId
+          userId: new Types.ObjectId(userId),
         },
       },
-      // Stage 2: Group by status and count the results in each group
+
       {
         $group: {
-          _id: '$status', // Group documents by the 'status' field
-          count: { $sum: 1 }, // Count the documents in each group
+          _id: '$status',
+          count: { $sum: 1 },
         },
       },
     ];

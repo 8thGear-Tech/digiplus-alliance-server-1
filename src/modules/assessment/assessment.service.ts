@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -14,6 +14,7 @@ import { BaseRepository } from '../repository/base.repository';
 import { AssessmentDocument } from './schemas/assessment.schema';
 import { AssessmentModuleDocument } from './schemas/assessment-module.schema';
 import { QuestionDocument } from './schemas/question.schema';
+import { MailerService } from '../mailer/mailer.service';
 import {
   UserAssessment,
   UserAssessmentDocument,
@@ -26,6 +27,8 @@ import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
 import { ServicesService } from '../admin/services/services.service';
+import { assessmentCompletionEmail } from '../mailer/mailer.constants';
+import { User } from '../user/user.schema';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 
 @Injectable()
@@ -45,7 +48,9 @@ export class AssessmentService {
     private readonly serviceRecommendationRepository: BaseRepository<any>,
     @InjectModel(UserAssessment.name)
     private readonly userAssessmentModel: Model<UserAssessmentDocument>,
-
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
+    private readonly mailService: MailerService,
     //added by opeyemi
     private questionValidationService: QuestionValidationService,
     private readonly servicesService: ServicesService,
@@ -75,7 +80,6 @@ export class AssessmentService {
       if (autoValidation !== ValidationRule.NONE) {
         processedQuestion.auto_validation = autoValidation;
 
-        // Add suggested placeholder if not provided
         if (!processedQuestion.placeholder) {
           processedQuestion.placeholder =
             this.questionValidationService.getSuggestedPlaceholder(
@@ -1259,6 +1263,27 @@ export class AssessmentService {
             'Cannot publish assessment without questions',
           );
         }
+
+        // ✅ Auto-unpublish any currently published assessment
+        const currentlyPublished = await this.assessmentRepository.findOne({
+          is_published: true,
+          _id: { $ne: new Types.ObjectId(assessmentId) },
+        });
+
+        if (currentlyPublished) {
+          await this.assessmentRepository.update(
+            { _id: currentlyPublished._id },
+            {
+              is_published: false,
+              is_active: false,
+              updated_at: new Date(),
+            },
+          );
+
+          this.logger.log(
+            `Auto-unpublished assessment "${currentlyPublished.title}" to publish "${assessment.title}"`,
+          );
+        }
       }
 
       // Update status
@@ -1357,11 +1382,48 @@ export class AssessmentService {
     }
   }
 
-  async getAssessmentById(assessmentId: string): Promise<any> {
+  async getAssessmentById(assessmentId: string, userId?: string): Promise<any> {
     try {
       const assessment = await this.assessmentRepository.findById(assessmentId);
       if (!assessment) {
+        // ✅ Throw directly - no 'error' variable exists here
         throw BadRequestException.RESOURCE_NOT_FOUND('Assessment not found');
+      }
+
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
+
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
+
+          const nextEligibleDate = new Date(
+            completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+          );
+
+          if (now <= nextEligibleDate) {
+            const daysRemaining = Math.ceil(
+              (nextEligibleDate.getTime() - now.getTime()) /
+                (1000 * 60 * 60 * 24),
+            );
+
+            throw BadRequestException.BAD_REQUEST(
+              `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
+                'en-US',
+                {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                },
+              )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
+            );
+          }
+        }
       }
 
       const moduleFilter: any = {
@@ -1375,7 +1437,6 @@ export class AssessmentService {
       const modules = await this.assessmentModuleRepository.find(moduleFilter);
       const questions = await this.questionRepository.find(questionFilter);
 
-      // Get service recommendations (when repository is available)
       const serviceRecommendations =
         await this.serviceRecommendationRepository.find({
           assessment_id: new Types.ObjectId(assessmentId),
@@ -1396,11 +1457,21 @@ export class AssessmentService {
           modules: moduleArray,
           questions: sortedQuestions,
           service_recommendations: serviceRecommendations,
-          // total_possible_points: assessment.total_possible_points || 0,
         },
       };
     } catch (error) {
       this.logger.error('Error getting assessment:', error);
+
+      // ✅ Handle already-thrown exceptions properly
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // ✅ Handle NestJS HttpException
+      if (error?.getStatus && typeof error.getStatus === 'function') {
+        throw error;
+      }
+
       throw BadRequestException.BAD_REQUEST('Failed to retrieve assessment');
     }
   }
@@ -1639,7 +1710,7 @@ export class AssessmentService {
         user_id: new Types.ObjectId(userId),
       };
 
-      // 📅 Date filtering
+      // Date filtering
       if (filters?.startDate || filters?.endDate) {
         filter.completed_at = {};
         if (filters.startDate) {
@@ -1876,6 +1947,32 @@ export class AssessmentService {
     userId?: string,
   ) {
     try {
+      // === 🧠 Step 1: Enforce 2-week retake rule ===
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
+
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
+          const diffInDays = Math.floor(
+            (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
+          );
+
+          if (diffInDays < 14) {
+            const nextEligibleDate = new Date(
+              completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+            );
+            throw BadRequestException.BAD_REQUEST(
+              `You can only retake this assessment every 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
+            );
+          }
+        }
+      }
+
       const assessmentData = await this.getAssessmentById(assessmentId);
 
       if (!assessmentData?.data) {
@@ -1930,7 +2027,7 @@ export class AssessmentService {
           answers,
           user_score: userScore,
           max_possible_score: total_possible_points,
-          percentage_score,
+          percentage_score: Number((percentage_score || 0).toFixed(2)),
           recommended_services: recommendedServices,
           completed_at: completedAt,
           is_submitted: true,
@@ -1948,13 +2045,38 @@ export class AssessmentService {
         );
       }
 
+      // 📧 Send confirmation email
+      const user = userId ? await this.userRepository.findById(userId) : null;
+
+      if (user?.email) {
+        const mailBody = assessmentCompletionEmail(
+          user,
+          assessment.title,
+          userScore,
+          total_possible_points,
+          percentage_score,
+          userLevel,
+          recommendedServices.map((service: any) => ({
+            name: service.service_name || service.name,
+            description: service.description,
+          })),
+        );
+
+        await this.mailService.sendMail({
+          to: user.email,
+          subject: `Assessment Completed - ${assessment.title}`,
+          text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
+          html: mailBody,
+        });
+      }
+
       return {
         success: true,
         message: 'Assessment completed successfully',
         data: {
           user_score: userScore,
           total_possible_points,
-          percentage_score,
+          percentage_score: Number((percentage_score || 0).toFixed(2)),
           user_level: userLevel,
           recommended_services: recommendedServices,
           assessment_title: assessment.title,
@@ -1964,12 +2086,24 @@ export class AssessmentService {
       };
     } catch (error) {
       this.logger.error('Error submitting assessment:', error);
+
+      // ✅ Don't override the original message if it's already a handled error
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // ✅ Also handle native NestJS HttpException (optional)
+      if (error.getStatus && error.getStatus() === 400) {
+        throw error;
+      }
       throw BadRequestException.BAD_REQUEST('Failed to submit assessment');
     }
   }
 
   async getUserMonthlyStats(userId: string, year?: number): Promise<any> {
     try {
+      const currentYear = year || new Date().getFullYear();
+
       const filter: any = {
         user_id: new Types.ObjectId(userId),
       };
@@ -1984,10 +2118,34 @@ export class AssessmentService {
       const stats = await this.userAssessmentModel.aggregate([
         { $match: filter },
         {
+          $lookup: {
+            from: 'assessments',
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessmentInfo',
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessmentInfo',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
           $group: {
             _id: { $month: '$completed_at' },
             totalScore: { $sum: '$user_score' },
             submissions: { $sum: 1 },
+            assessmentDetails: {
+              $push: {
+                assessment_id: '$assessment_id',
+                assessment_title: '$assessmentInfo.title',
+                user_score: '$user_score',
+                max_possible_score: '$max_possible_score',
+                percentage_score: '$percentage_score',
+                completed_at: '$completed_at',
+              },
+            },
           },
         },
         { $sort: { _id: 1 } },
@@ -1996,23 +2154,87 @@ export class AssessmentService {
       // 📊 Fill all 12 months with default 0
       const allMonths = Array.from({ length: 12 }, (_, i) => ({
         month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
-          new Date(2025, i),
+          new Date(currentYear, i),
         ),
+        year: currentYear,
         score: 0,
+        submissions: 0,
+        submission_details: [],
       }));
 
-      // Replace with averages where data exists
+      // Replace with actual data where it exists
       stats.forEach((s) => {
         const monthIndex = s._id - 1;
-        allMonths[monthIndex].score = Math.round(
-          s.totalScore / s.submissions, // average score for the month
+
+        const submissionDetails = s.assessmentDetails.map(
+          (assessment: any) => ({
+            assessment_name:
+              assessment.assessment_title || 'Unnamed Assessment',
+            user_score: assessment.user_score,
+            max_possible_score: assessment.max_possible_score,
+            percentage_score: Number(
+              (assessment.percentage_score || 0).toFixed(2),
+            ),
+            completed_at: assessment.completed_at,
+            completed_date: new Date(
+              assessment.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              assessment.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+          }),
         );
+
+        allMonths[monthIndex] = {
+          month: allMonths[monthIndex].month,
+          year: currentYear,
+          score: Math.round(s.totalScore / s.submissions),
+          submissions: s.submissions,
+          submission_details: submissionDetails,
+        };
       });
+
+      const totalSubmissions = stats.reduce((sum, s) => sum + s.submissions, 0);
+      const overallAverageScore =
+        totalSubmissions > 0
+          ? Math.round(
+              stats.reduce((sum, s) => sum + s.totalScore, 0) /
+                totalSubmissions,
+            )
+          : 0;
 
       return {
         success: true,
         message: 'Monthly stats retrieved successfully',
-        data: allMonths,
+        data: {
+          year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            overall_average_score: overallAverageScore,
+            months_active: stats.length,
+          },
+          monthly_breakdown: allMonths,
+          generated_at: new Date().toISOString(),
+          generated_date: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
+          generated_time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        },
       };
     } catch (error) {
       this.logger.error('Error getting monthly stats:', error);
@@ -2020,4 +2242,434 @@ export class AssessmentService {
     }
   }
 
+  async getSubmittedAssessments(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ): Promise<any> {
+    try {
+      const skip = (page - 1) * limit;
+
+      // Build aggregation pipeline
+      const pipeline: any[] = [
+        {
+          $lookup: {
+            from: 'users', // Your users collection name
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user_details',
+          },
+        },
+        {
+          $lookup: {
+            from: 'assessments', // Your assessments collection name
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessment_details',
+          },
+        },
+        {
+          $unwind: {
+            path: '$user_details',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessment_details',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+      ];
+
+      // 🔍 Name search filtering (after lookup)
+      if (search) {
+        const searchRegex = new RegExp(search, 'i');
+        pipeline.push({
+          $match: {
+            $or: [
+              { 'user_details.first_name': searchRegex },
+              { 'user_details.last_name': searchRegex },
+              { 'user_details.email': searchRegex },
+              { 'user_details.business_name': searchRegex },
+              { 'assessment_details.title': searchRegex },
+              {
+                $expr: {
+                  $regexMatch: {
+                    input: {
+                      $concat: [
+                        '$user_details.first_name',
+                        ' ',
+                        '$user_details.last_name',
+                      ],
+                    },
+                    regex: search,
+                    options: 'i',
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      // Get total count for pagination (before skip/limit)
+      const countPipeline = [...pipeline, { $count: 'total' }];
+      const countResult =
+        await this.userAssessmentModel.aggregate(countPipeline);
+      const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+
+      // Add sorting, pagination, and projection
+      pipeline.push(
+        { $sort: { completed_at: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 1,
+            assessment_id: 1,
+            user_id: 1,
+            user_score: 1,
+            max_possible_score: 1,
+            percentage_score: 1,
+            completed_at: 1,
+            submitted_at: 1,
+            time_taken_seconds: 1,
+            // User details
+            user: {
+              _id: '$user_details._id',
+              first_name: '$user_details.first_name',
+              last_name: '$user_details.last_name',
+              email: '$user_details.email',
+              phone_number: '$user_details.phone_number',
+              business_name: '$user_details.business_name',
+              profile_picture: '$user_details.profile_picture',
+              organization: '$user_details.organization',
+            },
+            // Assessment details
+            assessment: {
+              _id: '$assessment_details._id',
+              title: '$assessment_details.title',
+              description: '$assessment_details.description',
+              total_possible_points:
+                '$assessment_details.total_possible_points',
+              is_published: '$assessment_details.is_published',
+            },
+          },
+        },
+      );
+      // Fetch submissions
+      const submissions = await this.userAssessmentModel.aggregate(pipeline);
+
+      // Calculate statistics (using original filter without search)
+      const stats = await this.userAssessmentModel.aggregate([
+        // { $match: filter },
+        {
+          $group: {
+            _id: null,
+            total_submissions: { $sum: 1 },
+            average_score: { $avg: '$user_score' },
+            highest_score: { $max: '$user_score' },
+            lowest_score: { $min: '$user_score' },
+            average_percentage: { $avg: '$percentage_score' },
+          },
+        },
+      ]);
+
+      const statistics =
+        stats.length > 0
+          ? stats[0]
+          : {
+              total_submissions: 0,
+              average_score: 0,
+              highest_score: 0,
+              lowest_score: 0,
+              average_percentage: 0,
+            };
+
+      return {
+        success: true,
+        message: 'Submitted assessments retrieved successfully',
+        data: {
+          submissions: submissions.map((submission) => ({
+            submission_id: submission._id,
+            assessment: submission.assessment,
+            user: submission.user,
+            scores: {
+              user_score: submission.user_score,
+              max_possible_score: submission.max_possible_score,
+              percentage_score: Number(
+                (submission.percentage_score || 0).toFixed(2),
+              ),
+            },
+            completed_at: submission.completed_at,
+            completed_date: new Date(
+              submission.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              submission.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+            time_taken_seconds: submission.time_taken_seconds,
+          })),
+          pagination: {
+            current_page: page,
+            per_page: limit,
+            total_items: totalCount,
+            total_pages: Math.ceil(totalCount / limit),
+            has_next_page: page < Math.ceil(totalCount / limit),
+            has_previous_page: page > 1,
+          },
+          statistics: {
+            total_submissions: statistics.total_submissions,
+            average_score: Math.round(statistics.average_score * 100) / 100,
+            highest_score: statistics.highest_score,
+            lowest_score: statistics.lowest_score,
+            average_percentage:
+              Math.round(statistics.average_percentage * 100) / 100,
+          },
+          filters_applied: search || {},
+          generated_at: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting submitted assessments:', error);
+      throw BadRequestException.BAD_REQUEST(
+        'Failed to retrieve submitted assessments',
+      );
+    }
+  }
+
+  async getAllAssessmentsMonthlyStats(year?: number): Promise<any> {
+    try {
+      const currentYear = year || new Date().getFullYear();
+
+      // 🧮 Filter for completed assessments within the given year
+      const filter: any = {};
+      if (year) {
+        filter.completed_at = {
+          $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+          $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+        };
+      }
+
+      const stats = await this.userAssessmentModel.aggregate([
+        { $match: filter },
+        {
+          $lookup: {
+            from: 'assessments',
+            localField: 'assessment_id',
+            foreignField: '_id',
+            as: 'assessmentInfo',
+          },
+        },
+        {
+          $unwind: {
+            path: '$assessmentInfo',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $group: {
+            _id: { $month: '$completed_at' },
+            totalScore: { $sum: '$user_score' },
+            submissions: { $sum: 1 },
+            assessmentDetails: {
+              $push: {
+                assessment_title: '$assessmentInfo.title',
+                user_score: '$user_score',
+                max_possible_score: '$max_possible_score',
+                percentage_score: '$percentage_score',
+                completed_at: '$completed_at',
+              },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]);
+
+      // 📆 Initialize all 12 months with defaults
+      const allMonths = Array.from({ length: 12 }, (_, i) => ({
+        month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+          new Date(currentYear, i),
+        ),
+        year: currentYear,
+        average_score: 0,
+        submissions: 0,
+        submission_details: [],
+      }));
+
+      // 🧩 Populate actual data for months with submissions
+      stats.forEach((s) => {
+        const monthIndex = s._id - 1;
+
+        const submissionDetails = s.assessmentDetails.map(
+          (assessment: any) => ({
+            assessment_name:
+              assessment.assessment_title || 'Unnamed Assessment',
+            user_score: assessment.user_score,
+            max_possible_score: assessment.max_possible_score,
+            percentage_score: Number(
+              (assessment.percentage_score || 0).toFixed(2),
+            ),
+            completed_date: new Date(
+              assessment.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              assessment.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+          }),
+        );
+
+        allMonths[monthIndex] = {
+          month: allMonths[monthIndex].month,
+          year: currentYear,
+          average_score: Math.round(s.totalScore / s.submissions),
+          submissions: s.submissions,
+          submission_details: submissionDetails,
+        };
+      });
+
+      // 📊 Summary calculations
+      const totalSubmissions = stats.reduce((sum, s) => sum + s.submissions, 0);
+      const overallAverageScore =
+        totalSubmissions > 0
+          ? Math.round(
+              stats.reduce((sum, s) => sum + s.totalScore, 0) /
+                totalSubmissions,
+            )
+          : 0;
+
+      return {
+        success: true,
+        message: 'All assessment submission stats retrieved successfully',
+        data: {
+          year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            overall_average_score: overallAverageScore,
+            months_with_submissions: stats.length,
+          },
+          monthly_breakdown: allMonths,
+          generated_at: new Date().toISOString(),
+          generated_date: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
+          generated_time: new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting all assessment stats:', error);
+      throw BadRequestException.BAD_REQUEST(
+        'Failed to retrieve assessment stats',
+      );
+    }
+  }
+
+  async deleteAssessment(assessmentId: string): Promise<any> {
+    try {
+      if (!Types.ObjectId.isValid(assessmentId)) {
+        throw BadRequestException.BAD_REQUEST('Invalid assessment ID format');
+      }
+
+      const assessment = await this.assessmentRepository.findById(assessmentId);
+
+      if (!assessment) {
+        throw new NotFoundException('Assessment not found');
+      }
+
+      // ✅ Prevent deletion of published assessments
+      if (assessment.is_published) {
+        throw BadRequestException.BAD_REQUEST(
+          'Cannot delete a published assessment. Please unpublish it first.',
+        );
+      }
+
+      // ✅ Check if there are any user submissions for this assessment
+      const submissionsCount = await this.userAssessmentModel.countDocuments({
+        assessment_id: new Types.ObjectId(assessmentId),
+      });
+
+      if (submissionsCount > 0) {
+        throw BadRequestException.BAD_REQUEST(
+          `Cannot delete this assessment. It has ${submissionsCount} user submission(s). Consider unpublishing instead.`,
+        );
+      }
+
+      // Delete related data in order
+      const assessmentObjectId = new Types.ObjectId(assessmentId);
+
+      // 1. Delete all questions
+      const deletedQuestions = await this.questionRepository.deleteMany({
+        assessment_id: assessmentObjectId,
+      });
+
+      // 2. Delete all modules
+      const deletedModules = await this.assessmentModuleRepository.deleteMany({
+        assessment_id: assessmentObjectId,
+      });
+
+      // 3. Delete service recommendations
+      const deletedRecommendations =
+        await this.serviceRecommendationRepository.deleteMany({
+          assessment_id: assessmentObjectId,
+        });
+
+      // 4. Finally, delete the assessment itself
+      await this.assessmentRepository.delete({
+        _id: assessmentObjectId,
+      });
+
+      this.logger.log(
+        `Assessment ${assessmentId} deleted successfully along with ${deletedQuestions.deletedCount} questions, ${deletedModules.deletedCount} modules, and ${deletedRecommendations.deletedCount} recommendations`,
+      );
+
+      return {
+        success: true,
+        message: 'Assessment deleted successfully',
+        data: {
+          deleted_assessment_id: assessmentId,
+          deleted_assessment_title: assessment.title,
+          deleted_items: {
+            questions: deletedQuestions.deletedCount || 0,
+            modules: deletedModules.deletedCount || 0,
+            recommendations: deletedRecommendations.deletedCount || 0,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error deleting assessment:', error);
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      throw BadRequestException.BAD_REQUEST('Failed to delete assessment');
+    }
+  }
 }

@@ -17,6 +17,7 @@ import {
   Patch,
   Logger,
   Query,
+  Delete,
   // Put,
   // Delete,
 } from '@nestjs/common';
@@ -28,6 +29,7 @@ import {
   ApiBody,
   ApiParam,
   ApiQuery,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { AssessmentService } from './assessment.service';
 import {
@@ -46,8 +48,13 @@ import {
   SubmitAssessmentDto,
   SubmitAssessmentResDto,
 } from './dto/submit-assessment.dto';
+import {
+  GetUserStatsParamsDto,
+  GetUserStatsQueryDto,
+} from './dto/get-user-stats.dto';
 import { BadRequestException } from 'src/exceptions';
 import { PublishAssessmentDto } from './dto/publish-assessment.dto';
+import { UserStatsResponseDto } from './dto/user-stats-response.dto';
 
 @ApiTags('Assessments')
 @Controller('api/assessments')
@@ -587,14 +594,299 @@ export class AssessmentController {
     return this.assessmentService.getAvailableAssessments();
   }
 
+  //added by opeyemi
+  @Post('submit')
+  @ApiOperation({ summary: 'Submit assessment answers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assessment submitted successfully',
+    type: SubmitAssessmentResDto,
+  })
+  async submitAssessment(
+    @Body() submitAssessmentDto: SubmitAssessmentDto,
+    @Request() req, // Assumes req.user.user contains the authenticated user's ID string
+  ): Promise<SubmitAssessmentResDto> {
+    const { assessment_id, responses, user_id } = submitAssessmentDto; // Destructure the DTO
+
+    // 🛑 ADD THIS LOG to see what your middleware is passing
+    console.log('--- Auth Debug ---');
+    console.log('req.user:', req.user);
+    console.log('user_id from body:', user_id);
+    console.log('------------------');
+
+    // Use the authenticated user's ID as the final argument,
+    // falling back to the DTO's user_id if needed, or null/undefined if not present.
+
+    const authUserId = req.user?._id?.toString();
+    // Use the ID from auth first, then the body.
+    const finalUserId = authUserId || user_id;
+    this.logger.log(`Attempting submission with finalUserId: [${finalUserId}]`); // <-- ADD THIS LOG
+
+    // Ensure finalUserId is a non-empty string before calling the service
+    if (!finalUserId) {
+      throw BadRequestException.BAD_REQUEST(
+        'User authentication failed or ID is missing.',
+      );
+    }
+
+    // ✅ CORRECT CALL: Pass the arguments in the order the Service expects them.
+    return this.assessmentService.submitAssessment(
+      assessment_id, // Argument 1: string
+      responses, // Argument 2: Record<string, any> (object)
+      finalUserId, // Argument 3: string | undefined
+    );
+  }
+
+  @Get('user/submissions')
+  @ApiOperation({ summary: 'Get current user assessment submissions' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    example: '2025-09-01',
+    description:
+      'Filter assessments completed on or after this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    example: '2025-09-30',
+    description:
+      'Filter assessments completed on or before this date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'minScore',
+    required: false,
+    example: 30,
+    description: 'Minimum user score',
+  })
+  @ApiQuery({
+    name: 'maxScore',
+    required: false,
+    example: 80,
+    description: 'Maximum user score',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User assessments retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'User assessments retrieved successfully',
+        data: [
+          {
+            user_id: '68d76eea50c4b6fd7da5fc05',
+            assessment_id: '68d76eea50c4b6fd7da5fc06',
+            user_score: 45,
+            max_possible_score: 100,
+            percentage_score: 45,
+            completed_at: '2025-09-15T10:30:00.000Z',
+          },
+        ],
+      },
+    },
+  })
+  async getUserAssessments(
+    @Request() req,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('minScore') minScore?: number,
+    @Query('maxScore') maxScore?: number,
+  ): Promise<any> {
+    return this.assessmentService.getUserAssessments(req.user._id, {
+      startDate,
+      endDate,
+      minScore: minScore ? Number(minScore) : undefined,
+      maxScore: maxScore ? Number(maxScore) : undefined,
+    });
+  }
+
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get system-wide assessment submission statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiOkResponse({
+    description:
+      'System-wide monthly assessment statistics retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'All assessment submission stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_submissions: 1024,
+            overall_average_score: 78,
+            months_with_submissions: 10,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              year: 2025,
+              average_score: 80,
+              submissions: 120,
+              submission_details: [
+                {
+                  assessment_id: '507f1f77bcf86cd799439011',
+                  user_id: '507f1f77bcf86cd799439012',
+                  user_score: 40,
+                  max_possible_score: 50,
+                  percentage_score: 80,
+                  completed_date: 'January 15, 2025',
+                  completed_time: '10:30 AM',
+                },
+              ],
+            },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getAllAssessmentsMonthlyStats(
+    @Query('year') year?: number,
+  ): Promise<any> {
+    return this.assessmentService.getAllAssessmentsMonthlyStats(year);
+  }
+
+  @Get('stats/:userId')
+  @ApiOkResponse({
+    description: 'Monthly user assessment statistics retrieved successfully',
+    type: UserStatsResponseDto,
+  })
+  async getUserStats(
+    @Param() params: GetUserStatsParamsDto,
+    @Query() query: GetUserStatsQueryDto,
+  ): Promise<UserStatsResponseDto> {
+    return this.assessmentService.getUserMonthlyStats(
+      params.userId,
+      query.year ? +query.year : undefined,
+    );
+  }
+
+  @Get('admin/submitted-assessments')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Get all submitted assessments with user details (Admin only)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+    description: 'Page number for pagination',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 10,
+    description: 'Number of items per page',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    example: 'John Doe',
+    description: 'Search by user name or email',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Submitted assessments retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Submitted assessments retrieved successfully',
+        data: {
+          submissions: [
+            {
+              submission_id: '68d76eea50c4b6fd7da5fc07',
+              assessment: {
+                _id: '68d76eea50c4b6fd7da5fc06',
+                title: 'Mental Health Assessment',
+                description: 'Comprehensive mental health evaluation',
+                total_possible_points: 100,
+                is_published: true,
+              },
+              user: {
+                _id: '68d76eea50c4b6fd7da5fc05',
+                first_name: 'John',
+                last_name: 'Doe',
+                email: 'john.doe@example.com',
+                phone_number: '+2348012345678',
+                profile_picture: 'https://example.com/profile.jpg',
+                organization: 'ABC Corporation',
+              },
+              scores: {
+                user_score: 45,
+                max_possible_score: 100,
+                percentage_score: 45,
+              },
+              completed_at: '2025-09-15T10:30:00.000Z',
+              completed_date: 'September 15, 2025',
+              completed_time: '10:30 AM',
+              time_taken_seconds: 1200,
+            },
+          ],
+          pagination: {
+            current_page: 1,
+            per_page: 10,
+            total_items: 50,
+            total_pages: 5,
+            has_next_page: true,
+            has_previous_page: false,
+          },
+          statistics: {
+            total_submissions: 50,
+            average_score: 67.5,
+            highest_score: 95,
+            lowest_score: 30,
+            average_percentage: 67.5,
+          },
+          filters_applied: {
+            startDate: '2025-09-01',
+            endDate: '2025-09-30',
+          },
+          generated_at: '2025-10-14T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  async getSubmittedAssessments(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ): Promise<any> {
+    return this.assessmentService.getSubmittedAssessments(
+      page || 1,
+      limit || 10,
+      search,
+    );
+  }
+
   @Get(':id')
+  @UseGuards(JwtUserAuthGuard)
   @ApiOperation({ summary: 'Get assessment by ID with modules and questions' })
   @ApiResponse({
     status: 200,
     description: 'Assessment retrieved successfully',
   })
-  async getAssessmentById(@Param('id') id: string): Promise<any> {
-    return this.assessmentService.getAssessmentById(id);
+  async getAssessmentById(
+    @Param('id') assesssmentId: string,
+    @Request() req: any, // ✅ Get from authenticated request
+    // @Query('userId') userId: string,
+  ): Promise<any> {
+    const userId = req.user?.id || req.user?._id;
+    return this.assessmentService.getAssessmentById(assesssmentId, userId);
   }
 
   @Patch(':id')
@@ -688,146 +980,54 @@ export class AssessmentController {
     );
   }
 
-  // @Put('questions/:questionId')
-  // @UseGuards(RolesGuard)
-  // @Roles(UserTypes.admin)
-  // @ApiOperation({ summary: 'Update question (Admin only)' })
-  // @ApiResponse({ status: 200, description: 'Question updated successfully' })
-  // async updateQuestion(
-  //   @Param('questionId') questionId: string,
-  //   @Body() updateData: any,
-  // ): Promise<any> {
-  //   return this.assessmentService.updateQuestion(questionId, updateData);
-  // }
-
-  // @Delete('questions/:questionId')
-  // @UseGuards(RolesGuard)
-  // @Roles(UserTypes.admin)
-  // @ApiOperation({ summary: 'Delete question (Admin only)' })
-  // @ApiResponse({ status: 200, description: 'Question deleted successfully' })
-  // async deleteQuestion(@Param('questionId') questionId: string): Promise<any> {
-  //   return this.assessmentService.deleteQuestion(questionId);
-  // }
-
-  // User Routes
-
-  //added by opeyemi
-  @Post('submit')
-  @ApiOperation({ summary: 'Submit assessment answers' })
-  @ApiResponse({
-    status: 200,
-    description: 'Assessment submitted successfully',
-    type: SubmitAssessmentResDto,
-  })
-  async submitAssessment(
-    @Body() submitAssessmentDto: SubmitAssessmentDto,
-    @Request() req, // Assumes req.user.user contains the authenticated user's ID string
-  ): Promise<SubmitAssessmentResDto> {
-    const { assessment_id, responses, user_id } = submitAssessmentDto; // Destructure the DTO
-
-    // 🛑 ADD THIS LOG to see what your middleware is passing
-    console.log('--- Auth Debug ---');
-    console.log('req.user:', req.user);
-    console.log('user_id from body:', user_id);
-    console.log('------------------');
-
-    // Use the authenticated user's ID as the final argument,
-    // falling back to the DTO's user_id if needed, or null/undefined if not present.
-
-    const authUserId = req.user?._id?.toString();
-    // Use the ID from auth first, then the body.
-    const finalUserId = authUserId || user_id;
-    this.logger.log(`Attempting submission with finalUserId: [${finalUserId}]`); // <-- ADD THIS LOG
-
-    // Ensure finalUserId is a non-empty string before calling the service
-    if (!finalUserId) {
-      throw BadRequestException.BAD_REQUEST(
-        'User authentication failed or ID is missing.',
-      );
-    }
-
-    // ✅ CORRECT CALL: Pass the arguments in the order the Service expects them.
-    return this.assessmentService.submitAssessment(
-      assessment_id, // Argument 1: string
-      responses, // Argument 2: Record<string, any> (object)
-      finalUserId, // Argument 3: string | undefined
-    );
-  }
-
-  @Get('user/submissions')
-  @ApiOperation({ summary: 'Get current user assessment submissions' })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    example: '2025-09-01',
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete an assessment and all related data',
     description:
-      'Filter assessments completed on or after this date (ISO format)',
+      'Deletes an assessment along with all its questions, modules, and service recommendations. Cannot delete published assessments or assessments with user submissions.',
   })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    example: '2025-09-30',
-    description:
-      'Filter assessments completed on or before this date (ISO format)',
-  })
-  @ApiQuery({
-    name: 'minScore',
-    required: false,
-    example: 30,
-    description: 'Minimum user score',
-  })
-  @ApiQuery({
-    name: 'maxScore',
-    required: false,
-    example: 80,
-    description: 'Maximum user score',
+  @ApiParam({
+    name: 'id',
+    description: 'Assessment ID',
+    example: '507f1f77bcf86cd799439011',
   })
   @ApiResponse({
     status: 200,
-    description: 'User assessments retrieved successfully',
+    description: 'Assessment deleted successfully.',
     schema: {
       example: {
         success: true,
-        message: 'User assessments retrieved successfully',
-        data: [
-          {
-            user_id: '68d76eea50c4b6fd7da5fc05',
-            assessment_id: '68d76eea50c4b6fd7da5fc06',
-            user_score: 45,
-            max_possible_score: 100,
-            percentage_score: 45,
-            completed_at: '2025-09-15T10:30:00.000Z',
+        message: 'Assessment deleted successfully',
+        data: {
+          deleted_assessment_id: '507f1f77bcf86cd799439011',
+          deleted_assessment_title: 'Business Readiness Assessment',
+          deleted_items: {
+            questions: 25,
+            modules: 5,
+            recommendations: 10,
           },
-        ],
+        },
       },
     },
   })
-
-  async getUserAssessments(
-    @Request() req,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('minScore') minScore?: number,
-    @Query('maxScore') maxScore?: number,
-  ): Promise<any> {
-    return this.assessmentService.getUserAssessments(req.user._id, {
-      startDate,
-      endDate,
-      minScore: minScore ? Number(minScore) : undefined,
-      maxScore: maxScore ? Number(maxScore) : undefined,
-    });
-  }
-
- 
-
-  @Get('stats/:userId')
-  async getUserStats(
-    @Param('userId') userId: string,
-    @Query('year') year?: string,
-  ) {
-    return this.assessmentService.getUserMonthlyStats(
-      userId,
-      year ? +year : undefined,
-    );
+  @ApiResponse({
+    status: 400,
+    description:
+      'Cannot delete published assessment or assessment with submissions.',
+    schema: {
+      example: {
+        code: 400,
+        message:
+          'Cannot delete a published assessment. Please unpublish it first.',
+        success: false,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Assessment not found.',
+  })
+  async deleteAssessment(@Param('id') assessmentId: string): Promise<any> {
+    return this.assessmentService.deleteAssessment(assessmentId);
   }
 }

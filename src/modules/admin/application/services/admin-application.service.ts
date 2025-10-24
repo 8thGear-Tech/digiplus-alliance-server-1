@@ -1,5 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,11 +27,14 @@ import {
   ApplicationStatus,
   PaymentStatus,
   ValidationRule,
+  Repositories,
 } from 'src/shared/enums';
 import { UserSubmission } from 'src/modules/business-owner/user-submission.schema';
 import { Service } from '../../services/schemas/service.schema';
 import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
+import { BaseRepository } from 'src/modules/repository/base.repository';
+import { UserAssessment } from 'src/modules/assessment/schemas/user-assessment.schema';
 
 @Injectable()
 export class AdminApplicationService {
@@ -34,7 +43,10 @@ export class AdminApplicationService {
     private applicationFormModel: Model<ApplicationForm>,
     @InjectModel(UserSubmission.name)
     private submissionModel: Model<UserSubmission>,
-    // private readonly userSubmissionRepository: BaseRepository<UserSubmission>,
+    @Inject(Repositories.UserSubmissionRepository)
+    private readonly userSubmissionRepository: BaseRepository<UserSubmission>,
+    @Inject(Repositories.UserAssessmentRepository)
+    private readonly userAssessmentRepository: BaseRepository<UserAssessment>,
     @InjectModel(Service.name)
     private serviceModel: Model<Service>,
     private questionValidationService: QuestionValidationService,
@@ -49,21 +61,31 @@ export class AdminApplicationService {
   ): any {
     const processedQuestion = { ...question };
 
-    // 1. DATA KEY GENERATION: Only run if it's a new question or the data_key is missing
+    // ✅ ADD THIS VALIDATION
+    if (question.type === 'checkbox') {
+      const min = question.min_selections;
+      const max = question.max_selections;
+
+      if (min != null && max != null && min > max) {
+        throw new BadRequestException(
+          `Checkbox question "${question.question}": min_selections (${min}) cannot exceed max_selections (${max})`,
+        );
+      }
+    }
+
     if (isNewQuestion || !processedQuestion.data_key) {
       processedQuestion.data_key = this.questionDataKeyService.generate(
         question.question,
         existingDataKeys,
       );
-      // IMPORTANT: Add the newly generated key to the list to prevent collisions in the current batch.
+
       existingDataKeys.push(processedQuestion.data_key);
     }
 
-    // 2. AUTO-VALIDATION: Only run if it's a new question and is a text type
     if (
       isNewQuestion &&
       (question.type === 'short_text' || question.type === 'long_text') &&
-      !question.manual_validation // Don't auto-validate if manual validation is set
+      !question.manual_validation
     ) {
       const autoValidation =
         this.questionValidationService.detectValidationRule(question.question);
@@ -195,16 +217,12 @@ export class AdminApplicationService {
     Object.assign(form, dto);
 
     if (dto.questions) {
-      // 1a. Create a map of existing questions by data_key for fast lookup
-      // CRITICAL NOTE: The client MUST send the data_key for existing questions to avoid duplication.
       const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
 
-      // Collect all current data keys from the form's state (for collision checking on new questions)
       const currentDataKeys: string[] = form.questions
         .map((q) => q.data_key)
         .filter(Boolean) as string[];
 
-      // Populate map for existing items, using data_key as the unique identifier
       for (const question of form.questions) {
         if (question.data_key) {
           existingQuestionsMap.set(question.data_key, question);
@@ -221,32 +239,26 @@ export class AdminApplicationService {
 
         if (isExisting) {
           // --- UPDATE EXISTING QUESTION IN-PLACE ---
-          const existingQuestion = existingQuestionsMap.get(dataKey!)!;
+          const existingQuestion = existingQuestionsMap.get(dataKey)!;
 
-          // Process the question to apply auto-validation updates if needed, but not to regenerate the data_key
-          // We pass currentDataKeys, but since we set isNewQuestion=false, it won't be used for generation.
           const updatedQuestion = this.processSingleQuestion(
             incomingQuestion,
             currentDataKeys,
             false, // isNewQuestion = false
           );
 
-          // Apply all updates from the DTO to the existing Mongoose subdocument
           Object.assign(existingQuestion, updatedQuestion);
 
           // Add the now-updated existing question to our new list
           updatedAndNewQuestions.push(existingQuestion);
-          keysEncounteredInDto.add(dataKey!);
+          keysEncounteredInDto.add(dataKey);
         } else {
-          // --- CREATE/INSERT NEW QUESTION ---
-          // Since it is new (no data_key or no match), process it to generate the data_key and auto_validation fields
           const questionToSave = this.processSingleQuestion(
             incomingQuestion,
-            currentDataKeys, // Pass current keys for collision check
-            true, // isNewQuestion = true
+            currentDataKeys,
+            true,
           );
 
-          // IMPORTANT: Add the generated data_key to the set to prevent collision with other new questions in the same DTO batch
           if (questionToSave.data_key) {
             currentDataKeys.push(questionToSave.data_key);
             keysEncounteredInDto.add(questionToSave.data_key);
@@ -323,8 +335,9 @@ export class AdminApplicationService {
 
     return form;
   }
+
   async getAllForms(): Promise<ApplicationForm[]> {
-    return this.applicationFormModel.find().exec();
+    return this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
@@ -337,6 +350,42 @@ export class AdminApplicationService {
     }
 
     return updatedForm;
+  }
+
+  async deleteForm(id: string): Promise<{ message: string }> {
+    const form = await this.applicationFormModel.findById(id).exec();
+
+    if (!form) {
+      throw new NotFoundException(
+        `Application form with ID "${id}" not found.`,
+      );
+    }
+
+    // Optional: Check if form is live and prevent deletion
+    if (form.isLive) {
+      throw new BadRequestException(
+        'Cannot delete a live form. Please unpublish it first.',
+      );
+    }
+
+    // Optional: Check if there are submissions for this form
+    const submissionsCount = await this.submissionModel
+      .countDocuments({
+        form_id: id, // Assuming submissions reference the form
+      })
+      .exec();
+
+    if (submissionsCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete form. There are ${submissionsCount} submission(s) associated with this form.`,
+      );
+    }
+
+    await this.applicationFormModel.findByIdAndDelete(id).exec();
+
+    return {
+      message: 'Application form deleted successfully.',
+    };
   }
 
   async getApplicationList(dto: GetApplicationsDto): Promise<any[]> {
@@ -504,17 +553,170 @@ export class AdminApplicationService {
     return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
   }
 
-  // async getTotalApplicationsCount(): Promise<number> {
-  //   // Counts all documents in the submissions collection
-  //   return this.userSubmissionRepository.count({});
-  // }
+  async getTotalApplicationsCount(): Promise<number> {
+    return this.userSubmissionRepository.count({});
+  }
 
-  // --- NEW: Get total assessments completed count for admin dashboard ---
-  // async getTotalAssessmentsCompletedCount(): Promise<number> {
-  //   // Assuming 'status' is used to define 'completed' assessments.
-  //   // Adjust logic if 'assessmentCompleted' is a boolean field.
-  //   return this.submissionRepository.countDocuments({
-  //     status: ApplicationStatus.Completed,
-  //   });
-  // }
+  async getTotalAssessmentsCompletedCount(): Promise<number> {
+    return this.userAssessmentRepository.count({});
+  }
+  // Add this method to your admin-application.service.ts or wherever getApplicationList is located
+
+  async getApplicationSubmissionStats(year?: number): Promise<any> {
+    const currentYear = year || new Date().getFullYear();
+
+    // Filter for applications submitted in the specified year
+    const filter: any = {
+      createdAt: {
+        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
+        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+      },
+    };
+
+    // Aggregate applications by month
+    const stats = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { $month: '$createdAt' },
+          totalApplications: { $sum: 1 },
+          applicationDetails: {
+            $push: {
+              _id: '$_id',
+              userId: '$userId',
+              service_type: '$service_type',
+              status: '$status',
+              payment_status: '$payment_status',
+              created_at: '$createdAt',
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill all 12 months with default 0
+    const allMonths = Array.from({ length: 12 }, (_, i) => ({
+      month: new Intl.DateTimeFormat('en', { month: 'short' }).format(
+        new Date(currentYear, i),
+      ),
+      month_number: i + 1,
+      year: currentYear,
+      total_applications: 0,
+      application_details: [],
+    }));
+
+    // Replace with actual data where it exists
+    stats.forEach((s) => {
+      const monthIndex = s._id - 1;
+
+      const applicationDetails = s.applicationDetails.map((app: any) => ({
+        _id: app._id,
+        // userId: app.userId,
+        service_type: app.service_type || 'N/A',
+        status: app.status,
+        payment_status: app.payment_status,
+        created_date: new Date(app.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        created_time: new Date(app.created_at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }),
+      }));
+
+      allMonths[monthIndex] = {
+        month: allMonths[monthIndex].month,
+        month_number: monthIndex + 1,
+        year: currentYear,
+        total_applications: s.totalApplications,
+        application_details: applicationDetails,
+      };
+    });
+
+    const totalApplications = stats.reduce(
+      (sum, s) => sum + s.totalApplications,
+      0,
+    );
+    const monthsWithActivity = stats.length;
+    const averageApplicationsPerMonth =
+      monthsWithActivity > 0
+        ? Math.round(totalApplications / monthsWithActivity)
+        : 0;
+
+    // Get breakdown by status
+    const statusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Get breakdown by service type
+    const serviceTypeBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$service_type',
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    // Get breakdown by payment status
+    const paymentStatusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$payment_status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return {
+      success: true,
+      message: 'Application submission stats retrieved successfully',
+      data: {
+        year: currentYear,
+        summary: {
+          total_applications: totalApplications,
+          months_with_submissions: monthsWithActivity,
+          average_applications_per_month: averageApplicationsPerMonth,
+        },
+        monthly_breakdown: allMonths,
+        breakdown_by_status: statusBreakdown.map((item) => ({
+          status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_service_type: serviceTypeBreakdown.map((item) => ({
+          service_type: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_payment_status: paymentStatusBreakdown.map((item) => ({
+          payment_status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        generated_at: new Date().toISOString(),
+        generated_date: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        generated_time: new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }),
+      },
+    };
+  }
 }

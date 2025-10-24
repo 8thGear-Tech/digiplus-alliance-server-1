@@ -11,6 +11,8 @@ import {
   Service,
   ServiceSchema,
 } from '../admin/services/schemas/service.schema';
+import { MailerModule } from '../mailer/mailer.module';
+import { RepositoryModule } from '../repository/repository.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import {
       { name: ApplicationForm.name, schema: ApplicationFormSchema },
       { name: Service.name, schema: ServiceSchema },
     ]),
+    MailerModule,
+    RepositoryModule,
   ],
   controllers: [UserApplicationController],
   providers: [UserApplicationService],

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Controller,
   Post,
@@ -10,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,25 +29,15 @@ import {
   CreateApplicationFormDto,
   UpdateApplicationFormDto,
 } from './dtos/create-application-form.dto';
-import {
-  ApplicationForm,
-  EmbeddedQuestion,
-} from './schemas/application-form.schema';
+import { ApplicationForm } from './schemas/application-form.schema';
 import { GetApplicationsDto } from './dtos/get-applications.dto';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApplicationStatus, PaymentStatus, UserTypes } from 'src/shared/enums';
 import { PublishFormDto } from './dtos/publish-form.dto';
 import { QuestionDataKeyService } from './services/question-data-key.service';
-import { GetFormQuestionsDto } from './dtos/get-form-questions.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateTrainingDetailsDto } from './dtos/update-training-details.dto';
-// import {
-//   FormValidationRulesResponseDto,
-//   ValidateInputDto,
-//   ValidationResultDto,
-// } from './dtos/validation.dto';
-// import { AdminMetrics, UserService } from 'src/modules/user/user.service';
 
 @ApiTags('Admin Applications')
 @ApiBearerAuth()
@@ -55,7 +47,6 @@ export class AdminApplicationController {
   constructor(
     private readonly adminApplicationService: AdminApplicationService,
     private readonly questionDataKeyService: QuestionDataKeyService,
-    // private readonly userService: UserService,
   ) {}
 
   @Post()
@@ -133,7 +124,8 @@ export class AdminApplicationController {
                 { id: 'opt-3', text: 'Java', value: 'java' },
                 { id: 'opt-4', text: 'C++', value: 'cpp' },
               ],
-              min_selections: 1,
+              min_selections: 2,
+              max_selections: 4,
               is_required: true,
               step: 1,
               module_ref: 'skills-module',
@@ -159,6 +151,8 @@ export class AdminApplicationController {
               question: 'What is your first name?',
               description: 'Initial student information form.',
               placeholder: 'Enter your first name',
+              min_characters: 5,
+              max_characters: 20,
               is_required: true,
               step: 1,
               module_ref: 'contact-module',
@@ -184,6 +178,8 @@ export class AdminApplicationController {
               question: 'Please provide any additional comments or feedback.',
               description: 'Initial student information form.',
               placeholder: 'Enter your comments here...',
+              min_characters: 100,
+              max_characters: 500,
               is_required: false,
               step: 1,
               module_ref: 'feedback-module',
@@ -270,7 +266,7 @@ export class AdminApplicationController {
             {
               type: 'file_upload',
               question: 'Please upload your resume.',
-              acceptedFileTypes: ['.pdf', '.docx'],
+              accepted_file_types: ['.pdf', '.docx'],
               is_required: true,
               step: 1,
               module_ref: 'documents-module',
@@ -285,6 +281,80 @@ export class AdminApplicationController {
     @Body() dto: CreateApplicationFormDto,
   ): Promise<ApplicationForm> {
     return this.adminApplicationService.createForm(dto);
+  }
+
+  @Get('submission-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get application submission statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application submission statistics retrieved successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Application submission stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_applications: 256,
+            months_with_submissions: 10,
+            average_applications_per_month: 26,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              month_number: 1,
+              year: 2025,
+              total_applications: 25,
+              application_details: [
+                {
+                  _id: '507f1f77bcf86cd799439011',
+                  userId: '507f1f77bcf86cd799439012',
+                  service_type: 'Business Registration',
+                  status: 'pending',
+                  payment_status: 'paid',
+                  created_date: 'January 15, 2025',
+                  created_time: '10:30 AM',
+                },
+              ],
+            },
+            // ... rest of months
+          ],
+          breakdown_by_status: [
+            { status: 'pending', count: 120 },
+            { status: 'approved', count: 80 },
+            { status: 'rejected', count: 56 },
+          ],
+          breakdown_by_service_type: [
+            { service_type: 'Business Registration', count: 150 },
+            { service_type: 'Tax Compliance', count: 106 },
+          ],
+          breakdown_by_payment_status: [
+            { payment_status: 'paid', count: 200 },
+            { payment_status: 'pending', count: 56 },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getApplicationSubmissionStats(
+    @Query('year') year?: number,
+  ): Promise<any> {
+    return this.adminApplicationService.getApplicationSubmissionStats(year);
   }
 
   @Get('forms')
@@ -459,6 +529,40 @@ export class AdminApplicationController {
     status: 200,
     description: 'List of training participants retrieved successfully.',
     type: [UserSubmission],
+    schema: {
+      example: [
+        {
+          application_id: '68d69352c0549c0d9744a00d',
+          name: 'John Doe',
+          email: 'johndoe@example.com',
+          service_type: 'Digital Skills & Training',
+          service: 'MIRE Plus',
+          status: 'Approved',
+          submission_time: '9/26/2025, 2:21:22 PM',
+          payment_status: 'Paid',
+          payment_amount: 1500,
+          timetable_url:
+            'https://res.cloudinary.com/dklugyv9l/image/upload/v1759070458/training_timetables/dse_training-timetable-1759070449975.png',
+          start_date: '10/15/2026, 1:00:00 AM',
+          end_date: '10/30/2026, 1:00:00 AM',
+        },
+        {
+          application_id: '68d9485e8efe11a409799ab1',
+          name: 'John Doe',
+          email: 'johndoe@example.com',
+          service_type: 'Digital Skills & Training',
+          service: 'DSE Training',
+          status: 'Approved',
+          submission_time: '9/28/2025, 3:38:22 PM',
+          payment_status: 'Paid',
+          payment_amount: 1500,
+          timetable_url:
+            'https://res.cloudinary.com/dklugyv9l/image/upload/v1759070458/training_timetables/dse_training-timetable-1759070449975.png',
+          start_date: '10/15/2025, 1:00:00 AM',
+          end_date: '10/30/2025, 1:00:00 AM',
+        },
+      ],
+    },
   })
   @ApiResponse({
     status: 404,
@@ -553,24 +657,32 @@ export class AdminApplicationController {
     );
   }
 
-  //admin metrics
-  // @Get('metrics')
-  // @ApiOperation({
-  //   summary:
-  //     'Admin: Get key system metrics (Total Users, Applications, Assessments)',
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Dashboard metrics retrieved successfully.',
-  //   schema: {
-  //     example: {
-  //       totalUsers: 1500,
-  //       totalApplications: 2500,
-  //       // totalAssessmentsCompleted: 980,
-  //     },
-  //   },
-  // })
-  // async getAdminMetrics(): Promise<AdminMetrics> {
-  //   return this.userService.getAdminMetrics();
-  // }
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Delete an application form',
+    description:
+      'Permanently deletes an application form. The form must be unpublished and have no associated submissions.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Form deleted successfully.',
+    schema: {
+      example: {
+        message: 'Application form deleted successfully.',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Form not found.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete live form or form with submissions.',
+  })
+  async deleteForm(@Param('id') id: string): Promise<{ message: string }> {
+    return this.adminApplicationService.deleteForm(id);
+  }
 }

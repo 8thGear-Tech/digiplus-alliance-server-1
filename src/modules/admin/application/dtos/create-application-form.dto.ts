@@ -7,9 +7,12 @@ import {
   IsOptional,
   IsBoolean,
   IsNumber,
+  ValidateIf,
+  Min,
+  Max,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { ValidationRule } from 'src/shared/enums';
 import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 import { Types } from 'mongoose';
@@ -59,9 +62,14 @@ export class OptionDto {
   @IsString()
   text: string;
 
-  // @ApiProperty({ example: 'cs' })
-  // @IsString()
-  // value: string;
+  @ApiProperty({
+    example: 'cs',
+    description: 'Optional value for the option',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  value?: string;
 }
 
 // Grid column structure
@@ -74,9 +82,10 @@ export class GridColumnDto {
   @IsString()
   text: string;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
   @IsNumber()
-  value: number;
+  value?: number;
 }
 
 // Grid row structure
@@ -202,21 +211,77 @@ export class QuestionDto {
     description: 'Array of options (for multiple choice, checkbox, dropdown)',
     required: false,
   })
+  // @IsOptional()
+  // @IsArray()
+  // @ValidateNested({ each: true })
+  // @Type(() => OptionDto)
+  // options?: OptionDto[];
+  @ValidateIf((o) =>
+    ['multiple_choice', 'checkbox', 'dropdown'].includes(o.type),
+  )
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OptionDto)
   options?: OptionDto[];
 
-  // For checkbox only
+  // // For checkbox only
+  // @ApiProperty({
+  //   example: 1,
+  //   description: 'Minimum selections required (for checkbox)',
+  //   required: false,
+  // })
+  // @IsOptional()
+  // @IsNumber()
+  // min_selections?: number;
+  // *** For checkbox ONLY - minimum selections ***
   @ApiProperty({
     example: 1,
-    description: 'Minimum selections required (for checkbox)',
+    description: 'Minimum selections required (for checkbox only)',
     required: false,
   })
+  @ValidateIf((o) => o.type === 'checkbox')
   @IsOptional()
   @IsNumber()
+  @Min(1)
   min_selections?: number;
+
+  // *** For checkbox ONLY - maximum selections ***
+  @ApiProperty({
+    example: 3,
+    description: 'Maximum selections allowed (for checkbox only)',
+    required: false,
+  })
+  @ValidateIf((o) => o.type === 'checkbox')
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  max_selections?: number;
+
+  // *** For short_text and long_text - minimum character limit ***
+  @ApiProperty({
+    example: 10,
+    description: 'Minimum character limit (for short_text and long_text)',
+    required: false,
+  })
+  @ValidateIf((o) => o.type === 'short_text' || o.type === 'long_text')
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  min_characters?: number;
+
+  // *** For short_text and long_text - maximum character limit ***
+  @ApiProperty({
+    example: 500,
+    description: 'Maximum character limit (for short_text and long_text)',
+    required: false,
+  })
+  @ValidateIf((o) => o.type === 'short_text' || o.type === 'long_text')
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(10000)
+  max_characters?: number;
 
   // For multiple_choice_grid
   @ApiProperty({
@@ -257,6 +322,7 @@ export class QuestionDto {
     description: 'Accepted file types (for file upload)',
     required: false,
   })
+  @ValidateIf((o) => o.type === 'file_upload')
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

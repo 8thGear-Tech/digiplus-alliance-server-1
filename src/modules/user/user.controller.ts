@@ -1,16 +1,17 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { AdminMetrics, UserService } from './user.service';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { AdminMetrics, UserService, UserWithProfile } from './user.service';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { User } from './user.schema';
-import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserTypes } from 'src/shared/enums';
 import { JwtUserAuthGuard } from '../auth/guards/jwt-user-auth.guard';
+import { GetUsersQueryDto } from './dto/user.dto';
+import { RolesGuard } from 'src/common/guards/roles.guard';
 
 @ApiTags('Admin / Users')
 @ApiBearerAuth()
@@ -22,12 +23,37 @@ export class UserController {
 
   @Get()
   @ApiOperation({
-    summary: 'Admin: Get details for all system users (requires ADMIN role)',
+    summary:
+      'Admin: Get details for all system users with optional filters (requires ADMIN role)',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description:
+      'Search by first name, last name, or business name (partial match)',
+  })
+  // @ApiQuery({
+  //   name: 'service',
+  //   required: false,
+  //   type: String,
+  //   description: 'Filter by service name',
+  // })
+  // @ApiQuery({
+  //   name: 'status',
+  //   required: false,
+  //   enum: ApplicationStatus,
+  //   description: 'Filter by application status',
+  // })
+  // @ApiQuery({
+  //   name: 'payment_status',
+  //   required: false,
+  //   type: String,
+  //   description: 'Filter by payment status',
+  // })
   @ApiResponse({
     status: 200,
-    description: 'List of all users retrieved successfully.',
-
+    description: 'List of users retrieved successfully with filters applied.',
     schema: {
       type: 'array',
       items: {
@@ -37,13 +63,28 @@ export class UserController {
           email: { type: 'string' },
           role: { type: 'string' },
           first_name: { type: 'string' },
-          // ... other user properties
+          last_name: { type: 'string' },
+          business_name: { type: 'string' },
+          phone_number: { type: 'string' },
+          company_website: { type: 'string' },
+          is_verified: { type: 'boolean' },
+          last_login: { type: 'string', format: 'date-time' },
+          applications_count: {
+            type: 'number',
+            description: 'Total number of applications submitted by this user',
+          },
+          assessments_count: {
+            type: 'number',
+            description: 'Total number of assessments completed by this user',
+          },
         },
       },
     },
   })
-  async getAllUsers(): Promise<User[]> {
-    return this.userService.findAll();
+  async getAllUsers(
+    @Query() query: GetUsersQueryDto,
+  ): Promise<UserWithProfile[]> {
+    return this.userService.findAll(query);
   }
 
   @Get('metrics')
@@ -57,8 +98,8 @@ export class UserController {
     schema: {
       example: {
         totalUsers: 1500,
-        // totalApplications: 2500,
-        // totalAssessmentsCompleted: 980,
+        totalApplications: 2500,
+        totalAssessmentsCompleted: 980,
       },
     },
   })
@@ -66,4 +107,71 @@ export class UserController {
     return this.userService.getAdminMetrics();
   }
 
+  // Add this endpoint to user.controller.ts
+
+  @Get('registration-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get user registration statistics by month for a specified year',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year to get stats for (defaults to current year)',
+    example: 2025,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User registration statistics retrieved successfully.',
+    schema: {
+      example: {
+        success: true,
+        message: 'User registration stats retrieved successfully',
+        data: {
+          year: 2025,
+          summary: {
+            total_new_users: 156,
+            months_with_registrations: 10,
+            average_users_per_month: 16,
+          },
+          monthly_breakdown: [
+            {
+              month: 'Jan',
+              month_number: 1,
+              year: 2025,
+              total_users: 12,
+              user_details: [
+                {
+                  _id: '507f1f77bcf86cd799439011',
+                  email: 'user@example.com',
+                  name: 'John Doe',
+                  business_name: 'Acme Corp',
+                  created_at: '2025-01-15T10:30:00.000Z',
+                  created_date: 'January 15, 2025',
+                  created_time: '10:30 AM',
+                },
+              ],
+            },
+            {
+              month: 'Feb',
+              month_number: 2,
+              year: 2025,
+              total_users: 18,
+              user_details: [],
+            },
+            // ... rest of months
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getUserRegistrationStats(@Query('year') year?: number): Promise<any> {
+    return this.userService.getUserRegistrationStats(year);
+  }
 }

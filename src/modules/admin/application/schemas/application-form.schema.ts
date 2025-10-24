@@ -29,8 +29,8 @@ export class EmbeddedOption {
   @Prop({ required: true })
   text: string;
 
-  //   @Prop({ required: true })
-  //   value: string;
+  @Prop({ required: false })
+  value?: string;
 }
 const EmbeddedOptionSchema = SchemaFactory.createForClass(EmbeddedOption);
 
@@ -54,8 +54,8 @@ export class EmbeddedGridColumn {
   @Prop({ required: true })
   text: string;
 
-  @Prop({ required: true })
-  value: number;
+  @Prop({ required: false })
+  value?: number;
 }
 const EmbeddedGridColumnSchema =
   SchemaFactory.createForClass(EmbeddedGridColumn);
@@ -110,9 +110,20 @@ export class EmbeddedQuestion {
   @Prop({ type: [EmbeddedOptionSchema] })
   options?: EmbeddedOption[];
 
-  // For checkbox - minimum selections required
+  // For checkbox - minimum and maximum selections required
   @Prop()
   min_selections?: number;
+
+  @Prop()
+  max_selections?: number;
+
+  // *** NEW: For short_text and long_text - minimum character limit ***
+  @Prop()
+  min_characters?: number;
+
+  // *** NEW: For short_text and long_text - maximum character limit ***
+  @Prop()
+  max_characters?: number;
 
   // For multiple choice grid - array of grid row objects
   @Prop({ type: [EmbeddedGridRowSchema] })
@@ -186,7 +197,24 @@ ApplicationFormSchema.set('toJSON', {
       ret.questions = ret.questions.map((question) => {
         const cleanQuestion = { ...question };
 
-        // Remove empty/irrelevant fields based on question type
+        // For multiple_choice (radio button) - no min/max selections
+        if (question.type === 'multiple_choice') {
+          delete cleanQuestion.min_selections;
+          delete cleanQuestion.max_selections;
+        }
+
+        // For checkbox - keep both min and max selections
+        if (question.type === 'checkbox') {
+          // Keep min_selections and max_selections
+        }
+
+        // For dropdown - no min/max selections
+        if (question.type === 'dropdown') {
+          delete cleanQuestion.min_selections;
+          delete cleanQuestion.max_selections;
+        }
+
+        // Remove options for non-choice questions
         if (
           question.type !== 'multiple_choice' &&
           question.type !== 'checkbox' &&
@@ -194,6 +222,7 @@ ApplicationFormSchema.set('toJSON', {
         ) {
           delete cleanQuestion.options;
           delete cleanQuestion.min_selections;
+          delete cleanQuestion.max_selections;
         }
 
         if (question.type !== 'multiple_choice_grid') {
@@ -203,6 +232,8 @@ ApplicationFormSchema.set('toJSON', {
 
         if (question.type !== 'short_text' && question.type !== 'long_text') {
           delete cleanQuestion.placeholder;
+          delete cleanQuestion.min_characters;
+          delete cleanQuestion.max_characters;
         }
 
         if (question.type !== 'file_upload') {
