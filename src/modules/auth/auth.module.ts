@@ -12,9 +12,10 @@ import { TokenModule } from '../token/token.module';
 import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
 import { JwtUserDefaultStrategy } from './strategies/jwt.user.default.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    PassportModule.register({ defaultStrategy: 'google' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
       imports: [ConfigModule],
@@ -38,7 +39,12 @@ import { JwtUserDefaultStrategy } from './strategies/jwt.user.default.strategy';
     RepositoryModule,
     MongooseModelsModule,
   ],
-  providers: [JwtUserStrategy, AuthService, JwtUserDefaultStrategy],
+  providers: [
+    JwtUserStrategy,
+    AuthService,
+    JwtUserDefaultStrategy,
+    GoogleStrategy,
+  ],
   controllers: [AuthController],
   exports: [JwtUserStrategy, JwtUserDefaultStrategy],
 })
