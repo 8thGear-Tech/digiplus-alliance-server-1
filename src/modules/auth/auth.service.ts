@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -34,7 +36,6 @@ import { BaseRepository } from '../repository/base.repository';
 import { BusinessProfile } from '../profile/schemas/business.owner.schema';
 import { LogoutResDto } from './dtos/logout.dto';
 import { RefreshToken } from './schemas/refresh-token.schema';
-import { ConfigService } from '@nestjs/config';
 import { AdminProfile } from '../profile/schemas/admin.schema';
 import {
   forgotPasswordEmail,
@@ -87,7 +88,6 @@ export class AuthService {
 
     @Inject(Repositories.RefreshTokenRepository)
     private readonly refreshTokenRepository: BaseRepository<RefreshToken>,
-    private readonly configService: ConfigService,
   ) {}
 
   // In auth.service.ts
@@ -179,6 +179,85 @@ export class AuthService {
     };
   }
 
+  /**
+   * Handle Google Sign-In
+   */
+  async googleLogin(googleUser: any): Promise<any> {
+    try {
+      const { email, first_name, last_name, profile_picture, google_id } =
+        googleUser;
+
+      let user = await this.userRepository.findOne({ email });
+
+      if (!user) {
+        user = await this.userRepository.create({
+          email,
+          first_name,
+          last_name,
+          profile_picture,
+          google_id,
+          role: UserTypes.business_owner,
+          is_verified: true,
+        });
+
+        await this.businessProfileRepository.create({
+          user_id: user._id,
+          email: user.email,
+          business_name: `${first_name} ${last_name}`,
+        });
+
+        this.logger.log(`New user created via Google: ${user._id}`);
+      } else {
+        if (!user.google_id) {
+          await this.userRepository.update(
+            { _id: user._id },
+            {
+              google_id,
+              profile_picture: profile_picture || user.profile_picture,
+              is_verified: true,
+            },
+          );
+        }
+
+        await this.userRepository.update(
+          { _id: user._id },
+          { last_login: new Date() },
+        );
+
+        this.logger.log(`User logged in via Google: ${user._id}`);
+      }
+
+      const payload = {
+        sub: user._id,
+        email: user.email,
+        role: user.role,
+        first_name: user.first_name,
+        last_name: user.last_name,
+      };
+
+      const access_token = await this.jwtService.signAsync(payload);
+
+      return {
+        success: true,
+        message: 'Google authentication successful',
+        data: {
+          access_token,
+          user: {
+            id: user._id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            role: user.role,
+            profile_picture: user.profile_picture,
+            is_verified: user.is_verified,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error in Google login:', error);
+      throw error;
+    }
+  }
   async verifyEmail(
     verifyAccountDto: VerifyAccountDto,
   ): Promise<SignupResDto & { resetToken?: string }> {
@@ -226,9 +305,6 @@ export class AuthService {
       userType: user.role,
     });
 
-    // console.log('DB token:', findToken?.value);
-    // console.log('Received token:', receivedToken);
-    // console.log('Match:', findToken?.value === receivedToken);
     console.log('💾 Token in DB:', findToken?.value);
     console.log('🔍 Match result:', findToken?.value === receivedToken);
 

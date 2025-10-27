@@ -30,6 +30,7 @@ import { ServicesService } from '../admin/services/services.service';
 import { assessmentCompletionEmail } from '../mailer/mailer.constants';
 import { User } from '../user/user.schema';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class AssessmentService {
@@ -54,6 +55,7 @@ export class AssessmentService {
     //added by opeyemi
     private questionValidationService: QuestionValidationService,
     private readonly servicesService: ServicesService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Add these methods to your AssessmentService class
@@ -2068,6 +2070,19 @@ export class AssessmentService {
           text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
           html: mailBody,
         });
+      }
+
+      // ✅ Send notification after assessment is completed
+      if (userId) {
+        await this.notificationService.notifyAssessmentCompleted(
+          userId,
+          assessment.title,
+          percentage_score,
+          assessmentId,
+          recommendedServices.map(
+            (service: any) => service.service_name || service.name,
+          ),
+        );
       }
 
       return {

@@ -6,6 +6,7 @@ import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module'
 import { ServicesModule } from '../admin/services/services.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { QuestionValidationService } from '../admin/application/services/questio
     MongooseModelsModule,
     ServicesModule,
     MailerModule,
+    NotificationModule,
   ],
   controllers: [AssessmentController],
   providers: [AssessmentService, QuestionValidationService],
