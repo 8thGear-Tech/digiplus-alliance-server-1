@@ -29,8 +29,8 @@ export class EmbeddedOption {
   @Prop({ required: true })
   text: string;
 
-  //   @Prop({ required: true })
-  //   value: string;
+  @Prop({ required: false })
+  value?: string;
 }
 const EmbeddedOptionSchema = SchemaFactory.createForClass(EmbeddedOption);
 
@@ -110,11 +110,10 @@ export class EmbeddedQuestion {
   @Prop({ type: [EmbeddedOptionSchema] })
   options?: EmbeddedOption[];
 
-  // For checkbox - minimum selections required
+  // For checkbox - minimum and maximum selections required
   @Prop()
   min_selections?: number;
 
-  // *** NEW: For multiple_choice - maximum selections allowed ***
   @Prop()
   max_selections?: number;
 

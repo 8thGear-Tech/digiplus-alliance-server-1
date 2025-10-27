@@ -77,6 +77,18 @@ export class AdminApplicationService {
   ): any {
     const processedQuestion = { ...question };
 
+    // ✅ ADD THIS VALIDATION
+    if (question.type === 'checkbox') {
+      const min = question.min_selections;
+      const max = question.max_selections;
+
+      if (min != null && max != null && min > max) {
+        throw new BadRequestException(
+          `Checkbox question "${question.question}": min_selections (${min}) cannot exceed max_selections (${max})`,
+        );
+      }
+    }
+
     if (isNewQuestion || !processedQuestion.data_key) {
       processedQuestion.data_key = this.questionDataKeyService.generate(
         question.question,
@@ -339,8 +351,9 @@ export class AdminApplicationService {
 
     return form;
   }
+
   async getAllForms(): Promise<ApplicationForm[]> {
-    return this.applicationFormModel.find().exec();
+    return this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
@@ -353,6 +366,42 @@ export class AdminApplicationService {
     }
 
     return updatedForm;
+  }
+
+  async deleteForm(id: string): Promise<{ message: string }> {
+    const form = await this.applicationFormModel.findById(id).exec();
+
+    if (!form) {
+      throw new NotFoundException(
+        `Application form with ID "${id}" not found.`,
+      );
+    }
+
+    // Optional: Check if form is live and prevent deletion
+    if (form.isLive) {
+      throw new BadRequestException(
+        'Cannot delete a live form. Please unpublish it first.',
+      );
+    }
+
+    // Optional: Check if there are submissions for this form
+    const submissionsCount = await this.submissionModel
+      .countDocuments({
+        form_id: id, // Assuming submissions reference the form
+      })
+      .exec();
+
+    if (submissionsCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete form. There are ${submissionsCount} submission(s) associated with this form.`,
+      );
+    }
+
+    await this.applicationFormModel.findByIdAndDelete(id).exec();
+
+    return {
+      message: 'Application form deleted successfully.',
+    };
   }
 
   async getApplicationList(dto: GetApplicationsDto): Promise<any[]> {
