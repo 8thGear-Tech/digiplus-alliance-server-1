@@ -198,6 +198,8 @@ export class AuthService {
           google_id,
           role: UserTypes.business_owner,
           is_verified: true,
+          password: 'GOOGLE_AUTH_USER',
+          isGoogleUser: true,
         });
 
         await this.businessProfileRepository.create({
@@ -236,6 +238,8 @@ export class AuthService {
       };
 
       const access_token = await this.jwtService.signAsync(payload);
+
+      this.logger.log(`User logged in via Google: ${user.email}`);
 
       return {
         success: true,

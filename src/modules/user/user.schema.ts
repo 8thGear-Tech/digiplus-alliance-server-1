@@ -21,6 +21,7 @@ export interface User extends Document {
   created_at: Date;
   updated_at: Date;
   google_id?: string;
+  isGoogleUser?: boolean;
 }
 
 export const UserSchema: Schema<User> = new Schema<User>(
@@ -87,6 +88,10 @@ export const UserSchema: Schema<User> = new Schema<User>(
       type: String,
       unique: true,
       sparse: true,
+    },
+    isGoogleUser: {
+      type: Boolean,
+      default: false,
     },
   },
   {
