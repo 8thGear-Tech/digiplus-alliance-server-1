@@ -17,6 +17,9 @@ import { Service, ServiceSchema } from '../services/schemas/service.schema';
 
 import { CloudinaryModule } from 'src/modules/cloudinary/cloudinary.module';
 import { RepositoryModule } from 'src/modules/repository/repository.module';
+import { NotificationModule } from 'src/modules/notification/notification.module';
+import { BaseRepository } from 'src/modules/repository/base.repository';
+import { UserApplicationModule } from 'src/modules/business-owner/user-application.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { RepositoryModule } from 'src/modules/repository/repository.module';
 
     CloudinaryModule,
     RepositoryModule,
+    NotificationModule,
+    BaseRepository,
+    UserApplicationModule,
   ],
 
   controllers: [AdminApplicationController],

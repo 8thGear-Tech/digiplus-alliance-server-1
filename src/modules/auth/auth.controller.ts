@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
-  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import {
@@ -22,17 +24,12 @@ import { AuthService } from './auth.service';
 import { LoginReqDto, LoginResDto } from './dtos/login.dto';
 import { SignupReqDto, SignupResDto } from './dtos/signup.dto';
 import { VerifyAccountDto, VerifyEmailRes } from './dtos/verify-email.dto';
-import {
-  ResendEmailCodeRes,
-  ResendEmailCodeReqDto,
-} from './dtos/resend-email.dto';
 import { ResetPasswordReqDto } from './dtos/reset-password.dto';
 import { GetUser } from './decorators/get-user.decorator';
 import { JwtUserAuthGuard } from './guards/jwt-user-auth.guard';
 import { JwtUserDefaultAuthGuard } from './guards/jwt-user-auth.default.guard';
 import { Constants, COOKIE_NAME } from 'src/shared/constants';
 import { LogoutResDto } from './dtos/logout.dto';
-import { RefreshTokenGuard } from './guards/refresh.token.guard';
 import { RefreshResDto } from './dtos/refresh.dto';
 
 import { UnauthorizedException } from 'src/exceptions';
@@ -41,7 +38,7 @@ import {
   ChangePasswordReqDto,
   ChangePasswordResDto,
 } from './dtos/change-password.dto';
-import { Types } from 'mongoose';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 
 const convertJwtExpiryToMs = (expiry: string): number => {
   const value = parseInt(expiry.slice(0, -1), 10);
@@ -74,6 +71,34 @@ export class AuthController {
   @Post('signup')
   async signup(@Body(ValidationPipe) signupReqDto: SignupReqDto) {
     return this.authService.signup(signupReqDto);
+  }
+
+  // GET /auth/google
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Initiate Google Sign-In' })
+  async googleAuth(@Req() req: any) {
+    // Guard redirects to Google
+  }
+
+  // GET /auth/google/callback
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Google Sign-In callback' })
+  async googleAuthRedirect(@Req() req: any, @Res() res: Response) {
+    const result = await this.authService.googleLogin(req.user);
+
+    // Redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    if (result.success) {
+      // Redirect to frontend with token in URL
+      res.redirect(
+        `${frontendUrl}/auth/google/success?token=${result.data.access_token}`,
+      );
+    } else {
+      res.redirect(`${frontendUrl}/auth/google/error`);
+    }
   }
 
   // POST /auth/verify-email

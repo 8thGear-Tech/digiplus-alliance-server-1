@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Module } from '@nestjs/common';
-import { PassportModule, PassportStrategy } from '@nestjs/passport';
+import { PassportModule } from '@nestjs/passport';
 
 import { JwtUserStrategy } from './strategies/jwt-user.strategy';
 import { AuthController } from './auth.controller';
@@ -17,7 +18,7 @@ import { JwtUserDefaultStrategy } from './strategies/jwt.user.default.strategy';
     JwtModule.registerAsync({
       inject: [ConfigService],
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
+      useFactory: (configService: ConfigService) => {
         const env = configService.get('NODE_ENV');
         return {
           secret: configService.get(`${env + '.jwt.privateKey'}`),

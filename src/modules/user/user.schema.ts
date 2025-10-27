@@ -20,6 +20,7 @@ export interface User extends Document {
   last_login?: string;
   created_at: Date;
   updated_at: Date;
+  google_id?: string;
 }
 
 export const UserSchema: Schema<User> = new Schema<User>(
@@ -81,6 +82,11 @@ export const UserSchema: Schema<User> = new Schema<User>(
     },
     last_login: {
       type: String,
+    },
+    google_id: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
   },
   {

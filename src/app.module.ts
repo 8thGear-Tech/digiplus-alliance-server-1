@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { Module, ValidationError, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -33,6 +34,7 @@ import { UserApplicationModule } from './modules/business-owner/user-application
 import { ServicesModule } from './modules/admin/services/services.module';
 import { ContactModule } from './modules/general/contact/contact.module';
 import { UnifiedValidationModule } from './modules/form-validation-rules/unified-validation.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 dotenv.config();
 
@@ -128,6 +130,7 @@ const loadConfig = () => {
     ServicesModule,
     ContactModule,
     UnifiedValidationModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

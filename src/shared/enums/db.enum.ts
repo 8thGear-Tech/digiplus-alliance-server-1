@@ -198,7 +198,6 @@ export enum Repositories {
   UserRepository = 'UserRepository',
   BusinessOwnerRepository = 'BusinessOwnerRepository',
   AdminRepository = 'AdminRepository',
-  // NotificationRepository = 'NotificationRepository',
   RefreshTokenRepository = 'RefreshTokenRepository',
   TokenRepository = 'TokenRepository',
   AssessmentRepository = 'AssessmentRepository',
@@ -210,6 +209,7 @@ export enum Repositories {
   ApplicationFormRepository = 'ApplicationFormRepository',
   UserSubmissionRepository = 'UserSubmissionRepository',
   ServiceRepository = 'ServiceRepository',
+  NotificationRepository = 'NotificationRepository',
 }
 
 export enum NotificationTypes {
