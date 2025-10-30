@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -1992,7 +1993,7 @@ export class AssessmentService {
 
       // ✅ Use pre-calculated total_possible_points from DB
       const total_possible_points = assessment.total_possible_points || 0;
-      // ✅ Calculate user’s score
+      // ✅ Calculate user's score
       const userScore = this.calculateUserScore(questions, userResponses);
       const completedAt = new Date();
       // ✅ Determine user level & percentage score
@@ -2035,56 +2036,102 @@ export class AssessmentService {
           is_submitted: true,
         };
 
-        await this.userAssessmentRepository.create(userAssessmentData);
-
-        // 🔥 Update assessment is_submitted flag
-        await this.userAssessmentRepository.update(
-          { _id: assessmentId },
-          { $set: { is_submitted: true, updated_at: new Date() } },
+        await this.userAssessmentRepository.findOneAndUpdate(
+          {
+            user_id: new Types.ObjectId(userId),
+            assessment_id: new Types.ObjectId(assessmentId),
+          },
+          {
+            $set: {
+              answers,
+              user_score: userScore,
+              max_possible_score: total_possible_points,
+              percentage_score: Number((percentage_score || 0).toFixed(2)),
+              recommended_services: recommendedServices,
+              completed_at: completedAt,
+              is_submitted: true,
+            },
+          },
+          { upsert: true },
         );
+
         this.logger.log(
           `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
         );
       }
 
-      // 📧 Send confirmation email
-      const user = userId ? await this.userRepository.findById(userId) : null;
+      // 📧 Send email and notification in background (non-blocking)
+      setImmediate(async () => {
+        try {
+          const user = userId
+            ? await this.userRepository.findById(userId)
+            : null;
 
-      if (user?.email) {
-        const mailBody = assessmentCompletionEmail(
-          user,
-          assessment.title,
-          userScore,
-          total_possible_points,
-          percentage_score,
-          userLevel,
-          recommendedServices.map((service: any) => ({
-            name: service.service_name || service.name,
-            description: service.description,
-          })),
-        );
+          // Send email
+          if (user?.email) {
+            try {
+              const mailBody = assessmentCompletionEmail(
+                user,
+                assessment.title,
+                userScore,
+                total_possible_points,
+                percentage_score,
+                userLevel,
+                recommendedServices.map((service: any) => ({
+                  name: service.service_name || service.name,
+                  description: service.description,
+                })),
+              );
 
-        await this.mailService.sendMail({
-          to: user.email,
-          subject: `Assessment Completed - ${assessment.title}`,
-          text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
-          html: mailBody,
-        });
-      }
+              await this.mailService.sendMail({
+                to: user.email,
+                subject: `Assessment Completed - ${assessment.title}`,
+                text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
+                html: mailBody,
+              });
 
-      // ✅ Send notification after assessment is completed
-      if (userId) {
-        await this.notificationService.notifyAssessmentCompleted(
-          userId,
-          assessment.title,
-          percentage_score,
-          assessmentId,
-          recommendedServices.map(
-            (service: any) => service.service_name || service.name,
-          ),
-        );
-      }
+              this.logger.log(
+                `✅ Assessment completion email sent to ${user.email}`,
+              );
+            } catch (emailError) {
+              this.logger.error(
+                `❌ Failed to send assessment completion email to ${user.email}:`,
+                emailError.message,
+              );
+            }
+          }
 
+          // Send notification
+          if (userId) {
+            try {
+              await this.notificationService.notifyAssessmentCompleted(
+                userId,
+                assessment.title,
+                percentage_score,
+                assessmentId,
+                recommendedServices.map(
+                  (service: any) => service.service_name || service.name,
+                ),
+              );
+              this.logger.log(
+                `✅ Assessment completion notification sent to user ${userId}`,
+              );
+            } catch (notificationError) {
+              this.logger.error(
+                `❌ Failed to send assessment notification to user ${userId}:`,
+                notificationError.message,
+              );
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `❌ Error in background email/notification process:`,
+            error.message,
+          );
+        }
+      });
+
+      // ✅ Return immediately without waiting for email/notification
       return {
         success: true,
         message: 'Assessment completed successfully',
