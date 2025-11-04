@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 // ============================================
 // UNIFIED VALIDATION SERVICE
 // ============================================
@@ -257,8 +260,8 @@ export class UnifiedValidationService {
 
   //     // Validation doesn't need these, but keep for compatibility
   //     placeholder: question.placeholder,
-  //     max_length: question.max_length,
-  //     min_length: question.min_length,
+  //     max_character: question.max_character,
+  //     min_character: question.min_character,
 
   //     // Set data_key for validation service (use question_id as fallback)
   //     data_key: question._id?.toString(),
@@ -355,14 +358,14 @@ export class UnifiedValidationService {
       case 'short_text':
       case QuestionType.SHORT_TEXT:
         mapped.placeholder = question.placeholder;
-        mapped.max_length = question.max_length;
-        mapped.min_length = question.min_length;
+        mapped.max_character = question.max_character;
+        mapped.min_character = question.min_character;
         mapped.completion_points = question.completion_points;
         // Add validation params for length constraints
-        if (question.min_length || question.max_length) {
+        if (question.min_character || question.max_character) {
           mapped.validation_params = {
-            min_length: question.min_length,
-            max_length: question.max_length,
+            min_character: question.min_character,
+            max_character: question.max_character,
             error_message: question.validation_params?.error_message,
           };
         }
@@ -371,16 +374,16 @@ export class UnifiedValidationService {
       case 'long_text':
       case QuestionType.LONG_TEXT:
         mapped.placeholder = question.placeholder;
-        mapped.max_length = question.max_length;
-        mapped.min_length = question.min_length;
+        mapped.max_character = question.max_character;
+        mapped.min_character = question.min_character;
         mapped.rows = question.rows;
         mapped.completion_points = question.completion_points;
         mapped.keyword_scoring = question.keyword_scoring;
         // Add validation params for length constraints
-        if (question.min_length || question.max_length) {
+        if (question.min_character || question.max_character) {
           mapped.validation_params = {
-            min_length: question.min_length,
-            max_length: question.max_length,
+            min_character: question.min_character,
+            max_character: question.max_character,
             error_message: question.validation_params?.error_message,
           };
         }

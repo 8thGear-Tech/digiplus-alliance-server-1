@@ -1,3 +1,6 @@
+/* eslint-disable no-case-declarations */
+/* eslint-disable no-useless-escape */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -269,19 +272,19 @@
 //       }
 
 //       // Add length validations for text fields
-//       if (params.min_length) {
+//       if (params.min_character) {
 //         validation.rules.push({
-//           type: 'min_length',
-//           value: params.min_length,
-//           message: `Minimum ${params.min_length} characters required`,
+//           type: 'min_character',
+//           value: params.min_character,
+//           message: `Minimum ${params.min_character} characters required`,
 //         });
 //       }
 
-//       if (params.max_length) {
+//       if (params.max_character) {
 //         validation.rules.push({
-//           type: 'max_length',
-//           value: params.max_length,
-//           message: `Maximum ${params.max_length} characters allowed`,
+//           type: 'max_character',
+//           value: params.max_character,
+//           message: `Maximum ${params.max_character} characters allowed`,
 //         });
 //       }
 //     }
@@ -539,18 +542,18 @@
 //       }
 
 //       // Length validations
-//       if (params.min_length && value.length < params.min_length) {
+//       if (params.min_character && value.length < params.min_character) {
 //         errors.push({
-//           type: 'min_length',
-//           message: `Minimum ${params.min_length} characters required`,
+//           type: 'min_character',
+//           message: `Minimum ${params.min_character} characters required`,
 //           field,
 //         });
 //       }
 
-//       if (params.max_length && value.length > params.max_length) {
+//       if (params.max_character && value.length > params.max_character) {
 //         errors.push({
-//           type: 'max_length',
-//           message: `Maximum ${params.max_length} characters allowed`,
+//           type: 'max_character',
+//           message: `Maximum ${params.max_character} characters allowed`,
 //           field,
 //         });
 //       }
@@ -820,19 +823,19 @@ export class QuestionValidationService {
       }
 
       // Add length validations for text fields
-      if (params.min_length) {
+      if (params.min_character) {
         validation.rules.push({
-          type: 'min_length',
-          value: params.min_length,
-          message: `Minimum ${params.min_length} characters required`,
+          type: 'min_character',
+          value: params.min_character,
+          message: `Minimum ${params.min_character} characters required`,
         });
       }
 
-      if (params.max_length) {
+      if (params.max_character) {
         validation.rules.push({
-          type: 'max_length',
-          value: params.max_length,
-          message: `Maximum ${params.max_length} characters allowed`,
+          type: 'max_character',
+          value: params.max_character,
+          message: `Maximum ${params.max_character} characters allowed`,
         });
       }
     }
@@ -1090,18 +1093,18 @@ export class QuestionValidationService {
       }
 
       // Length validations
-      if (params.min_length && value.length < params.min_length) {
+      if (params.min_character && value.length < params.min_character) {
         errors.push({
-          type: 'min_length',
-          message: `Minimum ${params.min_length} characters required`,
+          type: 'min_character',
+          message: `Minimum ${params.min_character} characters required`,
           field,
         });
       }
 
-      if (params.max_length && value.length > params.max_length) {
+      if (params.max_character && value.length > params.max_character) {
         errors.push({
-          type: 'max_length',
-          message: `Maximum ${params.max_length} characters allowed`,
+          type: 'max_character',
+          message: `Maximum ${params.max_character} characters allowed`,
           field,
         });
       }
