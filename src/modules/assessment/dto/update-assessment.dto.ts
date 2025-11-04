@@ -226,12 +226,12 @@ export class UpdateQuestionDto {
   @ApiProperty({ example: 100, required: false })
   @IsOptional()
   @IsNumber()
-  max_length?: number;
+  max_characters?: number;
 
   @ApiProperty({ example: 2, required: false })
   @IsOptional()
   @IsNumber()
-  min_length?: number;
+  min_characters?: number;
 
   @ApiProperty({ example: 5, required: false })
   @IsOptional()

@@ -67,8 +67,8 @@ export class Question {
 
   @Prop({ type: Object })
   validation_params?: {
-    min_length?: number;
-    max_length?: number;
+    min_character?: number;
+    max_character?: number;
     error_message?: string;
   };
 

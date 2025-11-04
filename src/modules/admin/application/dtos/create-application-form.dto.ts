@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   IsNotEmpty,
   IsString,
@@ -191,14 +192,14 @@ export class QuestionDto {
 
   // Validation parameters
   @ApiProperty({
-    example: { min_length: 5, max_length: 100 },
+    example: { min_character: 5, max_character: 100 },
     description: 'Parameters for validation rules',
     required: false,
   })
   @IsOptional()
   validation_params?: {
-    min_length?: number;
-    max_length?: number;
+    min_character?: number;
+    max_character?: number;
     custom_pattern?: string;
     error_message?: string;
   };
