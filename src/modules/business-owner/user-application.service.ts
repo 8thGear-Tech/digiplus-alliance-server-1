@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable no-prototype-builtins */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -6,6 +8,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -23,6 +26,11 @@ import { Repositories } from '../../shared/enums/db.enum';
 import { BaseRepository } from '../repository/base.repository';
 import { User } from '../user/user.schema';
 import { MailerService } from '../mailer/mailer.service';
+import { NotificationService } from '../notification/notification.service';
+import {
+  NotificationPriority,
+  NotificationType,
+} from '../notification/schemas/notification.schema';
 
 type FormProjection = {
   _id: string;
@@ -33,6 +41,8 @@ type FormProjection = {
 
 @Injectable()
 export class UserApplicationService {
+  private readonly logger = new Logger(UserApplicationService.name);
+
   constructor(
     @InjectModel(ApplicationForm.name)
     private applicationFormModel: Model<ApplicationForm>,
@@ -43,6 +53,7 @@ export class UserApplicationService {
     @Inject(Repositories.UserRepository)
     private readonly userRepository: BaseRepository<User>,
     private readonly mailService: MailerService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private transformUserSubmissions(submissions: any[]): any[] {
@@ -213,6 +224,35 @@ export class UserApplicationService {
         subject: `New Application - ${service}`,
         html: adminMailBody,
       });
+
+      // 🔔 Send in-app notification to user
+      if (user) {
+        try {
+          await this.notificationService.create({
+            user_id: user._id.toString(),
+            title: 'Application Submitted Successfully',
+            message: `Your application for "${service}" has been submitted successfully. We'll review it and get back to you soon.`,
+            type: NotificationType.APPLICATION_SUBMITTED,
+            priority: NotificationPriority.MEDIUM,
+            metadata: {
+              application_id: savedSubmission._id,
+              service_name: service,
+              service_type: selectedService.service_type,
+              action_url: '',
+            },
+            expires_in_days: 60,
+          });
+          this.logger.log(
+            `✅ Application submission notification sent to user ${user._id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `❌ Failed to send application notification to user ${user._id}`,
+            error,
+          );
+        }
+      }
+
       return savedSubmission;
     } catch (error) {
       console.error('Failed to save submission:', error.message);

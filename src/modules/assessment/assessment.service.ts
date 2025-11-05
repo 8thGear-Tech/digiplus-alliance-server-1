@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -30,6 +31,8 @@ import { ServicesService } from '../admin/services/services.service';
 import { assessmentCompletionEmail } from '../mailer/mailer.constants';
 import { User } from '../user/user.schema';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
+import { NotificationService } from '../notification/notification.service';
+import { max } from 'class-validator';
 
 @Injectable()
 export class AssessmentService {
@@ -54,6 +57,7 @@ export class AssessmentService {
     //added by opeyemi
     private questionValidationService: QuestionValidationService,
     private readonly servicesService: ServicesService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Add these methods to your AssessmentService class
@@ -238,8 +242,8 @@ export class AssessmentService {
     if (question.module_description)
       base.module_description = question.module_description;
     if (question.placeholder) base.placeholder = question.placeholder;
-    if (question.max_length) base.max_length = question.max_length;
-    if (question.min_length) base.min_length = question.min_length;
+    if (question.max_character) base.max_character = question.max_character;
+    if (question.min_character) base.min_character = question.min_character;
     if (question.rows) base.rows = question.rows;
     if (question.completion_points)
       base.completion_points = question.completion_points;
@@ -648,10 +652,10 @@ export class AssessmentService {
       case QuestionType.SHORT_TEXT:
         if (questionDto.placeholder !== undefined)
           updateData.placeholder = questionDto.placeholder;
-        if (questionDto.max_length !== undefined)
-          updateData.max_length = questionDto.max_length;
-        if (questionDto.min_length !== undefined)
-          updateData.min_length = questionDto.min_length;
+        if (questionDto.max_character !== undefined)
+          updateData.max_character = questionDto.max_character;
+        if (questionDto.min_character !== undefined)
+          updateData.min_character = questionDto.min_character;
         if (questionDto.completion_points !== undefined) {
           updateData.completion_points = questionDto.completion_points;
           updateData.max_points = questionDto.completion_points;
@@ -661,10 +665,10 @@ export class AssessmentService {
       case QuestionType.LONG_TEXT:
         if (questionDto.placeholder !== undefined)
           updateData.placeholder = questionDto.placeholder;
-        if (questionDto.max_length !== undefined)
-          updateData.max_length = questionDto.max_length;
-        if (questionDto.min_length !== undefined)
-          updateData.min_length = questionDto.min_length;
+        if (questionDto.max_character !== undefined)
+          updateData.max_character = questionDto.max_character;
+        if (questionDto.min_character !== undefined)
+          updateData.min_character = questionDto.min_character;
         if (questionDto.rows !== undefined) updateData.rows = questionDto.rows;
         if (questionDto.completion_points !== undefined)
           updateData.completion_points = questionDto.completion_points;
@@ -792,8 +796,8 @@ export class AssessmentService {
         questionData = {
           ...baseQuestionData,
           placeholder: questionDto.placeholder,
-          max_length: questionDto.max_length,
-          min_length: questionDto.min_length,
+          max_character: questionDto.max_character,
+          min_character: questionDto.min_character,
           completion_points: questionDto.completion_points || 0,
           max_points: questionDto.completion_points || 0,
         };
@@ -803,8 +807,8 @@ export class AssessmentService {
         questionData = {
           ...baseQuestionData,
           placeholder: questionDto.placeholder,
-          max_length: questionDto.max_length,
-          min_length: questionDto.min_length,
+          max_character: questionDto.max_character,
+          min_character: questionDto.min_character,
           rows: questionDto.rows,
           completion_points: questionDto.completion_points || 0,
           keyword_scoring: questionDto.keyword_scoring || [],
@@ -1084,8 +1088,8 @@ export class AssessmentService {
             questionData = {
               ...baseQuestionData,
               placeholder: questionDto.placeholder,
-              max_length: questionDto.max_length,
-              min_length: questionDto.min_length,
+              max_character: questionDto.max_character,
+              min_character: questionDto.min_character,
               completion_points: questionDto.completion_points || 0,
               max_points: questionDto.completion_points || 0,
             };
@@ -1095,8 +1099,8 @@ export class AssessmentService {
             questionData = {
               ...baseQuestionData,
               placeholder: questionDto.placeholder,
-              max_length: questionDto.max_length,
-              min_length: questionDto.min_length,
+              max_character: questionDto.max_character,
+              min_character: questionDto.min_character,
               rows: questionDto.rows,
               completion_points: questionDto.completion_points || 0,
               keyword_scoring: questionDto.keyword_scoring || [],
@@ -1990,7 +1994,7 @@ export class AssessmentService {
 
       // ✅ Use pre-calculated total_possible_points from DB
       const total_possible_points = assessment.total_possible_points || 0;
-      // ✅ Calculate user’s score
+      // ✅ Calculate user's score
       const userScore = this.calculateUserScore(questions, userResponses);
       const completedAt = new Date();
       // ✅ Determine user level & percentage score
@@ -2033,43 +2037,102 @@ export class AssessmentService {
           is_submitted: true,
         };
 
-        await this.userAssessmentRepository.create(userAssessmentData);
-
-        // 🔥 Update assessment is_submitted flag
-        await this.userAssessmentRepository.update(
-          { _id: assessmentId },
-          { $set: { is_submitted: true, updated_at: new Date() } },
+        await this.userAssessmentRepository.findOneAndUpdate(
+          {
+            user_id: new Types.ObjectId(userId),
+            assessment_id: new Types.ObjectId(assessmentId),
+          },
+          {
+            $set: {
+              answers,
+              user_score: userScore,
+              max_possible_score: total_possible_points,
+              percentage_score: Number((percentage_score || 0).toFixed(2)),
+              recommended_services: recommendedServices,
+              completed_at: completedAt,
+              is_submitted: true,
+            },
+          },
+          { upsert: true },
         );
+
         this.logger.log(
           `User ${userId} completed assessment ${assessmentId} with score ${userScore}`,
         );
       }
 
-      // 📧 Send confirmation email
-      const user = userId ? await this.userRepository.findById(userId) : null;
+      // 📧 Send email and notification in background (non-blocking)
+      setImmediate(async () => {
+        try {
+          const user = userId
+            ? await this.userRepository.findById(userId)
+            : null;
 
-      if (user?.email) {
-        const mailBody = assessmentCompletionEmail(
-          user,
-          assessment.title,
-          userScore,
-          total_possible_points,
-          percentage_score,
-          userLevel,
-          recommendedServices.map((service: any) => ({
-            name: service.service_name || service.name,
-            description: service.description,
-          })),
-        );
+          // Send email
+          if (user?.email) {
+            try {
+              const mailBody = assessmentCompletionEmail(
+                user,
+                assessment.title,
+                userScore,
+                total_possible_points,
+                percentage_score,
+                userLevel,
+                recommendedServices.map((service: any) => ({
+                  name: service.service_name || service.name,
+                  description: service.description,
+                })),
+              );
 
-        await this.mailService.sendMail({
-          to: user.email,
-          subject: `Assessment Completed - ${assessment.title}`,
-          text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
-          html: mailBody,
-        });
-      }
+              await this.mailService.sendMail({
+                to: user.email,
+                subject: `Assessment Completed - ${assessment.title}`,
+                text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
+                html: mailBody,
+              });
 
+              this.logger.log(
+                `✅ Assessment completion email sent to ${user.email}`,
+              );
+            } catch (emailError) {
+              this.logger.error(
+                `❌ Failed to send assessment completion email to ${user.email}:`,
+                emailError.message,
+              );
+            }
+          }
+
+          // Send notification
+          if (userId) {
+            try {
+              await this.notificationService.notifyAssessmentCompleted(
+                userId,
+                assessment.title,
+                percentage_score,
+                assessmentId,
+                recommendedServices.map(
+                  (service: any) => service.service_name || service.name,
+                ),
+              );
+              this.logger.log(
+                `✅ Assessment completion notification sent to user ${userId}`,
+              );
+            } catch (notificationError) {
+              this.logger.error(
+                `❌ Failed to send assessment notification to user ${userId}:`,
+                notificationError.message,
+              );
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `❌ Error in background email/notification process:`,
+            error.message,
+          );
+        }
+      });
+
+      // ✅ Return immediately without waiting for email/notification
       return {
         success: true,
         message: 'Assessment completed successfully',

@@ -298,7 +298,7 @@ export class CreateShortTextQuestionDto extends BaseQuestionDto {
   })
   @IsOptional()
   @IsNumber()
-  max_length?: number;
+  max_character?: number;
 
   @ApiProperty({
     example: 2,
@@ -307,7 +307,7 @@ export class CreateShortTextQuestionDto extends BaseQuestionDto {
   })
   @IsOptional()
   @IsNumber()
-  min_length?: number;
+  min_character?: number;
 
   @ApiProperty({
     example: 5,
@@ -341,7 +341,7 @@ export class CreateLongTextQuestionDto extends BaseQuestionDto {
   })
   @IsOptional()
   @IsNumber()
-  max_length?: number;
+  max_character?: number;
 
   @ApiProperty({
     example: 50,
@@ -350,7 +350,7 @@ export class CreateLongTextQuestionDto extends BaseQuestionDto {
   })
   @IsOptional()
   @IsNumber()
-  min_length?: number;
+  min_character?: number;
 
   @ApiProperty({
     example: 5,

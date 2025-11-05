@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Module } from '@nestjs/common';
-import { PassportModule, PassportStrategy } from '@nestjs/passport';
+import { PassportModule } from '@nestjs/passport';
 
 import { JwtUserStrategy } from './strategies/jwt-user.strategy';
 import { AuthController } from './auth.controller';
@@ -11,13 +12,14 @@ import { TokenModule } from '../token/token.module';
 import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModelsModule } from '../mongoose-models/mongoose.models.module';
 import { JwtUserDefaultStrategy } from './strategies/jwt.user.default.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    PassportModule.register({ defaultStrategy: 'google' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
+      useFactory: (configService: ConfigService) => {
         const env = configService.get('NODE_ENV');
         return {
           secret: configService.get(`${env + '.jwt.privateKey'}`),
@@ -37,7 +39,12 @@ import { JwtUserDefaultStrategy } from './strategies/jwt.user.default.strategy';
     RepositoryModule,
     MongooseModelsModule,
   ],
-  providers: [JwtUserStrategy, AuthService, JwtUserDefaultStrategy],
+  providers: [
+    JwtUserStrategy,
+    AuthService,
+    JwtUserDefaultStrategy,
+    GoogleStrategy,
+  ],
   controllers: [AuthController],
   exports: [JwtUserStrategy, JwtUserDefaultStrategy],
 })

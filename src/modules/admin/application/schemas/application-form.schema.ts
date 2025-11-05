@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ValidationRule } from 'src/shared/enums';
@@ -7,10 +8,10 @@ import { QuestionType } from 'src/modules/assessment/enums/question-type.enum';
 @Schema({ _id: false })
 export class ValidationParams {
   @Prop()
-  min_length?: number;
+  min_character?: number;
 
   @Prop()
-  max_length?: number;
+  max_character?: number;
 
   @Prop()
   custom_pattern?: string;

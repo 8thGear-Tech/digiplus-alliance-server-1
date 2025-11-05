@@ -13,6 +13,8 @@ import {
 } from '../admin/services/schemas/service.schema';
 import { MailerModule } from '../mailer/mailer.module';
 import { RepositoryModule } from '../repository/repository.module';
+import { NotificationModule } from '../notification/notification.module';
+// import { UserSchema, User } from '../user/user.schema';
 
 @Module({
   imports: [
@@ -23,6 +25,7 @@ import { RepositoryModule } from '../repository/repository.module';
     ]),
     MailerModule,
     RepositoryModule,
+    NotificationModule,
   ],
   controllers: [UserApplicationController],
   providers: [UserApplicationService],

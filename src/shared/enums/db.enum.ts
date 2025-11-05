@@ -81,8 +81,8 @@
 //   URL = 'url',
 //   NUMBER_ONLY = 'number_only',
 //   ALPHABETS_ONLY = 'alphabets_only',
-//   MIN_LENGTH = 'min_length',
-//   MAX_LENGTH = 'max_length',
+//   MIN_CHARACTER = 'min_character',
+//   MAX_CHARACTER = 'max_character',
 // }
 
 // export enum Repositories {
@@ -190,15 +190,14 @@ export enum ValidationRule {
   URL = 'url',
   NUMBER_ONLY = 'number_only',
   ALPHABETS_ONLY = 'alphabets_only',
-  MIN_LENGTH = 'min_length',
-  MAX_LENGTH = 'max_length',
+  MIN_CHARACTER = 'min_character',
+  MAX_CHARACTER = 'max_character',
 }
 
 export enum Repositories {
   UserRepository = 'UserRepository',
   BusinessOwnerRepository = 'BusinessOwnerRepository',
   AdminRepository = 'AdminRepository',
-  // NotificationRepository = 'NotificationRepository',
   RefreshTokenRepository = 'RefreshTokenRepository',
   TokenRepository = 'TokenRepository',
   AssessmentRepository = 'AssessmentRepository',
@@ -210,6 +209,7 @@ export enum Repositories {
   ApplicationFormRepository = 'ApplicationFormRepository',
   UserSubmissionRepository = 'UserSubmissionRepository',
   ServiceRepository = 'ServiceRepository',
+  NotificationRepository = 'NotificationRepository',
 }
 
 export enum NotificationTypes {

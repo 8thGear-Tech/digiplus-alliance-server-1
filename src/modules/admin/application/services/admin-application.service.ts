@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -8,6 +11,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -35,9 +39,18 @@ import { UploadService } from 'src/modules/cloudinary/cloudinary.service';
 import { UpdateTrainingDetailsDto } from '../dtos/update-training-details.dto';
 import { BaseRepository } from 'src/modules/repository/base.repository';
 import { UserAssessment } from 'src/modules/assessment/schemas/user-assessment.schema';
+import { NotificationService } from 'src/modules/notification/notification.service';
+import { User } from 'src/modules/user/user.schema';
+import {
+  NotificationPriority,
+  NotificationType,
+} from 'src/modules/notification/schemas/notification.schema';
+import { UserApplicationService } from 'src/modules/business-owner/user-application.service';
 
 @Injectable()
 export class AdminApplicationService {
+  private readonly logger = new Logger(UserApplicationService.name);
+
   constructor(
     @InjectModel(ApplicationForm.name)
     private applicationFormModel: Model<ApplicationForm>,
@@ -52,6 +65,9 @@ export class AdminApplicationService {
     private questionValidationService: QuestionValidationService,
     private questionDataKeyService: QuestionDataKeyService,
     private readonly uploadService: UploadService,
+    private readonly notificationService: NotificationService,
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
   ) {}
 
   private processSingleQuestion(
@@ -474,6 +490,85 @@ export class AdminApplicationService {
     return this.transformTrainingsList(submissions, servicePriceMap);
   }
 
+  // async updateTrainingDetails(
+  //   trainingName: string,
+  //   updateDto: UpdateTrainingDetailsDto,
+  //   file: Express.Multer.File,
+  // ): Promise<any[]> {
+  //   const updatePayload: any = {};
+  //   let timetable_url: string | undefined;
+
+  //   if (file) {
+  //     try {
+  //       const sanitizedName = trainingName
+  //         .replace(/[^a-z0-9]/gi, '_')
+  //         .toLowerCase();
+  //       const filename = `${sanitizedName}-timetable-${Date.now()}`;
+  //       const folder = 'training_timetables';
+
+  //       const uploadResult = await this.uploadService.uploadImage(
+  //         file,
+  //         filename,
+  //         folder,
+  //       );
+  //       timetable_url = uploadResult.secure_url;
+  //     } catch (error) {
+  //       console.error('Cloudinary Upload Error:', error);
+  //       throw new BadRequestException(
+  //         'Failed to upload timetable file to cloud storage.',
+  //       );
+  //     }
+  //   } else if (updateDto.timetable_url) {
+  //     timetable_url = updateDto.timetable_url;
+  //   }
+
+  //   if (timetable_url) {
+  //     updatePayload.timetable_url = timetable_url;
+  //   }
+
+  //   if (updateDto.start_date) {
+  //     updatePayload.start_date = new Date(updateDto.start_date);
+  //   }
+  //   if (updateDto.end_date) {
+  //     updatePayload.end_date = new Date(updateDto.end_date);
+  //   }
+
+  //   if (Object.keys(updatePayload).length === 0) {
+  //     throw new BadRequestException(
+  //       'No valid update fields (file, URL, start date, or end date) were provided.',
+  //     );
+  //   }
+
+  //   const filter: any = {
+  //     service: new RegExp(trainingName.trim(), 'i'),
+  //     status: ApplicationStatus.Approved,
+  //     payment_status: PaymentStatus.Paid,
+  //   };
+
+  //   const updateResult = await this.submissionModel
+  //     .updateMany(filter, { $set: updatePayload })
+  //     .exec();
+
+  //   if (updateResult.matchedCount === 0) {
+  //     throw new NotFoundException(
+  //       `No approved and paid participants found for training "${trainingName}" to update.`,
+  //     );
+  //   }
+
+  //   const updatedSubmissions = await this.submissionModel
+  //     .find(filter)
+  //     .select('+service_type +timetable_url +start_date +end_date')
+  //     .exec();
+
+  //   const services = await this.serviceModel.find().exec();
+  //   const servicePriceMap = services.reduce((map, service) => {
+  //     map[service.name] = service.price;
+  //     return map;
+  //   }, {});
+
+  //   return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
+  // }
+
   async updateTrainingDetails(
     trainingName: string,
     updateDto: UpdateTrainingDetailsDto,
@@ -529,15 +624,22 @@ export class AdminApplicationService {
       payment_status: PaymentStatus.Paid,
     };
 
-    const updateResult = await this.submissionModel
-      .updateMany(filter, { $set: updatePayload })
+    // Get all affected submissions before updating (to get user IDs)
+    const affectedSubmissions = await this.submissionModel
+      .find(filter)
+      .select('+userId +service')
       .exec();
 
-    if (updateResult.matchedCount === 0) {
+    if (affectedSubmissions.length === 0) {
       throw new NotFoundException(
         `No approved and paid participants found for training "${trainingName}" to update.`,
       );
     }
+
+    // ✅ CORE FUNCTIONALITY: Update training details
+    const updateResult = await this.submissionModel
+      .updateMany(filter, { $set: updatePayload })
+      .exec();
 
     const updatedSubmissions = await this.submissionModel
       .find(filter)
@@ -550,9 +652,114 @@ export class AdminApplicationService {
       return map;
     }, {});
 
+    // 🔔 OPTIONAL: Send notifications (wrapped in try-catch to not block main flow)
+    // This runs asynchronously and won't affect the response
+    setImmediate(async () => {
+      try {
+        this.logger.log(
+          `Starting to send notifications to ${affectedSubmissions.length} users for training "${trainingName}"`,
+        );
+
+        const notificationPromises = affectedSubmissions.map(
+          async (submission) => {
+            try {
+              const user = await this.userRepository.findById(
+                submission.userId.toString(),
+              );
+
+              if (!user) {
+                this.logger.warn(
+                  `User not found for submission ${submission._id}`,
+                );
+                return;
+              }
+
+              // Build notification message based on what was updated
+              let message = `Training details for "${trainingName}" have been updated. `;
+              const updates: string[] = [];
+
+              if (timetable_url) {
+                updates.push('A new timetable has been uploaded');
+              }
+              if (updateDto.start_date) {
+                const formattedDate = new Date(
+                  updateDto.start_date,
+                ).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                });
+                updates.push(`Start date: ${formattedDate}`);
+              }
+              if (updateDto.end_date) {
+                const formattedDate = new Date(
+                  updateDto.end_date,
+                ).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                });
+                updates.push(`End date: ${formattedDate}`);
+              }
+
+              if (updates.length > 0) {
+                message += updates.join('. ') + '.';
+              }
+
+              await this.notificationService.create({
+                user_id: user._id.toString(),
+                title: `Training Update: ${trainingName}`,
+                message,
+                type: NotificationType.SYSTEM_ANNOUNCEMENT,
+                priority: NotificationPriority.HIGH,
+                metadata: {
+                  training_name: trainingName,
+                  timetable_url,
+                  start_date: updateDto.start_date,
+                  end_date: updateDto.end_date,
+                  submission_id: submission._id,
+                  action_url: timetable_url || '/trainings',
+                },
+                expires_in_days: 90,
+              });
+
+              this.logger.log(
+                `✅ Training update notification sent to user ${user._id} for ${trainingName}`,
+              );
+            } catch (notificationError) {
+              // Log but don't throw - continue with other notifications
+              this.logger.error(
+                `❌ Failed to send notification to user ${submission.userId}:`,
+                notificationError.message,
+              );
+            }
+          },
+        );
+
+        // Wait for all notifications (failures won't affect main flow)
+        const results = await Promise.allSettled(notificationPromises);
+
+        const successCount = results.filter(
+          (r) => r.status === 'fulfilled',
+        ).length;
+        const failureCount = results.filter(
+          (r) => r.status === 'rejected',
+        ).length;
+
+        this.logger.log(
+          `📧 Notification summary for "${trainingName}": ${successCount} sent successfully, ${failureCount} failed`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `❌ Error in notification batch process for training "${trainingName}":`,
+          error.message,
+        );
+      }
+    });
+
+    // ✅ Return immediately without waiting for notifications
     return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
   }
-
   async getTotalApplicationsCount(): Promise<number> {
     return this.userSubmissionRepository.count({});
   }
