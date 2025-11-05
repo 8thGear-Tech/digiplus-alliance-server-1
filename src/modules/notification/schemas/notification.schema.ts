@@ -3,6 +3,7 @@ import { Document, Types } from 'mongoose';
 
 export enum NotificationType {
   ASSESSMENT_COMPLETED = 'assessment_completed',
+  ASSESSMENT_LIMITED = 'assessment_limited',
   APPLICATION_SUBMITTED = 'application_submitted',
   APPLICATION_APPROVED = 'application_approved',
   APPLICATION_REJECTED = 'application_rejected',

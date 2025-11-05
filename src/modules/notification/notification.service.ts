@@ -267,6 +267,36 @@ export class NotificationService {
     }
   }
 
+  async notifyAssessmentRetakeLimited(
+    userId: string,
+    assessmentTitle: string,
+    nextEligibleDate: Date,
+  ): Promise<void> {
+    try {
+      await this.create({
+        user_id: userId,
+        title: 'Assessment Retake Limited',
+        message: `You recently completed "${assessmentTitle}". You can retake this assessment again on ${nextEligibleDate.toDateString()}.`,
+        type: NotificationType.ASSESSMENT_LIMITED,
+        priority: NotificationPriority.HIGH,
+        metadata: {
+          next_eligible_date: nextEligibleDate,
+          action_url: '',
+        },
+        expires_in_days: 30,
+      });
+
+      this.logger.log(
+        `🚫 Assessment retake notification sent to user ${userId} for "${assessmentTitle}" — next eligible: ${nextEligibleDate.toDateString()}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send assessment retake limitation notification to user ${userId}`,
+        error.stack,
+      );
+    }
+  }
+
   /**
    * Helper: Notify user about application status
    */
