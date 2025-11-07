@@ -12,6 +12,7 @@ import {
 } from './schemas/notification.schema';
 import { BaseRepository } from '../repository/base.repository';
 import { Repositories } from 'src/shared/enums';
+import { User } from '../user/user.schema';
 
 export interface CreateNotificationDto {
   user_id: string | Types.ObjectId;
@@ -32,6 +33,8 @@ export class NotificationService {
   constructor(
     @Inject(Repositories.NotificationRepository)
     private readonly notificationRepository: BaseRepository<Notification>,
+    @Inject(Repositories.UserRepository)
+    private readonly userRepository: BaseRepository<User>,
   ) {}
 
   /**
@@ -267,6 +270,36 @@ export class NotificationService {
     }
   }
 
+  async notifyAssessmentRetakeLimited(
+    userId: string,
+    assessmentTitle: string,
+    nextEligibleDate: Date,
+  ): Promise<void> {
+    try {
+      await this.create({
+        user_id: userId,
+        title: 'Assessment Retake Limited',
+        message: `You recently completed "${assessmentTitle}". You can retake this assessment again on ${nextEligibleDate.toDateString()}.`,
+        type: NotificationType.ASSESSMENT_LIMITED,
+        priority: NotificationPriority.HIGH,
+        metadata: {
+          next_eligible_date: nextEligibleDate,
+          action_url: '',
+        },
+        expires_in_days: 30,
+      });
+
+      this.logger.log(
+        `🚫 Assessment retake notification sent to user ${userId} for "${assessmentTitle}" — next eligible: ${nextEligibleDate.toDateString()}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to send assessment retake limitation notification to user ${userId}`,
+        error.stack,
+      );
+    }
+  }
+
   /**
    * Helper: Notify user about application status
    */
@@ -315,5 +348,107 @@ export class NotificationService {
       },
       expires_in_days: 14,
     });
+  }
+
+  // Add to notification.service.ts
+
+  /**
+   * Helper: Notify ALL admin users about new application submission
+   */
+  async notifyAdminsNewApplication(
+    submitterId: string,
+    submitterName: string,
+    serviceName: string,
+    applicationId: string,
+  ): Promise<void> {
+    try {
+      // Get all admin users
+      const admins = await this.userRepository.find({ role: 'admin' });
+
+      if (admins.length === 0) {
+        this.logger.warn('No admin users found to notify');
+        return;
+      }
+
+      // Send notification to each admin
+      const notificationPromises = admins.map((admin) =>
+        this.create({
+          user_id: admin._id.toString(),
+          title: 'New Application Submitted',
+          message: `${submitterName} has submitted an application for "${serviceName}"`,
+          type: NotificationType.APPLICATION_SUBMITTED,
+          priority: NotificationPriority.HIGH,
+          metadata: {
+            application_id: new Types.ObjectId(applicationId),
+            submitter_id: new Types.ObjectId(submitterId),
+            submitter_name: submitterName,
+            service_name: serviceName,
+            action_url: ``,
+          },
+          expires_in_days: 90,
+        }),
+      );
+
+      await Promise.allSettled(notificationPromises);
+      this.logger.log(
+        `✅ Notified ${admins.length} admin(s) about new application from ${submitterName}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        '❌ Failed to notify admins about new application:',
+        error.message,
+      );
+    }
+  }
+
+  /**
+   * Helper: Notify ALL admin users about new assessment submission
+   */
+  async notifyAdminsNewAssessmentSubmission(
+    submitterId: string,
+    submitterName: string,
+    assessmentTitle: string,
+    assessmentId: string,
+    score: number,
+  ): Promise<void> {
+    try {
+      // Get all admin users
+      const admins = await this.userRepository.find({ role: 'admin' });
+
+      if (admins.length === 0) {
+        this.logger.warn('No admin users found to notify');
+        return;
+      }
+
+      // Send notification to each admin
+      const notificationPromises = admins.map((admin) =>
+        this.create({
+          user_id: admin._id.toString(),
+          title: 'New Assessment Completed',
+          message: `${submitterName} completed "${assessmentTitle}" with a score of ${score}%`,
+          type: NotificationType.ASSESSMENT_COMPLETED,
+          priority: NotificationPriority.MEDIUM,
+          metadata: {
+            assessment_id: new Types.ObjectId(assessmentId),
+            submitter_id: new Types.ObjectId(submitterId),
+            submitter_name: submitterName,
+            assessment_title: assessmentTitle,
+            score,
+            action_url: ``,
+          },
+          expires_in_days: 60,
+        }),
+      );
+
+      await Promise.allSettled(notificationPromises);
+      this.logger.log(
+        `✅ Notified ${admins.length} admin(s) about assessment completion by ${submitterName}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        '❌ Failed to notify admins about assessment submission:',
+        error.message,
+      );
+    }
   }
 }

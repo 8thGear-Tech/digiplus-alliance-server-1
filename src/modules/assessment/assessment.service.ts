@@ -1951,6 +1951,13 @@ export class AssessmentService {
     userId?: string,
   ) {
     try {
+      const assessmentData = await this.getAssessmentById(assessmentId);
+
+      if (!assessmentData?.data) {
+        throw BadRequestException.BAD_REQUEST('Assessment not found');
+      }
+
+      const { assessment, questions } = assessmentData.data;
       // === 🧠 Step 1: Enforce 2-week retake rule ===
       if (userId) {
         const lastSubmission = await this.userAssessmentRepository.findOne({
@@ -1970,20 +1977,27 @@ export class AssessmentService {
             const nextEligibleDate = new Date(
               completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
             );
+
+            setImmediate(async () => {
+              try {
+                await this.notificationService.notifyAssessmentRetakeLimited(
+                  userId,
+                  assessment.title,
+                  nextEligibleDate,
+                );
+              } catch (notifyError) {
+                this.logger.error(
+                  `❌ Failed to notify user ${userId} about retake limitation:`,
+                  notifyError.message,
+                );
+              }
+            });
             throw BadRequestException.BAD_REQUEST(
-              `You can only retake this assessment every 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
+              `You can only retake this assessment after 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
             );
           }
         }
       }
-
-      const assessmentData = await this.getAssessmentById(assessmentId);
-
-      if (!assessmentData?.data) {
-        throw BadRequestException.BAD_REQUEST('Assessment not found');
-      }
-
-      const { assessment, questions } = assessmentData.data;
 
       // 🛑 Check if published
       if (!assessment.is_published) {
@@ -2068,44 +2082,28 @@ export class AssessmentService {
             ? await this.userRepository.findById(userId)
             : null;
 
-          // Send email
-          if (user?.email) {
-            try {
-              const mailBody = assessmentCompletionEmail(
-                user,
-                assessment.title,
-                userScore,
-                total_possible_points,
-                percentage_score,
-                userLevel,
-                recommendedServices.map((service: any) => ({
-                  name: service.service_name || service.name,
-                  description: service.description,
-                })),
-              );
-
-              await this.mailService.sendMail({
+          const emailPromise = user?.email
+            ? this.mailService.sendMail({
                 to: user.email,
                 subject: `Assessment Completed - ${assessment.title}`,
                 text: `Hi ${user.first_name || ''}, you scored ${userScore}/${total_possible_points} in ${assessment.title}.`,
-                html: mailBody,
-              });
+                html: assessmentCompletionEmail(
+                  user,
+                  assessment.title,
+                  userScore,
+                  total_possible_points,
+                  percentage_score,
+                  userLevel,
+                  recommendedServices.map((service: any) => ({
+                    name: service.service_name || service.name,
+                    description: service.description,
+                  })),
+                ),
+              })
+            : Promise.resolve();
 
-              this.logger.log(
-                `✅ Assessment completion email sent to ${user.email}`,
-              );
-            } catch (emailError) {
-              this.logger.error(
-                `❌ Failed to send assessment completion email to ${user.email}:`,
-                emailError.message,
-              );
-            }
-          }
-
-          // Send notification
-          if (userId) {
-            try {
-              await this.notificationService.notifyAssessmentCompleted(
+          const notificationPromise = userId
+            ? this.notificationService.notifyAssessmentCompleted(
                 userId,
                 assessment.title,
                 percentage_score,
@@ -2113,16 +2111,59 @@ export class AssessmentService {
                 recommendedServices.map(
                   (service: any) => service.service_name || service.name,
                 ),
-              );
-              this.logger.log(
-                `✅ Assessment completion notification sent to user ${userId}`,
-              );
-            } catch (notificationError) {
-              this.logger.error(
-                `❌ Failed to send assessment notification to user ${userId}:`,
-                notificationError.message,
-              );
-            }
+              )
+            : Promise.resolve();
+
+          // ✅ NEW: Notify admins about assessment submission
+          const adminNotificationPromise =
+            userId && user
+              ? this.notificationService.notifyAdminsNewAssessmentSubmission(
+                  userId,
+                  `${user.first_name} ${user.last_name}`.trim() || user.email,
+                  assessment.title,
+                  assessmentId,
+                  Math.round(percentage_score),
+                )
+              : Promise.resolve();
+
+          // Run both concurrently — no blocking
+          const [emailResult, notificationResult, adminNotificationResult] =
+            await Promise.allSettled([
+              emailPromise,
+              notificationPromise,
+              adminNotificationPromise,
+            ]);
+
+          if (emailResult.status === 'fulfilled') {
+            this.logger.log(
+              `✅ Assessment completion email sent to ${user?.email}`,
+            );
+          } else {
+            this.logger.error(
+              `❌ Failed to send email to ${user?.email}:`,
+              emailResult.reason?.message,
+            );
+          }
+
+          if (notificationResult.status === 'fulfilled') {
+            this.logger.log(`✅ Notification sent to user ${userId}`);
+          } else {
+            this.logger.error(
+              `❌ Failed to send notification to user ${userId}:`,
+              notificationResult.reason?.message,
+            );
+          }
+
+          // ✅ NEW: Log admin notification result
+          if (adminNotificationResult.status === 'fulfilled') {
+            this.logger.log(
+              `✅ Admin notifications sent for assessment ${assessmentId}`,
+            );
+          } else {
+            this.logger.error(
+              `❌ Failed to send admin notifications:`,
+              adminNotificationResult.reason?.message,
+            );
           }
         } catch (error) {
           this.logger.error(
