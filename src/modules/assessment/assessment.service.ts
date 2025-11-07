@@ -2114,11 +2114,25 @@ export class AssessmentService {
               )
             : Promise.resolve();
 
+          // ✅ NEW: Notify admins about assessment submission
+          const adminNotificationPromise =
+            userId && user
+              ? this.notificationService.notifyAdminsNewAssessmentSubmission(
+                  userId,
+                  `${user.first_name} ${user.last_name}`.trim() || user.email,
+                  assessment.title,
+                  assessmentId,
+                  Math.round(percentage_score),
+                )
+              : Promise.resolve();
+
           // Run both concurrently — no blocking
-          const [emailResult, notificationResult] = await Promise.allSettled([
-            emailPromise,
-            notificationPromise,
-          ]);
+          const [emailResult, notificationResult, adminNotificationResult] =
+            await Promise.allSettled([
+              emailPromise,
+              notificationPromise,
+              adminNotificationPromise,
+            ]);
 
           if (emailResult.status === 'fulfilled') {
             this.logger.log(
@@ -2137,6 +2151,18 @@ export class AssessmentService {
             this.logger.error(
               `❌ Failed to send notification to user ${userId}:`,
               notificationResult.reason?.message,
+            );
+          }
+
+          // ✅ NEW: Log admin notification result
+          if (adminNotificationResult.status === 'fulfilled') {
+            this.logger.log(
+              `✅ Admin notifications sent for assessment ${assessmentId}`,
+            );
+          } else {
+            this.logger.error(
+              `❌ Failed to send admin notifications:`,
+              adminNotificationResult.reason?.message,
             );
           }
         } catch (error) {

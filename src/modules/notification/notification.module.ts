@@ -8,11 +8,13 @@ import {
 } from './schemas/notification.schema';
 import { BaseRepository } from '../repository/base.repository';
 import { Repositories } from 'src/shared/enums';
+import { UserSchema } from '../user/user.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Notification.name, schema: NotificationSchema },
+      { name: 'User', schema: UserSchema },
     ]),
   ],
   controllers: [NotificationController],
@@ -22,6 +24,11 @@ import { Repositories } from 'src/shared/enums';
       provide: Repositories.NotificationRepository,
       useFactory: (model) => new BaseRepository(model),
       inject: [getModelToken(Notification.name)],
+    },
+    {
+      provide: Repositories.UserRepository,
+      useFactory: (model) => new BaseRepository(model),
+      inject: [getModelToken('User')],
     },
   ],
   exports: [NotificationService],

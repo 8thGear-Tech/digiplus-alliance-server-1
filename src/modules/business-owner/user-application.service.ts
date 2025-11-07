@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable no-prototype-builtins */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -126,6 +128,142 @@ export class UserApplicationService {
     return form;
   }
 
+  // async submitApplication(
+  //   slug: string,
+  //   submissionDto: SubmissionDto,
+  //   userId: string,
+  // ): Promise<UserSubmission> {
+  //   const { responses, service } = submissionDto;
+
+  //   const form = await this.applicationFormModel.findOne({
+  //     slug,
+  //     isLive: true,
+  //   });
+  //   if (!form) {
+  //     throw new NotFoundException('Application form not found or is not live.');
+  //   }
+
+  //   const selectedService = await this.serviceModel.findOne({ name: service });
+  //   if (!selectedService) {
+  //     throw new NotFoundException('Selected service not found.');
+  //   }
+
+  //   const formQuestions = new Map();
+  //   form.questions.forEach((question) => {
+  //     if (question.data_key) {
+  //       formQuestions.set(question.data_key, {
+  //         isRequired: question.is_required,
+  //         question: question.question,
+  //       });
+  //     }
+  //   });
+
+  //   const submittedResponsesKeys = new Set(Object.keys(responses));
+
+  //   form.questions.forEach((question) => {
+  //     if (
+  //       question.is_required &&
+  //       question.data_key &&
+  //       !submittedResponsesKeys.has(question.data_key)
+  //     ) {
+  //       throw new BadRequestException(
+  //         `The required question '${question.question}' (data_key: '${question.data_key}') was not provided in the submission.`,
+  //       );
+  //     }
+  //   });
+
+  //   submittedResponsesKeys.forEach((key) => {
+  //     if (!formQuestions.has(key)) {
+  //       throw new BadRequestException(
+  //         `The submitted field '${key}' does not correspond to a question in the form.`,
+  //       );
+  //     }
+  //   });
+
+  //   const newSubmission = new this.submissionModel({
+  //     responses,
+  //     service,
+  //     userId,
+  //     service_type: selectedService.service_type,
+  //     formId: form._id,
+  //     payment_amount: selectedService.price,
+  //   });
+
+  //   try {
+  //     const savedSubmission = await newSubmission.save();
+
+  //     // ✅ Fetch user details
+  //     const user = await this.userRepository.findById(userId);
+
+  //     // 📧 Send confirmation email to user
+  //     if (user?.email) {
+  //       const userMailBody = applicationUserEmail(
+  //         user,
+  //         service,
+  //         responses,
+  //         formQuestions,
+  //       );
+
+  //       await this.mailService.sendMail({
+  //         to: user.email,
+  //         subject: `Application Submitted - ${service}`,
+  //         html: userMailBody,
+  //       });
+  //     }
+
+  //     // 📧 Send notification email to admin
+  //     const adminEmail = process.env.ADMIN_EMAIL || 'admin@digiplus.com';
+  //     const adminMailBody = applicationAdminEmail(
+  //       user,
+  //       service,
+  //       responses,
+  //       formQuestions,
+  //       selectedService.price,
+  //     );
+
+  //     await this.mailService.sendMail({
+  //       to: adminEmail,
+  //       subject: `New Application - ${service}`,
+  //       html: adminMailBody,
+  //     });
+
+  //     // 🔔 Send in-app notification to user
+  //     if (user) {
+  //       try {
+  //         await this.notificationService.create({
+  //           user_id: user._id.toString(),
+  //           title: 'Application Submitted Successfully',
+  //           message: `Your application for "${service}" has been submitted successfully. We'll review it and get back to you soon.`,
+  //           type: NotificationType.APPLICATION_SUBMITTED,
+  //           priority: NotificationPriority.MEDIUM,
+  //           metadata: {
+  //             application_id: savedSubmission._id,
+  //             service_name: service,
+  //             service_type: selectedService.service_type,
+  //             action_url: '',
+  //           },
+  //           expires_in_days: 60,
+  //         });
+  //         this.logger.log(
+  //           `✅ Application submission notification sent to user ${user._id}`,
+  //         );
+  //       } catch (error) {
+  //         this.logger.error(
+  //           `❌ Failed to send application notification to user ${user._id}`,
+  //           error,
+  //         );
+  //       }
+  //     }
+
+  //     return savedSubmission;
+  //   } catch (error) {
+  //     console.error('Failed to save submission:', error.message);
+  //     throw error;
+  //   }
+  // }
+
+  // user-application.service.ts
+
   async submitApplication(
     slug: string,
     submissionDto: SubmissionDto,
@@ -193,73 +331,129 @@ export class UserApplicationService {
       // ✅ Fetch user details
       const user = await this.userRepository.findById(userId);
 
-      // 📧 Send confirmation email to user
-      if (user?.email) {
-        const userMailBody = applicationUserEmail(
-          user,
-          service,
-          responses,
-          formQuestions,
-        );
+      // 📧 Send emails and notifications in background (non-blocking)
+      setImmediate(async () => {
+        try {
+          // Email to user
+          const userEmailPromise = user?.email
+            ? this.mailService.sendMail({
+                to: user.email,
+                subject: `Application Submitted - ${service}`,
+                html: applicationUserEmail(
+                  user,
+                  service,
+                  responses,
+                  formQuestions,
+                ),
+              })
+            : Promise.resolve();
 
-        await this.mailService.sendMail({
-          to: user.email,
-          subject: `Application Submitted - ${service}`,
-          html: userMailBody,
-        });
-      }
+          // Email to admin
+          const adminEmail = process.env.ADMIN_EMAIL || 'admin@digiplus.com';
+          const adminEmailPromise = this.mailService.sendMail({
+            to: adminEmail,
+            subject: `New Application - ${service}`,
+            html: applicationAdminEmail(
+              user,
+              service,
+              responses,
+              formQuestions,
+              selectedService.price,
+            ),
+          });
 
-      // 📧 Send notification email to admin
-      const adminEmail = process.env.ADMIN_EMAIL || 'admin@digiplus.com';
-      const adminMailBody = applicationAdminEmail(
-        user,
-        service,
-        responses,
-        formQuestions,
-        selectedService.price,
-      );
+          // User notification
+          const userNotificationPromise = user
+            ? this.notificationService.create({
+                user_id: user._id.toString(),
+                title: 'Application Submitted Successfully',
+                message: `Your application for "${service}" has been submitted successfully. We'll review it and get back to you soon.`,
+                type: NotificationType.APPLICATION_SUBMITTED,
+                priority: NotificationPriority.MEDIUM,
+                metadata: {
+                  application_id: savedSubmission._id,
+                  service_name: service,
+                  service_type: selectedService.service_type,
+                  action_url: '',
+                },
+                expires_in_days: 60,
+              })
+            : Promise.resolve();
 
-      await this.mailService.sendMail({
-        to: adminEmail,
-        subject: `New Application - ${service}`,
-        html: adminMailBody,
+          // ✅ NEW: Admin notification
+          const adminNotificationPromise = user
+            ? this.notificationService.notifyAdminsNewApplication(
+                user._id.toString(),
+                `${user.first_name} ${user.last_name}`.trim() || user.email,
+                service,
+                (savedSubmission._id as Types.ObjectId).toString(),
+              )
+            : Promise.resolve();
+
+          // Run all concurrently
+          const [
+            userEmailResult,
+            adminEmailResult,
+            userNotificationResult,
+            adminNotificationResult,
+          ] = await Promise.allSettled([
+            userEmailPromise,
+            adminEmailPromise,
+            userNotificationPromise,
+            adminNotificationPromise, // ✅ Add this
+          ]);
+
+          // Log results
+          if (userEmailResult.status === 'fulfilled') {
+            this.logger.log(`✅ User email sent to ${user?.email}`);
+          } else {
+            this.logger.error(
+              `❌ Failed to send user email:`,
+              userEmailResult.reason?.message,
+            );
+          }
+
+          if (adminEmailResult.status === 'fulfilled') {
+            this.logger.log(`✅ Admin email sent`);
+          } else {
+            this.logger.error(
+              `❌ Failed to send admin email:`,
+              adminEmailResult.reason?.message,
+            );
+          }
+
+          if (userNotificationResult.status === 'fulfilled') {
+            this.logger.log(`✅ User notification sent`);
+          } else {
+            this.logger.error(
+              `❌ Failed to send user notification:`,
+              userNotificationResult.reason?.message,
+            );
+          }
+
+          // ✅ NEW: Log admin notification result
+          if (adminNotificationResult.status === 'fulfilled') {
+            this.logger.log(
+              `✅ Admin notifications sent for application ${savedSubmission._id}`,
+            );
+          } else {
+            this.logger.error(
+              `❌ Failed to send admin notifications:`,
+              adminNotificationResult.reason?.message,
+            );
+          }
+        } catch (error) {
+          this.logger.error(`❌ Error in background process:`, error.message);
+        }
       });
 
-      // 🔔 Send in-app notification to user
-      if (user) {
-        try {
-          await this.notificationService.create({
-            user_id: user._id.toString(),
-            title: 'Application Submitted Successfully',
-            message: `Your application for "${service}" has been submitted successfully. We'll review it and get back to you soon.`,
-            type: NotificationType.APPLICATION_SUBMITTED,
-            priority: NotificationPriority.MEDIUM,
-            metadata: {
-              application_id: savedSubmission._id,
-              service_name: service,
-              service_type: selectedService.service_type,
-              action_url: '',
-            },
-            expires_in_days: 60,
-          });
-          this.logger.log(
-            `✅ Application submission notification sent to user ${user._id}`,
-          );
-        } catch (error) {
-          this.logger.error(
-            `❌ Failed to send application notification to user ${user._id}`,
-            error,
-          );
-        }
-      }
-
+      // ✅ Return immediately
       return savedSubmission;
     } catch (error) {
       console.error('Failed to save submission:', error.message);
       throw error;
     }
   }
-
   async getUserSubmissions(userId: string): Promise<any[]> {
     const submissions = await this.submissionModel
       .aggregate([
