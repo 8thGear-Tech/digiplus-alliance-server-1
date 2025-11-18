@@ -283,78 +283,55 @@ export class AdminApplicationController {
     return this.adminApplicationService.createForm(dto);
   }
 
-  @Get('submission-stats')
+  @Get('submission-yearly-range-stats')
   @UseGuards(RolesGuard)
   @Roles(UserTypes.admin)
   @ApiOperation({
     summary:
-      'Admin: Get application submission statistics by month for a specified year',
-  })
-  @ApiQuery({
-    name: 'year',
-    required: false,
-    type: Number,
-    description: 'Year to get stats for (defaults to current year)',
-    example: 2025,
+      'Admin: Get system-wide application submission statistics for the last 6 years',
   })
   @ApiResponse({
     status: 200,
-    description: 'Application submission statistics retrieved successfully.',
+    description:
+      'Application submission yearly statistics retrieved successfully for the last 6 years.',
     schema: {
       example: {
         success: true,
-        message: 'Application submission stats retrieved successfully',
+        message: 'Application submission yearly stats retrieved successfully',
         data: {
-          year: 2025,
+          start_year: 2020,
+          end_year: 2025,
           summary: {
-            total_applications: 256,
-            months_with_submissions: 10,
-            average_applications_per_month: 26,
+            total_applications: 5120,
+            years_with_submissions: 6,
+            average_applications_per_year: 853,
           },
-          monthly_breakdown: [
-            {
-              month: 'Jan',
-              month_number: 1,
-              year: 2025,
-              total_applications: 25,
-              application_details: [
-                {
-                  _id: '507f1f77bcf86cd799439011',
-                  userId: '507f1f77bcf86cd799439012',
-                  service_type: 'Business Registration',
-                  status: 'pending',
-                  payment_status: 'paid',
-                  created_date: 'January 15, 2025',
-                  created_time: '10:30 AM',
-                },
-              ],
-            },
-            // ... rest of months
+          yearly_breakdown: [
+            { year: 2020, total_applications: 800 },
+            { year: 2021, total_applications: 1000 },
+            // ... (Data for years 2022, 2023, 2024)
+            { year: 2025, total_applications: 1200 },
           ],
           breakdown_by_status: [
-            { status: 'pending', count: 120 },
-            { status: 'approved', count: 80 },
-            { status: 'rejected', count: 56 },
+            { status: 'pending', count: 2500 },
+            { status: 'approved', count: 1800 },
+            { status: 'rejected', count: 820 },
           ],
           breakdown_by_service_type: [
-            { service_type: 'Business Registration', count: 150 },
-            { service_type: 'Tax Compliance', count: 106 },
+            { service_type: 'Business Registration', count: 3000 },
+            { service_type: 'Tax Compliance', count: 2120 },
           ],
           breakdown_by_payment_status: [
-            { payment_status: 'paid', count: 200 },
-            { payment_status: 'pending', count: 56 },
+            { payment_status: 'paid', count: 4000 },
+            { payment_status: 'pending', count: 1120 },
           ],
           generated_at: '2025-10-15T14:30:00.000Z',
-          generated_date: 'October 15, 2025',
-          generated_time: '02:30:00 PM',
         },
       },
     },
   })
-  async getApplicationSubmissionStats(
-    @Query('year') year?: number,
-  ): Promise<any> {
-    return this.adminApplicationService.getApplicationSubmissionStats(year);
+  async getApplicationSubmissionYearlyStats(): Promise<any> {
+    return this.adminApplicationService.getApplicationSubmissionYearlyStats();
   }
 
   @Get('forms')

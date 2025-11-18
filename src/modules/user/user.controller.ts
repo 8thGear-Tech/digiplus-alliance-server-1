@@ -174,4 +174,40 @@ export class UserController {
   async getUserRegistrationStats(@Query('year') year?: number): Promise<any> {
     return this.userService.getUserRegistrationStats(year);
   }
+
+  @Get('registration-yearly-range-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary: 'Admin: Get user registration statistics for the last 6 years',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'User registration yearly statistics retrieved successfully for the last 6 years.',
+    schema: {
+      example: {
+        success: true,
+        message: 'User registration yearly stats retrieved successfully',
+        data: {
+          start_year: 2020,
+          end_year: 2025,
+          summary: {
+            total_new_users: 1024,
+            years_with_registrations: 6,
+            average_users_per_year: 171,
+          },
+          yearly_breakdown: [
+            { year: 2020, total_users: 150 },
+            { year: 2021, total_users: 180 },
+            { year: 2025, total_users: 220 },
+          ],
+          generated_at: '2025-11-18T16:00:30.000Z',
+        },
+      },
+    },
+  })
+  async getUserRegistrationYearlyStats(): Promise<any> {
+    return this.userService.getUserRegistrationYearlyStats();
+  }
 }
