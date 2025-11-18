@@ -315,4 +315,70 @@ export class UserService {
       },
     };
   }
+
+  async getUserRegistrationYearlyStats(): Promise<any> {
+    const currentYear = new Date().getFullYear();
+    // Define the 6-year range (current year and 5 previous years)
+    const startYear = currentYear - 5;
+
+    // Filter for users created in the last 6 years
+    const filter: any = {
+      createdAt: {
+        $gte: new Date(`${startYear}-01-01T00:00:00.000Z`),
+        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+      },
+    };
+
+    // Aggregate users by year
+    const stats = await this.userRepository.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { $year: '$createdAt' }, // Group by year
+          totalUsers: { $sum: 1 },
+          // userDetails are excluded for high-level yearly stats
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Fill all 6 years with default 0
+    const allYears = Array.from({ length: 6 }, (_, i) => ({
+      year: startYear + i,
+      total_users: 0,
+    }));
+
+    // Replace with actual data where it exists
+    stats.forEach((s) => {
+      const yearIndex = s._id - startYear;
+
+      if (yearIndex >= 0 && yearIndex < 6) {
+        allYears[yearIndex] = {
+          year: s._id,
+          total_users: s.totalUsers,
+        };
+      }
+    });
+
+    const totalUsers = stats.reduce((sum, s) => sum + s.totalUsers, 0);
+    const yearsWithActivity = stats.length;
+    const averageUsersPerYear =
+      yearsWithActivity > 0 ? Math.round(totalUsers / yearsWithActivity) : 0;
+
+    return {
+      success: true,
+      message: 'User registration yearly stats retrieved successfully',
+      data: {
+        start_year: startYear,
+        end_year: currentYear,
+        summary: {
+          total_new_users: totalUsers,
+          years_with_registrations: yearsWithActivity,
+          average_users_per_year: averageUsersPerYear,
+        },
+        yearly_breakdown: allYears,
+        generated_at: new Date().toISOString(),
+      },
+    };
+  }
 }

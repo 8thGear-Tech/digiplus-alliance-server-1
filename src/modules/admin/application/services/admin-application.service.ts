@@ -926,4 +926,121 @@ export class AdminApplicationService {
       },
     };
   }
+
+  async getApplicationSubmissionYearlyStats(): Promise<any> {
+    const currentYear = new Date().getFullYear();
+    // Calculate the starting year for the 6-year range (current year - 5)
+    const startYear = currentYear - 5;
+
+    // Filter for applications submitted in the last 6 years
+    const filter: any = {
+      createdAt: {
+        $gte: new Date(`${startYear}-01-01T00:00:00.000Z`),
+        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+      },
+    };
+
+    // 1. Aggregate applications by year
+    const stats = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { $year: '$createdAt' }, // Group by year
+          totalApplications: { $sum: 1 },
+          // Note: applicationDetails are NOT included for yearly stats
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // 2. Fill all 6 years with default 0
+    const allYears = Array.from({ length: 6 }, (_, i) => ({
+      year: startYear + i,
+      total_applications: 0,
+    }));
+
+    // 3. Replace with actual data where it exists
+    stats.forEach((s) => {
+      const yearIndex = s._id - startYear;
+
+      if (yearIndex >= 0 && yearIndex < 6) {
+        allYears[yearIndex] = {
+          year: s._id,
+          total_applications: s.totalApplications,
+        };
+      }
+    });
+
+    const totalApplications = stats.reduce(
+      (sum, s) => sum + s.totalApplications,
+      0,
+    );
+    const yearsWithActivity = stats.length;
+    const averageApplicationsPerYear =
+      yearsWithActivity > 0
+        ? Math.round(totalApplications / yearsWithActivity)
+        : 0;
+
+    // 4. Get breakdown by status across the 6-year range
+    const statusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // 5. Get breakdown by service type across the 6-year range
+    const serviceTypeBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$service_type',
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    // 6. Get breakdown by payment status across the 6-year range
+    const paymentStatusBreakdown = await this.submissionModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$payment_status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return {
+      success: true,
+      message: 'Application submission yearly stats retrieved successfully',
+      data: {
+        start_year: startYear,
+        end_year: currentYear,
+        summary: {
+          total_applications: totalApplications,
+          years_with_submissions: yearsWithActivity,
+          average_applications_per_year: averageApplicationsPerYear,
+        },
+        yearly_breakdown: allYears,
+        breakdown_by_status: statusBreakdown.map((item) => ({
+          status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_service_type: serviceTypeBreakdown.map((item) => ({
+          service_type: item._id || 'Unknown',
+          count: item.count,
+        })),
+        breakdown_by_payment_status: paymentStatusBreakdown.map((item) => ({
+          payment_status: item._id || 'Unknown',
+          count: item.count,
+        })),
+        generated_at: new Date().toISOString(),
+      },
+    };
+  }
 }

@@ -2346,6 +2346,90 @@ export class AssessmentService {
     }
   }
 
+  async getUserYearlyStats(userId: string): Promise<any> {
+    try {
+      const currentYear = new Date().getFullYear();
+      // Calculate the starting year (current year - 5) for 6 years of data
+      const startYear = currentYear - 5;
+
+      // 1. Setup the initial filter for the last 6 years
+      const filter: any = {
+        user_id: new Types.ObjectId(userId),
+        completed_at: {
+          $gte: new Date(`${startYear}-01-01T00:00:00.000Z`),
+          $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+        },
+      };
+
+      const stats = await this.userAssessmentModel.aggregate([
+        { $match: filter },
+        // 2. Group by the year of the 'completed_at' date
+        {
+          $group: {
+            _id: { $year: '$completed_at' }, // Grouping key is the year
+            totalScore: { $sum: '$user_score' },
+            totalMaxPossibleScore: { $sum: '$max_possible_score' },
+            submissions: { $sum: 1 },
+          },
+        },
+        // 3. Sort by year (ascending)
+        { $sort: { _id: 1 } },
+      ]);
+
+      // 4. Fill all 6 years with default 0 data
+      const allYears = Array.from({ length: 6 }, (_, i) => ({
+        year: startYear + i,
+        average_score: 0,
+        submissions: 0,
+      }));
+
+      // 5. Replace defaults with actual aggregated data and calculate averages
+      stats.forEach((s) => {
+        const yearIndex = s._id - startYear;
+
+        // Ensure the year is within the 6-year range
+        if (yearIndex >= 0 && yearIndex < 6) {
+          const averageScore =
+            s.submissions > 0 ? Math.round(s.totalScore / s.submissions) : 0;
+
+          allYears[yearIndex] = {
+            year: s._id,
+            average_score: averageScore,
+            submissions: s.submissions,
+          };
+        }
+      });
+
+      // 6. Calculate overall summary
+      const totalSubmissions = allYears.reduce(
+        (sum, s) => sum + s.submissions,
+        0,
+      );
+
+      return {
+        success: true,
+        message: 'Yearly stats retrieved successfully',
+        data: {
+          start_year: startYear,
+          end_year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            // Note: Calculating a combined overall average from annual averages isn't ideal,
+            // a true overall average requires re-aggregating the raw data's total scores.
+            // For simplicity, we'll keep the breakdown as the main focus.
+            years_active: stats.length,
+          },
+          yearly_breakdown: allYears,
+          generated_at: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting yearly stats:', error);
+      // Assuming BadRequestException is defined in your environment
+      throw BadRequestException.BAD_REQUEST('Failed to retrieve yearly stats');
+    }
+  }
+
   async getSubmittedAssessments(
     page: number = 1,
     limit: number = 10,
@@ -2688,6 +2772,86 @@ export class AssessmentService {
       this.logger.error('Error getting all assessment stats:', error);
       throw BadRequestException.BAD_REQUEST(
         'Failed to retrieve assessment stats',
+      );
+    }
+  }
+
+  async getAllAssessmentsYearlyStats(): Promise<any> {
+    try {
+      const currentYear = new Date().getFullYear();
+      // Calculate the starting year (current year - 5) for 6 years of data
+      const startYear = currentYear - 5;
+
+      // 🧮 Filter for completed assessments within the last 6 years
+      const filter: any = {
+        completed_at: {
+          $gte: new Date(`${startYear}-01-01T00:00:00.000Z`),
+          $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+        },
+      };
+
+      const stats = await this.userAssessmentModel.aggregate([
+        { $match: filter },
+        // 1. Group by the year of the 'completed_at' date
+        {
+          $group: {
+            _id: { $year: '$completed_at' }, // Grouping key is the year
+            totalScore: { $sum: '$user_score' },
+            submissions: { $sum: 1 },
+          },
+        },
+        // 2. Sort by year (ascending)
+        { $sort: { _id: 1 } },
+      ]);
+
+      // 3. Fill all 6 years with default 0 data
+      const allYears = Array.from({ length: 6 }, (_, i) => ({
+        year: startYear + i,
+        average_score: 0,
+        submissions: 0,
+      }));
+
+      // 4. Replace defaults with actual aggregated data and calculate averages
+      stats.forEach((s) => {
+        const yearIndex = s._id - startYear;
+
+        // Ensure the year is within the 6-year range
+        if (yearIndex >= 0 && yearIndex < 6) {
+          const averageScore =
+            s.submissions > 0 ? Math.round(s.totalScore / s.submissions) : 0;
+
+          allYears[yearIndex] = {
+            year: s._id,
+            average_score: averageScore,
+            submissions: s.submissions,
+          };
+        }
+      });
+
+      // 5. Summary calculations
+      const totalSubmissions = allYears.reduce(
+        (sum, s) => sum + s.submissions,
+        0,
+      );
+
+      return {
+        success: true,
+        message: 'All assessment yearly stats retrieved successfully',
+        data: {
+          start_year: startYear,
+          end_year: currentYear,
+          summary: {
+            total_submissions: totalSubmissions,
+            years_with_submissions: stats.length,
+          },
+          yearly_breakdown: allYears,
+          generated_at: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error getting all assessment yearly stats:', error);
+      throw BadRequestException.BAD_REQUEST(
+        'Failed to retrieve all assessment yearly stats',
       );
     }
   }
