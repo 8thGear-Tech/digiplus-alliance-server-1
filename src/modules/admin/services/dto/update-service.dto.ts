@@ -66,8 +66,8 @@ export class UpdateServiceDto {
   @ApiProperty({
     description: 'Pricing unit',
     enum: PricingUnit,
-    example: PricingUnit.ONE_TIME,
-    default: PricingUnit.ONE_TIME,
+    example: PricingUnit.ONE_TIME_PAYMENT,
+    default: PricingUnit.ONE_TIME_PAYMENT,
   })
   @IsOptional()
   @IsEnum(PricingUnit)
