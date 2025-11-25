@@ -220,7 +220,7 @@ export enum NotificationTypes {
 export enum PricingUnit {
   PER_HOUR = 'per_hour',
   PER_PROJECT = 'per_project',
-  ONE_TIME = 'one_time',
+  ONE_TIME_PAYMENT = 'one_time_payment',
   PER_DAY = 'per_day',
   PER_MONTH = 'per_month',
 }
@@ -229,7 +229,7 @@ export class CurrencyUtil {
   private static unitDisplayMap = {
     [PricingUnit.PER_HOUR]: 'per hour',
     [PricingUnit.PER_PROJECT]: 'per project',
-    [PricingUnit.ONE_TIME]: '', // No unit for one-time payments
+    [PricingUnit.ONE_TIME_PAYMENT]: '', // No unit for one-time payments
     [PricingUnit.PER_DAY]: 'per day',
     [PricingUnit.PER_MONTH]: 'per month',
   };
@@ -240,7 +240,7 @@ export class CurrencyUtil {
 
   static formatNairaWithUnit(
     amount: number,
-    unit: PricingUnit = PricingUnit.ONE_TIME,
+    unit: PricingUnit = PricingUnit.ONE_TIME_PAYMENT,
   ): string {
     const formattedAmount = this.formatNaira(amount);
     const unitText = this.unitDisplayMap[unit];

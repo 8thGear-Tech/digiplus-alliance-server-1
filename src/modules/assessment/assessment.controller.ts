@@ -759,6 +759,54 @@ export class AssessmentController {
   ): Promise<any> {
     return this.assessmentService.getAllAssessmentsMonthlyStats(year);
   }
+  @Get('yearlyRangeStats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get system-wide assessment submission statistics for the last 6 years',
+  })
+  @ApiOkResponse({
+    description:
+      'System-wide yearly assessment statistics retrieved successfully for the last 6 years',
+    schema: {
+      example: {
+        success: true,
+        message: 'All assessment yearly stats retrieved successfully',
+        data: {
+          start_year: 2020,
+          end_year: 2025,
+          summary: {
+            total_submissions: 5120,
+            years_with_submissions: 6,
+          },
+          yearly_breakdown: [
+            {
+              year: 2020,
+              average_score: 75,
+              submissions: 800,
+            },
+            {
+              year: 2021,
+              average_score: 80,
+              submissions: 1000,
+            },
+            {
+              year: 2025,
+              average_score: 78,
+              submissions: 1200,
+            },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+          generated_date: 'October 15, 2025',
+          generated_time: '02:30:00 PM',
+        },
+      },
+    },
+  })
+  async getAllAssessmentsYearlyStats(): Promise<any> {
+    return this.assessmentService.getAllAssessmentsYearlyStats();
+  }
 
   @Get('stats/:userId')
   @ApiOkResponse({
@@ -773,6 +821,16 @@ export class AssessmentController {
       params.userId,
       query.year ? +query.year : undefined,
     );
+  }
+  @Get('yearlyStats/:userId')
+  @ApiOkResponse({
+    description: 'Monthly user assessment statistics retrieved successfully',
+    type: UserStatsResponseDto,
+  })
+  async getUserYearlyStats(
+    @Param() params: GetUserStatsParamsDto,
+  ): Promise<UserStatsResponseDto> {
+    return this.assessmentService.getUserYearlyStats(params.userId);
   }
 
   @Get('admin/submitted-assessments')

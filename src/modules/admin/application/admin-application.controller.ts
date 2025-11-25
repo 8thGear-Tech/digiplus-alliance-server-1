@@ -357,6 +357,55 @@ export class AdminApplicationController {
     return this.adminApplicationService.getApplicationSubmissionStats(year);
   }
 
+  @Get('submission-yearly-range-stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserTypes.admin)
+  @ApiOperation({
+    summary:
+      'Admin: Get system-wide application submission statistics for the last 6 years',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Application submission yearly statistics retrieved successfully for the last 6 years.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Application submission yearly stats retrieved successfully',
+        data: {
+          start_year: 2020,
+          end_year: 2025,
+          summary: {
+            total_applications: 5120,
+            years_with_submissions: 6,
+            average_applications_per_year: 853,
+          },
+          yearly_breakdown: [
+            { year: 2020, total_applications: 800 },
+            { year: 2021, total_applications: 1000 },
+          ],
+          breakdown_by_status: [
+            { status: 'pending', count: 2500 },
+            { status: 'approved', count: 1800 },
+            { status: 'rejected', count: 820 },
+          ],
+          breakdown_by_service_type: [
+            { service_type: 'Business Registration', count: 3000 },
+            { service_type: 'Tax Compliance', count: 2120 },
+          ],
+          breakdown_by_payment_status: [
+            { payment_status: 'paid', count: 4000 },
+            { payment_status: 'pending', count: 1120 },
+          ],
+          generated_at: '2025-10-15T14:30:00.000Z',
+        },
+      },
+    },
+  })
+  async getApplicationSubmissionYearlyStats(): Promise<any> {
+    return this.adminApplicationService.getApplicationSubmissionYearlyStats();
+  }
+
   @Get('forms')
   @ApiOperation({ summary: 'Get a list of all application forms' })
   @ApiResponse({
