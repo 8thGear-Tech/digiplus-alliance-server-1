@@ -13,6 +13,25 @@ export class BlogService {
     @InjectModel(Blog.name) private readonly blogModel: Model<Blog>,
   ) {}
 
+  private async getRelatedBlogs(
+    tags: string[],
+    currentBlogId: string,
+    limit: number = 3, // You can choose how many related blogs to return
+  ): Promise<Blog[]> {
+    if (!tags || tags.length === 0) {
+      return [];
+    }
+
+  
+    return this.blogModel
+      .find({
+        tags: { $in: tags }, 
+        _id: { $ne: currentBlogId }, 
+      })
+      .limit(limit)
+      .sort({ createdAt: -1 }) 
+      .exec();
+  }
   async create(createBlogDto: CreateBlogDto, user: User): Promise<Blog> {
     const newBlog = new this.blogModel({
       ...createBlogDto,
@@ -26,7 +45,7 @@ export class BlogService {
     return this.blogModel.find().exec();
   }
 
-  async findOne(id: string): Promise<Blog> {
+  async findOne(id: string): Promise<any> {
     try {
       const blog = await this.blogModel.findById(id).exec();
       if (!blog) {
@@ -34,16 +53,27 @@ export class BlogService {
           `Blog with ID ${id} not found`,
         );
       }
-      return blog;
-    } catch (error) {
-      if (error.name === 'CastError') {
-        throw BadRequestException.RESOURCE_NOT_FOUND(
-          `Invalid ID format: ${id}`,
-        );
-      }
-      throw error;
-    }
-  }
+
+   
+     const tags = blog.tags || [];
+
+   
+     const relatedBlogs = await this.getRelatedBlogs(tags, id, 3);
+     
+     return {
+       ...blog.toObject(),
+       relatedBlogs: relatedBlogs.map(b => b.toObject()),
+     };
+
+   } catch (error) {
+     if (error.name === 'CastError') {
+       throw BadRequestException.RESOURCE_NOT_FOUND(
+         `Invalid ID format: ${id}`,
+       );
+     }
+     throw error;
+   }
+ }
 
   async update(id: string, updateBlogDto: UpdateBlogDto): Promise<Blog> {
     try {
