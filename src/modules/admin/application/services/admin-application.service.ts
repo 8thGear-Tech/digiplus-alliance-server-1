@@ -1,11 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   BadRequestException,
   Inject,
@@ -221,124 +213,219 @@ export class AdminApplicationService {
   }
 
   async updateForm(
-    id: string,
-    dto: UpdateApplicationFormDto,
-  ): Promise<ApplicationForm> {
-    const form = await this.applicationFormModel.findById(id);
-    if (!form) {
-      throw new NotFoundException('Application form not found.');
-    }
-
-    // 1. Update top-level properties (welcome screens, isLive, etc.)
-    Object.assign(form, dto);
-
-    if (dto.questions) {
-      const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
-
-      const currentDataKeys: string[] = form.questions
-        .map((q) => q.data_key)
-        .filter(Boolean) as string[];
-
-      for (const question of form.questions) {
-        if (question.data_key) {
-          existingQuestionsMap.set(question.data_key, question);
-        }
-      }
-
-      const updatedAndNewQuestions: EmbeddedQuestion[] = [];
-      const keysEncounteredInDto = new Set<string>();
-
-      for (const incomingQuestion of dto.questions) {
-        // A question is considered existing if it has a data_key that matches a question already in the form.
-        const dataKey = incomingQuestion.data_key;
-        const isExisting = dataKey && existingQuestionsMap.has(dataKey);
-
-        if (isExisting) {
-          // --- UPDATE EXISTING QUESTION IN-PLACE ---
-          const existingQuestion = existingQuestionsMap.get(dataKey)!;
-
-          const updatedQuestion = this.processSingleQuestion(
-            incomingQuestion,
-            currentDataKeys,
-            false, // isNewQuestion = false
-          );
-
-          Object.assign(existingQuestion, updatedQuestion);
-
-          // Add the now-updated existing question to our new list
-          updatedAndNewQuestions.push(existingQuestion);
-          keysEncounteredInDto.add(dataKey);
-        } else {
-          const questionToSave = this.processSingleQuestion(
-            incomingQuestion,
-            currentDataKeys,
-            true,
-          );
-
-          if (questionToSave.data_key) {
-            currentDataKeys.push(questionToSave.data_key);
-            keysEncounteredInDto.add(questionToSave.data_key);
-          }
-
-          updatedAndNewQuestions.push(questionToSave as EmbeddedQuestion);
-        }
-      }
-
-      const questionsToKeep = form.questions.filter((q) => {
-        // Keep questions that were NOT included in the incoming DTO (identified by data_key)
-        return q.data_key && !keysEncounteredInDto.has(q.data_key);
-      });
-
-      // The new array is the combination of the retained old questions + the updated/new questions from the DTO
-      form.questions = [...questionsToKeep, ...updatedAndNewQuestions];
-    }
-
-    // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
-    if (dto.modules) {
-      const existingModulesMap = new Map<string, any>(); // Key: temp_id string
-      const tempIdsEncounteredInDto = new Set<string>();
-
-      // Map existing modules by their temp_id
-      for (const module of form.modules) {
-        // Use temp_id as the primary lookup key for modules
-        if (module.temp_id) {
-          existingModulesMap.set(module.temp_id, module);
-        }
-      }
-
-      const updatedAndNewModules: EmbeddedModule[] = [];
-
-      for (const incomingModule of dto.modules) {
-        const tempId = incomingModule.temp_id;
-
-        // A module is considered existing if its temp_id matches a module already in the form.
-        const isExisting = tempId && existingModulesMap.has(tempId);
-
-        if (isExisting) {
-          // --- UPDATE EXISTING MODULE IN-PLACE ---
-          const existingModule = existingModulesMap.get(tempId)!;
-          // Apply updates from the DTO to the existing Mongoose subdocument
-          Object.assign(existingModule, incomingModule);
-          updatedAndNewModules.push(existingModule);
-          tempIdsEncounteredInDto.add(tempId);
-        } else {
-          // --- CREATE/INSERT NEW MODULE ---
-          updatedAndNewModules.push(incomingModule as EmbeddedModule);
-        }
-      }
-
-      // Merge: keep old modules that weren't included in the DTO, and append the updated/new modules.
-      const modulesToKeep = form.modules.filter((m) => {
-        // Keep modules that were NOT included in the incoming DTO (identified by temp_id)
-        return m.temp_id && !tempIdsEncounteredInDto.has(m.temp_id);
-      });
-
-      form.modules = [...modulesToKeep, ...updatedAndNewModules];
-    }
-
-    const updatedForm = await form.save();
-    return updatedForm.toObject() as ApplicationForm;
+  id: string,
+  dto: UpdateApplicationFormDto,
+): Promise<ApplicationForm> {
+  const form = await this.applicationFormModel.findById(id);
+  if (!form) {
+    throw new NotFoundException('Application form not found.');
   }
+
+  // 1. Update top-level properties (welcome screens, isLive, etc.)
+  if (dto.welcome_title !== undefined) form.welcome_title = dto.welcome_title;
+  if (dto.welcome_description !== undefined) form.welcome_description = dto.welcome_description;
+  if (dto.welcome_instruction !== undefined) form.welcome_instruction = dto.welcome_instruction;
+  if (dto.welcome_button_text !== undefined) form.welcome_button_text = dto.welcome_button_text;
+  if (dto.isLive !== undefined) form.isLive = dto.isLive;
+
+  // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
+  if (dto.questions && dto.questions.length > 0) {
+    const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
+    const currentDataKeys: string[] = [];
+
+    // Map existing questions by data_key
+    for (const question of form.questions) {
+      if (question.data_key) {
+        existingQuestionsMap.set(question.data_key, question);
+        currentDataKeys.push(question.data_key);
+      }
+    }
+
+    for (const incomingQuestion of dto.questions) {
+      const dataKey = incomingQuestion.data_key;
+      
+      // Check if this is an update (question with this data_key already exists)
+      if (dataKey && existingQuestionsMap.has(dataKey)) {
+        // UPDATE EXISTING QUESTION
+        const existingQuestion = existingQuestionsMap.get(dataKey)!;
+        const updatedQuestion = this.processSingleQuestion(
+          incomingQuestion,
+          currentDataKeys,
+          false, // isNewQuestion = false
+        );
+        Object.assign(existingQuestion, updatedQuestion);
+      } else {
+        // ADD NEW QUESTION
+        const newQuestion = this.processSingleQuestion(
+          incomingQuestion,
+          currentDataKeys,
+          true, // isNewQuestion = true
+        );
+        
+        // Prevent duplicates: check if data_key was just generated and already exists
+        if (newQuestion.data_key && !existingQuestionsMap.has(newQuestion.data_key)) {
+          form.questions.push(newQuestion as EmbeddedQuestion);
+          existingQuestionsMap.set(newQuestion.data_key, newQuestion as EmbeddedQuestion);
+          currentDataKeys.push(newQuestion.data_key);
+        }
+      }
+    }
+  }
+
+  // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
+  if (dto.modules && dto.modules.length > 0) {
+    const existingModulesMap = new Map<string, EmbeddedModule>();
+
+    // Map existing modules by temp_id
+    for (const module of form.modules) {
+      if (module.temp_id) {
+        existingModulesMap.set(module.temp_id, module);
+      }
+    }
+
+    for (const incomingModule of dto.modules) {
+      const tempId = incomingModule.temp_id;
+
+      if (!tempId) {
+        throw new BadRequestException('Module must have a temp_id');
+      }
+
+      // Check if this module already exists
+      if (existingModulesMap.has(tempId)) {
+        // UPDATE EXISTING MODULE
+        const existingModule = existingModulesMap.get(tempId)!;
+        Object.assign(existingModule, incomingModule);
+      } else {
+        // ADD NEW MODULE (prevent duplicates)
+        form.modules.push(incomingModule as EmbeddedModule);
+        existingModulesMap.set(tempId, incomingModule as EmbeddedModule);
+      }
+    }
+  }
+
+  const updatedForm = await form.save();
+  return updatedForm.toObject() as ApplicationForm;
+}
+
+  // async updateForm(
+  //   id: string,
+  //   dto: UpdateApplicationFormDto,
+  // ): Promise<ApplicationForm> {
+  //   const form = await this.applicationFormModel.findById(id);
+  //   if (!form) {
+  //     throw new NotFoundException('Application form not found.');
+  //   }
+
+  //   // 1. Update top-level properties (welcome screens, isLive, etc.)
+  //   Object.assign(form, dto);
+
+  //   if (dto.questions) {
+  //     const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
+
+  //     const currentDataKeys: string[] = form.questions
+  //       .map((q) => q.data_key)
+  //       .filter(Boolean) as string[];
+
+  //     for (const question of form.questions) {
+  //       if (question.data_key) {
+  //         existingQuestionsMap.set(question.data_key, question);
+  //       }
+  //     }
+
+  //     const updatedAndNewQuestions: EmbeddedQuestion[] = [];
+  //     const keysEncounteredInDto = new Set<string>();
+
+  //     for (const incomingQuestion of dto.questions) {
+  //       // A question is considered existing if it has a data_key that matches a question already in the form.
+  //       const dataKey = incomingQuestion.data_key;
+  //       const isExisting = dataKey && existingQuestionsMap.has(dataKey);
+
+  //       if (isExisting) {
+  //         // --- UPDATE EXISTING QUESTION IN-PLACE ---
+  //         const existingQuestion = existingQuestionsMap.get(dataKey)!;
+
+  //         const updatedQuestion = this.processSingleQuestion(
+  //           incomingQuestion,
+  //           currentDataKeys,
+  //           false, // isNewQuestion = false
+  //         );
+
+  //         Object.assign(existingQuestion, updatedQuestion);
+
+  //         // Add the now-updated existing question to our new list
+  //         updatedAndNewQuestions.push(existingQuestion);
+  //         keysEncounteredInDto.add(dataKey);
+  //       } else {
+  //         const questionToSave = this.processSingleQuestion(
+  //           incomingQuestion,
+  //           currentDataKeys,
+  //           true,
+  //         );
+
+  //         if (questionToSave.data_key) {
+  //           currentDataKeys.push(questionToSave.data_key);
+  //           keysEncounteredInDto.add(questionToSave.data_key);
+  //         }
+
+  //         updatedAndNewQuestions.push(questionToSave as EmbeddedQuestion);
+  //       }
+  //     }
+
+  //     const questionsToKeep = form.questions.filter((q) => {
+  //       // Keep questions that were NOT included in the incoming DTO (identified by data_key)
+  //       return q.data_key && !keysEncounteredInDto.has(q.data_key);
+  //     });
+
+  //     // The new array is the combination of the retained old questions + the updated/new questions from the DTO
+  //     form.questions = [...questionsToKeep, ...updatedAndNewQuestions];
+  //   }
+
+  //   // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
+  //   if (dto.modules) {
+  //     const existingModulesMap = new Map<string, any>(); // Key: temp_id string
+  //     const tempIdsEncounteredInDto = new Set<string>();
+
+  //     // Map existing modules by their temp_id
+  //     for (const module of form.modules) {
+  //       // Use temp_id as the primary lookup key for modules
+  //       if (module.temp_id) {
+  //         existingModulesMap.set(module.temp_id, module);
+  //       }
+  //     }
+
+  //     const updatedAndNewModules: EmbeddedModule[] = [];
+
+  //     for (const incomingModule of dto.modules) {
+  //       const tempId = incomingModule.temp_id;
+
+  //       // A module is considered existing if its temp_id matches a module already in the form.
+  //       const isExisting = tempId && existingModulesMap.has(tempId);
+
+  //       if (isExisting) {
+  //         // --- UPDATE EXISTING MODULE IN-PLACE ---
+  //         const existingModule = existingModulesMap.get(tempId)!;
+  //         // Apply updates from the DTO to the existing Mongoose subdocument
+  //         Object.assign(existingModule, incomingModule);
+  //         updatedAndNewModules.push(existingModule);
+  //         tempIdsEncounteredInDto.add(tempId);
+  //       } else {
+  //         // --- CREATE/INSERT NEW MODULE ---
+  //         updatedAndNewModules.push(incomingModule as EmbeddedModule);
+  //       }
+  //     }
+
+  //     // Merge: keep old modules that weren't included in the DTO, and append the updated/new modules.
+  //     const modulesToKeep = form.modules.filter((m) => {
+  //       // Keep modules that were NOT included in the incoming DTO (identified by temp_id)
+  //       return m.temp_id && !tempIdsEncounteredInDto.has(m.temp_id);
+  //     });
+
+  //     form.modules = [...modulesToKeep, ...updatedAndNewModules];
+  //   }
+
+  //   const updatedForm = await form.save();
+  //   return updatedForm.toObject() as ApplicationForm;
+  // }
 
   async getSingleForm(formId: string): Promise<ApplicationForm> {
     const form = await this.applicationFormModel.findById(formId).exec();
@@ -357,6 +444,24 @@ export class AdminApplicationService {
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
+
+    const form = await this.applicationFormModel.findById(id).exec();
+  
+  if (!form) {
+    throw new NotFoundException('Application form not found.');
+  }
+
+  // If publishing this form (isLive = true), unpublish all other forms first
+  if (isLive) {
+    await this.applicationFormModel
+      .updateMany(
+        { _id: { $ne: id }, isLive: true }, // Find all other live forms
+        { $set: { isLive: false } } // Set them to unpublished
+      )
+      .exec();
+    
+    this.logger.log(`Unpublished all other forms before publishing form: ${id}`);
+  }
     const updatedForm = await this.applicationFormModel
       .findByIdAndUpdate(id, { $set: { isLive: isLive } }, { new: true })
       .exec();
