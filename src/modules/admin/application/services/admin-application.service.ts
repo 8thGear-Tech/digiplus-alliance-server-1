@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   ApplicationForm,
   EmbeddedModule,
@@ -38,6 +38,24 @@ import {
   NotificationType,
 } from 'src/modules/notification/schemas/notification.schema';
 import { UserApplicationService } from 'src/modules/business-owner/user-application.service';
+
+interface PopulatedSubmission {
+  _id: any;
+  responses: Record<string, any>;
+  service: string;
+  service_type: string;
+  payment_amount?: number;
+  userId: string;
+  status: ApplicationStatus;
+  payment_status: PaymentStatus;
+  createdAt: Date;
+  formId: {
+    _id: Types.ObjectId;
+    welcome_title: string;
+    slug: string;
+    questions: EmbeddedQuestion[];
+  };
+}
 
 @Injectable()
 export class AdminApplicationService {
@@ -153,19 +171,43 @@ export class AdminApplicationService {
     });
   }
 
-  private transformSubmissionsForList(submissions: any[]): any[] {
+  private transformSubmissionsForList(
+  submissions: PopulatedSubmission[],
+  formsMap: Map<string, any>,
+): any[] {
     return submissions.map((submission) => {
       const firstName = submission.responses['firstname'] || 'N/A';
       const lastName = submission.responses['lastname'] || '';
       const email = submission.responses['email'] || 'N/A';
       const specificService = submission.service;
-
       const paymentStatus = submission.payment_status || 'Not Paid';
-
       const name = `${firstName} ${lastName}`.trim();
+// Get form details from the map
+    const formDetails = formsMap.get(submission.formId?._id?.toString() || '') || {};
+    // Transform responses into question-answer pairs
+    const formQuestions = formDetails.questions || [];
+    const questionAnswerPairs = formQuestions
+      .map((question: any) => {
+        const dataKey = question.data_key;
+        const answer = submission.responses[dataKey];
+        
+        // Only include questions that have answers
+        if (answer !== undefined && answer !== null && answer !== '') {
+          return {
+            question: question.question,
+            data_key: dataKey,
+            answer: answer,
+            type: question.type,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean); // Remove null entries
 
       return {
         _id: submission._id,
+        form_title: formDetails.welcome_title || 'N/A',
+         form_slug: formDetails.slug || null,
         name,
         email,
         service: specificService,
@@ -173,6 +215,7 @@ export class AdminApplicationService {
         status: submission.status,
         timestamp: new Date(submission.createdAt).toLocaleString(),
         payment_status: paymentStatus,
+        responses: questionAnswerPairs,
       };
     });
   }
@@ -517,7 +560,10 @@ export class AdminApplicationService {
 
     const submissions = await this.submissionModel
       .find(filter)
-
+ .populate({
+      path: 'formId',
+      select: 'welcome_title slug questions',
+    })
       .exec();
 
     if (submissions.length === 0) {
@@ -526,8 +572,47 @@ export class AdminApplicationService {
       );
     }
 
-    return this.transformSubmissionsForList(submissions);
-  }
+     // Create a map of forms for efficient lookup
+  const formsMap = new Map<string, any>();
+    const typedSubmissions: PopulatedSubmission[] = [];
+  
+ submissions.forEach((submission: any) => {
+    // Check if formId is populated (not just an ObjectId)
+    if (submission.formId && typeof submission.formId === 'object' && submission.formId._id) {
+      const formId = submission.formId._id.toString();
+      
+      // Add to forms map (avoid duplicates)
+      if (!formsMap.has(formId)) {
+        formsMap.set(formId, {
+          welcome_title: submission.formId.welcome_title,
+          slug: submission.formId.slug,
+          questions: submission.formId.questions || [],
+        });
+      }
+      
+      // Add to typed submissions array
+      typedSubmissions.push({
+        _id: submission._id,
+        responses: submission.responses,
+        service: submission.service,
+        service_type: submission.service_type,
+        payment_amount: submission.payment_amount,
+        userId: submission.userId,
+        status: submission.status,
+        payment_status: submission.payment_status,
+        createdAt: submission.createdAt,
+        formId: {
+          _id: submission.formId._id,
+          welcome_title: submission.formId.welcome_title,
+          slug: submission.formId.slug,
+          questions: submission.formId.questions || [],
+        },
+      });
+    }
+  });
+
+  return this.transformSubmissionsForList(typedSubmissions, formsMap);
+}
 
   async updateApplicationStatus(
     id: string,
