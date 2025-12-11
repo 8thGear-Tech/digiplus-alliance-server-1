@@ -32,6 +32,8 @@ import { assessmentCompletionEmail } from '../mailer/mailer.constants';
 import { User } from '../user/user.schema';
 import { QuestionValidationService } from '../admin/application/services/question-validation.service';
 import { NotificationService } from '../notification/notification.service';
+import { Question } from '../assessment/schemas/question.schema';
+
 import { max } from 'class-validator';
 
 @Injectable()
@@ -1394,41 +1396,41 @@ export class AssessmentService {
         throw BadRequestException.RESOURCE_NOT_FOUND('Assessment not found');
       }
 
-      if (userId) {
-        const lastSubmission = await this.userAssessmentRepository.findOne({
-          user_id: new Types.ObjectId(userId),
-          assessment_id: new Types.ObjectId(assessmentId),
-          is_submitted: true,
-        });
+      // if (userId) {
+      //   const lastSubmission = await this.userAssessmentRepository.findOne({
+      //     user_id: new Types.ObjectId(userId),
+      //     assessment_id: new Types.ObjectId(assessmentId),
+      //     is_submitted: true,
+      //   });
 
-        if (lastSubmission) {
-          const completedAt = new Date(lastSubmission.completed_at);
-          const now = new Date();
+      //   if (lastSubmission) {
+      //     const completedAt = new Date(lastSubmission.completed_at);
+      //     const now = new Date();
 
-          const nextEligibleDate = new Date(
-            completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
-          );
+      //     const nextEligibleDate = new Date(
+      //       completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+      //     );
 
-          if (now <= nextEligibleDate) {
-            const daysRemaining = Math.ceil(
-              (nextEligibleDate.getTime() - now.getTime()) /
-                (1000 * 60 * 60 * 24),
-            );
+      //     if (now <= nextEligibleDate) {
+      //       const daysRemaining = Math.ceil(
+      //         (nextEligibleDate.getTime() - now.getTime()) /
+      //           (1000 * 60 * 60 * 24),
+      //       );
 
-            throw BadRequestException.BAD_REQUEST(
-              `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
-                'en-US',
-                {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                },
-              )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
-            );
-          }
-        }
-      }
+      //       throw BadRequestException.BAD_REQUEST(
+      //         `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
+      //           'en-US',
+      //           {
+      //             weekday: 'long',
+      //             year: 'numeric',
+      //             month: 'short',
+      //             day: 'numeric',
+      //           },
+      //         )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
+      //       );
+      //     }
+      //   }
+      // }
 
       const moduleFilter: any = {
         assessment_id: new Types.ObjectId(assessmentId),
@@ -1557,21 +1559,32 @@ export class AssessmentService {
           }
           break;
 
-        case QuestionType.MULTIPLE_CHOICE_GRID:
-          if (response && typeof response === 'object') {
-            Object.entries(response).forEach(([rowId, columnId]) => {
-              const row = question.grid_rows?.find((r: any) => r.id === rowId);
+        case QuestionType.MULTIPLE_CHOICE_GRID: {
+          // Response should be an object like: { rowId: selectedColumnId, ... }
+          if (
+            response &&
+            typeof response === 'object' &&
+            !Array.isArray(response)
+          ) {
+            Object.entries(response).forEach(([rowId, selectedColumnId]) => {
+              // Find the row definition
+              const row = question.grid_rows?.find((r: any) => r.id == rowId);
+
+              // Find the selected column definition
               const column = question.grid_columns?.find(
-                (c: any) => c.id === columnId,
+                (c: any) => c.id == selectedColumnId,
               );
+
               if (row && column) {
-                // Use 'points' instead of 'value' - check both for backward compatibility
-                totalScore +=
-                  (column.points || column.value || 0) * (row.weight || 1);
+                const columnScore = column.points ?? column.value ?? 0;
+                const weight = row.weight ?? 1;
+
+                totalScore += columnScore * weight;
               }
             });
           }
           break;
+        }
       }
     });
 
@@ -1957,47 +1970,50 @@ export class AssessmentService {
         throw BadRequestException.BAD_REQUEST('Assessment not found');
       }
 
-      const { assessment, questions } = assessmentData.data;
+      const { assessment, questions } = assessmentData.data as {
+        assessment: any;
+        questions: Question[];
+      };
       // === 🧠 Step 1: Enforce 2-week retake rule ===
-      if (userId) {
-        const lastSubmission = await this.userAssessmentRepository.findOne({
-          user_id: new Types.ObjectId(userId),
-          assessment_id: new Types.ObjectId(assessmentId),
-          is_submitted: true,
-        });
+      // if (userId) {
+      //   const lastSubmission = await this.userAssessmentRepository.findOne({
+      //     user_id: new Types.ObjectId(userId),
+      //     assessment_id: new Types.ObjectId(assessmentId),
+      //     is_submitted: true,
+      //   });
 
-        if (lastSubmission) {
-          const completedAt = new Date(lastSubmission.completed_at);
-          const now = new Date();
-          const diffInDays = Math.floor(
-            (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
-          );
+      //   if (lastSubmission) {
+      //     const completedAt = new Date(lastSubmission.completed_at);
+      //     const now = new Date();
+      //     const diffInDays = Math.floor(
+      //       (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
+      //     );
 
-          if (diffInDays < 14) {
-            const nextEligibleDate = new Date(
-              completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
-            );
+      //     if (diffInDays < 14) {
+      //       const nextEligibleDate = new Date(
+      //         completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+      //       );
 
-            setImmediate(async () => {
-              try {
-                await this.notificationService.notifyAssessmentRetakeLimited(
-                  userId,
-                  assessment.title,
-                  nextEligibleDate,
-                );
-              } catch (notifyError) {
-                this.logger.error(
-                  `❌ Failed to notify user ${userId} about retake limitation:`,
-                  notifyError.message,
-                );
-              }
-            });
-            throw BadRequestException.BAD_REQUEST(
-              `You can only retake this assessment after 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
-            );
-          }
-        }
-      }
+      //       setImmediate(async () => {
+      //         try {
+      //           await this.notificationService.notifyAssessmentRetakeLimited(
+      //             userId,
+      //             assessment.title,
+      //             nextEligibleDate,
+      //           );
+      //         } catch (notifyError) {
+      //           this.logger.error(
+      //             `❌ Failed to notify user ${userId} about retake limitation:`,
+      //             notifyError.message,
+      //           );
+      //         }
+      //       });
+      //       throw BadRequestException.BAD_REQUEST(
+      //         `You can only retake this assessment after 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
+      //       );
+      //     }
+      //   }
+      // }
 
       // 🛑 Check if published
       if (!assessment.is_published) {
@@ -2021,13 +2037,83 @@ export class AssessmentService {
         total_possible_points,
       );
 
-      // ✅ Convert responses → answers to match schema
+      // ✅ Create question map for easy lookup
+      const questionMap = new Map(
+        questions.map((q: any) => [q._id.toString(), q]),
+      );
+
+      // ✅ Helper function to transform matrix answers
+      const transformAnswer = (questionId: string, answer: any) => {
+        const question = questionMap.get(questionId);
+
+        if (!question) return answer;
+
+        // Handle matrix questions
+        if (
+          question.type === QuestionType.MULTIPLE_CHOICE_GRID &&
+          typeof answer === 'object' &&
+          answer !== null
+        ) {
+          const formattedAnswer: any = {};
+
+          for (const row of question.grid_rows || []) {
+            const selectedColId = answer[row.id];
+
+            const col = question.grid_columns?.find(
+              (c: any) => c.id == selectedColId,
+            );
+
+            formattedAnswer[row.text] = col?.text || null;
+          }
+
+          return formattedAnswer;
+        }
+
+        // --- MULTIPLE CHOICE / CHECKBOX ---
+        if (
+          question.type === QuestionType.MULTIPLE_CHOICE ||
+          question.type === QuestionType.CHECKBOX ||
+          question.type === QuestionType.DROPDOWN
+        ) {
+          if (Array.isArray(answer)) {
+            return answer.map((optId) => {
+              const option = question.options?.find((o) => o.id === optId);
+              return option?.text || optId;
+            });
+          } else if (typeof answer === 'string') {
+            const option = question.options?.find((o) => o.id === answer);
+            return option?.text || answer;
+          }
+        }
+
+        // --- TEXT FIELDS ---
+        if (
+          question.type === QuestionType.SHORT_TEXT ||
+          question.type === QuestionType.LONG_TEXT
+        ) {
+          return answer;
+        }
+
+        // --- FILE UPLOAD ---
+        if (question.type === QuestionType.FILE_UPLOAD) {
+          return answer; // keep URL or file ref
+        }
+
+        // Return as-is for text, number, etc.
+        return answer;
+      };
+      // ✅ Convert responses → answers with transformed values
       const answers = Object.entries(userResponses).map(
-        ([questionId, answer]) => ({
-          question_id: new Types.ObjectId(questionId),
-          answer,
-          score: undefined,
-        }),
+        ([questionId, answer]) => {
+          const question = questionMap.get(questionId);
+          return {
+            question_id: new Types.ObjectId(questionId),
+            question_text: question?.question || 'Unknown Question',
+            answer: transformAnswer(questionId, answer),
+            original_answer: answer, // Keep original for database
+            score: undefined,
+          };
+        },
       );
 
       // ✅ Fetch recommendations
@@ -2051,6 +2137,14 @@ export class AssessmentService {
           is_submitted: true,
         };
 
+        const dbAnswers = Object.entries(userResponses).map(
+          ([questionId, answer]) => ({
+            question_id: new Types.ObjectId(questionId),
+            answer,
+            score: undefined,
+          }),
+        );
+
         await this.userAssessmentRepository.findOneAndUpdate(
           {
             user_id: new Types.ObjectId(userId),
@@ -2058,7 +2152,7 @@ export class AssessmentService {
           },
           {
             $set: {
-              answers,
+              answers: dbAnswers,
               user_score: userScore,
               max_possible_score: total_possible_points,
               percentage_score: Number((percentage_score || 0).toFixed(2)),
@@ -2178,6 +2272,11 @@ export class AssessmentService {
         success: true,
         message: 'Assessment completed successfully',
         data: {
+          answers: answers.map((a) => ({
+            question_id: a.question_id,
+            question_text: a.question_text,
+            answer: a.answer, // Transformed answer with labels
+          })),
           user_score: userScore,
           total_possible_points,
           percentage_score: Number((percentage_score || 0).toFixed(2)),
