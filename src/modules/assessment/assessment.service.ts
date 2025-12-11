@@ -1975,45 +1975,45 @@ export class AssessmentService {
         questions: Question[];
       };
       // === 🧠 Step 1: Enforce 2-week retake rule ===
-      // if (userId) {
-      //   const lastSubmission = await this.userAssessmentRepository.findOne({
-      //     user_id: new Types.ObjectId(userId),
-      //     assessment_id: new Types.ObjectId(assessmentId),
-      //     is_submitted: true,
-      //   });
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
 
-      //   if (lastSubmission) {
-      //     const completedAt = new Date(lastSubmission.completed_at);
-      //     const now = new Date();
-      //     const diffInDays = Math.floor(
-      //       (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
-      //     );
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
+          const diffInDays = Math.floor(
+            (now.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24),
+          );
 
-      //     if (diffInDays < 14) {
-      //       const nextEligibleDate = new Date(
-      //         completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
-      //       );
+          if (diffInDays < 14) {
+            const nextEligibleDate = new Date(
+              completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+            );
 
-      //       setImmediate(async () => {
-      //         try {
-      //           await this.notificationService.notifyAssessmentRetakeLimited(
-      //             userId,
-      //             assessment.title,
-      //             nextEligibleDate,
-      //           );
-      //         } catch (notifyError) {
-      //           this.logger.error(
-      //             `❌ Failed to notify user ${userId} about retake limitation:`,
-      //             notifyError.message,
-      //           );
-      //         }
-      //       });
-      //       throw BadRequestException.BAD_REQUEST(
-      //         `You can only retake this assessment after 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
-      //       );
-      //     }
-      //   }
-      // }
+            setImmediate(async () => {
+              try {
+                await this.notificationService.notifyAssessmentRetakeLimited(
+                  userId,
+                  assessment.title,
+                  nextEligibleDate,
+                );
+              } catch (notifyError) {
+                this.logger.error(
+                  `❌ Failed to notify user ${userId} about retake limitation:`,
+                  notifyError.message,
+                );
+              }
+            });
+            throw BadRequestException.BAD_REQUEST(
+              `You can only retake this assessment after 2 weeks. Next eligible date: ${nextEligibleDate.toDateString()}`,
+            );
+          }
+        }
+      }
 
       // 🛑 Check if published
       if (!assessment.is_published) {
@@ -2272,11 +2272,11 @@ export class AssessmentService {
         success: true,
         message: 'Assessment completed successfully',
         data: {
-          answers: answers.map((a) => ({
-            question_id: a.question_id,
-            question_text: a.question_text,
-            answer: a.answer, // Transformed answer with labels
-          })),
+          // answers: answers.map((a) => ({
+          //   question_id: a.question_id,
+          //   question_text: a.question_text,
+          //   answer: a.answer, // Transformed answer with labels
+          // })),
           user_score: userScore,
           total_possible_points,
           percentage_score: Number((percentage_score || 0).toFixed(2)),
@@ -2541,7 +2541,7 @@ export class AssessmentService {
       const pipeline: any[] = [
         {
           $lookup: {
-            from: 'users', // Your users collection name
+            from: 'users',
             localField: 'user_id',
             foreignField: '_id',
             as: 'user_details',
@@ -2549,7 +2549,7 @@ export class AssessmentService {
         },
         {
           $lookup: {
-            from: 'assessments', // Your assessments collection name
+            from: 'assessments',
             localField: 'assessment_id',
             foreignField: '_id',
             as: 'assessment_details',
@@ -2569,7 +2569,7 @@ export class AssessmentService {
         },
       ];
 
-      // 🔍 Name search filtering (after lookup)
+      // 🔍 Search filtering
       if (search) {
         const searchRegex = new RegExp(search, 'i');
         pipeline.push({
@@ -2600,13 +2600,13 @@ export class AssessmentService {
         });
       }
 
-      // Get total count for pagination (before skip/limit)
+      // Get total count
       const countPipeline = [...pipeline, { $count: 'total' }];
       const countResult =
         await this.userAssessmentModel.aggregate(countPipeline);
       const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 
-      // Add sorting, pagination, and projection
+      // Add sorting and pagination
       pipeline.push(
         { $sort: { completed_at: -1 } },
         { $skip: skip },
@@ -2616,13 +2616,13 @@ export class AssessmentService {
             _id: 1,
             assessment_id: 1,
             user_id: 1,
+            answers: 1, // ✅ Include answers
             user_score: 1,
             max_possible_score: 1,
             percentage_score: 1,
             completed_at: 1,
             submitted_at: 1,
             time_taken_seconds: 1,
-            // User details
             user: {
               _id: '$user_details._id',
               first_name: '$user_details.first_name',
@@ -2633,7 +2633,6 @@ export class AssessmentService {
               profile_picture: '$user_details.profile_picture',
               organization: '$user_details.organization',
             },
-            // Assessment details
             assessment: {
               _id: '$assessment_details._id',
               title: '$assessment_details.title',
@@ -2645,12 +2644,120 @@ export class AssessmentService {
           },
         },
       );
+
       // Fetch submissions
       const submissions = await this.userAssessmentModel.aggregate(pipeline);
 
-      // Calculate statistics (using original filter without search)
+      // ✅ Transform answers for each submission
+      const transformedSubmissions = await Promise.all(
+        submissions.map(async (submission) => {
+          let formattedAnswers = [];
+
+          if (submission.answers && submission.answers.length > 0) {
+            // Fetch questions for this assessment
+            const questions = await this.questionRepository.find({
+              assessment_id: submission.assessment_id,
+            });
+
+            const questionMap = new Map(
+              questions.map((q: any) => [q._id.toString(), q]),
+            );
+
+            // Transform each answer
+            formattedAnswers = submission.answers.map((ans: any) => {
+              const question = questionMap.get(ans.question_id.toString());
+
+              if (!question) {
+                return {
+                  question_text: 'Unknown Question',
+                  answer: ans.answer,
+                };
+              }
+
+              let formattedAnswer = ans.answer;
+
+              // Handle matrix/grid questions
+              if (
+                question.type === QuestionType.MULTIPLE_CHOICE_GRID &&
+                typeof ans.answer === 'object' &&
+                ans.answer !== null
+              ) {
+                const gridAnswer: any = {};
+
+                for (const row of question.grid_rows || []) {
+                  const selectedColId = ans.answer[row.id];
+                  const col = question.grid_columns?.find(
+                    (c: any) => c.id === selectedColId,
+                  );
+                  gridAnswer[row.text] = col?.text || 'Not answered';
+                }
+
+                formattedAnswer = gridAnswer;
+              }
+              // Handle multiple choice/checkbox
+              else if (
+                question.type === QuestionType.MULTIPLE_CHOICE ||
+                question.type === QuestionType.CHECKBOX ||
+                question.type === QuestionType.DROPDOWN
+              ) {
+                if (Array.isArray(ans.answer)) {
+                  formattedAnswer = ans.answer.map((optId) => {
+                    const option = question.options?.find(
+                      (o: any) => o.id === optId,
+                    );
+                    return option?.text || optId;
+                  });
+                } else if (typeof ans.answer === 'string') {
+                  const option = question.options?.find(
+                    (o: any) => o.id === ans.answer,
+                  );
+                  formattedAnswer = option?.text || ans.answer;
+                }
+              }
+
+              return {
+                question_id: ans.question_id,
+                question_text: question.question,
+                question_type: question.type,
+                answer: formattedAnswer,
+              };
+            });
+          }
+
+          return {
+            submission_id: submission._id,
+            assessment: submission.assessment,
+            user: submission.user,
+            scores: {
+              user_score: submission.user_score,
+              max_possible_score: submission.max_possible_score,
+              percentage_score: Number(
+                (submission.percentage_score || 0).toFixed(2),
+              ),
+            },
+            answers: formattedAnswers, // ✅ Formatted answers with questions
+            completed_at: submission.completed_at,
+            completed_date: new Date(
+              submission.completed_at,
+            ).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            completed_time: new Date(
+              submission.completed_at,
+            ).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+            time_taken_seconds: submission.time_taken_seconds,
+          };
+        }),
+      );
+
+      // Calculate statistics
       const stats = await this.userAssessmentModel.aggregate([
-        // { $match: filter },
         {
           $group: {
             _id: null,
@@ -2678,34 +2785,7 @@ export class AssessmentService {
         success: true,
         message: 'Submitted assessments retrieved successfully',
         data: {
-          submissions: submissions.map((submission) => ({
-            submission_id: submission._id,
-            assessment: submission.assessment,
-            user: submission.user,
-            scores: {
-              user_score: submission.user_score,
-              max_possible_score: submission.max_possible_score,
-              percentage_score: Number(
-                (submission.percentage_score || 0).toFixed(2),
-              ),
-            },
-            completed_at: submission.completed_at,
-            completed_date: new Date(
-              submission.completed_at,
-            ).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-            completed_time: new Date(
-              submission.completed_at,
-            ).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            }),
-            time_taken_seconds: submission.time_taken_seconds,
-          })),
+          submissions: transformedSubmissions,
           pagination: {
             current_page: page,
             per_page: limit,
@@ -2722,7 +2802,7 @@ export class AssessmentService {
             average_percentage:
               Math.round(statistics.average_percentage * 100) / 100,
           },
-          filters_applied: search || {},
+          search_applied: search || null,
           generated_at: new Date().toISOString(),
         },
       };
