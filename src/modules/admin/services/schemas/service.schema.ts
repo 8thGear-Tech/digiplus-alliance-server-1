@@ -31,8 +31,14 @@ export class Service {
   // In your Service schema
   @Prop({
     type: String,
-    enum: ['per_hour', 'per_project', 'one_time', 'per_day', 'per_month'],
-    default: 'one_time',
+    enum: [
+      'per_hour',
+      'per_project',
+      'one_time_payment',
+      'per_day',
+      'per_month',
+    ],
+    default: 'one_time_payment',
   })
   pricing_unit?: string;
   //changed by opeyemi

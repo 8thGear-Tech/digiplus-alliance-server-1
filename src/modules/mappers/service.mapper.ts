@@ -16,13 +16,14 @@ export function toServiceResponse(
     formatted_discounted_price: service.discounted_price
       ? CurrencyUtil.formatNairaWithUnit(
           service.discounted_price,
-          (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+          (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
         )
       : undefined,
-    pricing_unit: (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+    pricing_unit:
+      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
     formatted_price: CurrencyUtil.formatNairaWithUnit(
       service.price,
-      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME,
+      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
     ),
     // subtitle: service.subtitle,
     short_description: service.short_description,
