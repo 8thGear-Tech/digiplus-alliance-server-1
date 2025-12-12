@@ -448,26 +448,87 @@ export class AssessmentService {
     return Math.round(maxColumnPoints * totalWeightedRows);
   }
 
+  // private async updateModules(
+  //   assessmentId: string,
+  //   modules: any[],
+  // ): Promise<string[]> {
+  //   const updatedModuleIds: string[] = [];
+  //   const moduleMapping = new Map<string, Types.ObjectId>();
+
+  //   for (const moduleDto of modules) {
+  //     if (moduleDto.id) {
+  //       // Update existing module
+  //       const existingModule = await this.assessmentModuleRepository.findById(
+  //         moduleDto.id,
+  //       );
+  //       if (!existingModule) {
+  //         this.logger.warn(
+  //           `Module with ID ${moduleDto.id} not found, skipping...`,
+  //         );
+  //         continue;
+  //       }
+
+  //       const updateData: any = {};
+  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
+  //       if (moduleDto.description !== undefined)
+  //         updateData.description = moduleDto.description;
+  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
+  //       if (moduleDto.max_points !== undefined)
+  //         updateData.max_points = moduleDto.max_points;
+
+  //       if (Object.keys(updateData).length > 0) {
+  //         await this.assessmentModuleRepository.findByIdAndUpdate(
+  //           moduleDto.id,
+  //           updateData,
+  //         );
+  //         updatedModuleIds.push(moduleDto.id);
+  //         moduleMapping.set(
+  //           moduleDto.temp_id || moduleDto.id,
+  //           new Types.ObjectId(moduleDto.id),
+  //         );
+  //         this.logger.log(`Module ${moduleDto.id} updated`);
+  //       }
+  //     } else if (moduleDto.temp_id) {
+  //       // Create new module
+  //       const moduleData = {
+  //         assessment_id: new Types.ObjectId(assessmentId),
+  //         title: moduleDto.title,
+  //         description: moduleDto.description,
+  //         order: moduleDto.order,
+  //         max_points: moduleDto.max_points || 0,
+  //       };
+
+  //       const newModule =
+  //         await this.assessmentModuleRepository.create(moduleData);
+  //       moduleMapping.set(moduleDto.temp_id, newModule._id);
+  //       updatedModuleIds.push(newModule._id.toString());
+  //       this.logger.log(`New module created: ${newModule._id}`);
+  //     }
+  //   }
+
+  //   return updatedModuleIds;
+  // }
+
   private async updateModules(
     assessmentId: string,
     modules: any[],
   ): Promise<string[]> {
     const updatedModuleIds: string[] = [];
-    const moduleMapping = new Map<string, Types.ObjectId>();
+
+    // ✅ Get existing modules for this assessment
+    const existingModules = await this.assessmentModuleRepository.find({
+      assessment_id: new Types.ObjectId(assessmentId),
+    });
+
+    const existingModuleIds = new Set(
+      existingModules.map((m: any) => m._id.toString()),
+    );
+
+    const processedModuleIds = new Set<string>();
 
     for (const moduleDto of modules) {
       if (moduleDto.id) {
         // Update existing module
-        const existingModule = await this.assessmentModuleRepository.findById(
-          moduleDto.id,
-        );
-        if (!existingModule) {
-          this.logger.warn(
-            `Module with ID ${moduleDto.id} not found, skipping...`,
-          );
-          continue;
-        }
-
         const updateData: any = {};
         if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
         if (moduleDto.description !== undefined)
@@ -482,13 +543,10 @@ export class AssessmentService {
             updateData,
           );
           updatedModuleIds.push(moduleDto.id);
-          moduleMapping.set(
-            moduleDto.temp_id || moduleDto.id,
-            new Types.ObjectId(moduleDto.id),
-          );
+          processedModuleIds.add(moduleDto.id);
           this.logger.log(`Module ${moduleDto.id} updated`);
         }
-      } else if (moduleDto.temp_id) {
+      } else {
         // Create new module
         const moduleData = {
           assessment_id: new Types.ObjectId(assessmentId),
@@ -500,11 +558,21 @@ export class AssessmentService {
 
         const newModule =
           await this.assessmentModuleRepository.create(moduleData);
-        moduleMapping.set(moduleDto.temp_id, newModule._id);
         updatedModuleIds.push(newModule._id.toString());
+        processedModuleIds.add(newModule._id.toString());
         this.logger.log(`New module created: ${newModule._id}`);
       }
     }
+
+    // ✅ Remove modules that weren't in the update (optional - only if you want full replacement)
+    // Comment out these lines if you want to keep unmentioned modules
+    // const modulesToDelete = Array.from(existingModuleIds).filter(
+    //   id => !processedModuleIds.has(id)
+    // );
+    // for (const moduleId of modulesToDelete) {
+    //   await this.assessmentModuleRepository.delete({ _id: new Types.ObjectId(moduleId) });
+    //   this.logger.log(`Module ${moduleId} deleted (not in update)`);
+    // }
 
     return updatedModuleIds;
   }

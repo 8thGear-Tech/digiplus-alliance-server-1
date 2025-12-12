@@ -974,6 +974,20 @@ export class AssessmentController {
           is_active: true,
         },
       },
+      updateExistingModule: {
+        summary: 'Update existing module',
+        value: {
+          modules: [
+            {
+              id: '68dd2f298117c98763ffc774',
+              title: 'Updated Module Title',
+              description: 'Updated description for this specific module',
+              order: 1,
+              max_points: 25,
+            },
+          ],
+        },
+      },
       addNewQuestion: {
         summary: 'Add new question to assessment',
         value: {
