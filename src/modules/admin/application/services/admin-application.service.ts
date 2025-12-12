@@ -377,11 +377,22 @@ export class AdminApplicationService {
       );
     }
 
+    // Filter out inactive questions when returning the form
+    const formObject = form.toObject() as ApplicationForm;
+    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+
     return form;
   }
 
   async getAllForms(): Promise<ApplicationForm[]> {
-    return this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
+     const forms = await this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
+    
+    // Filter out inactive questions from each form
+    return forms.map(form => {
+      const formObject = form.toObject() as ApplicationForm;
+      formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+      return formObject;
+    });
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
@@ -410,6 +421,10 @@ export class AdminApplicationService {
     if (!updatedForm) {
       throw new NotFoundException('Application form not found.');
     }
+
+      // Filter out inactive questions
+    const formObject = updatedForm.toObject() as ApplicationForm;
+    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
 
     return updatedForm;
   }
@@ -484,7 +499,7 @@ export class AdminApplicationService {
         formsMap.set(formId, {
           welcome_title: submission.formId.welcome_title,
           slug: submission.formId.slug,
-          questions: submission.formId.questions || [],
+           questions: (submission.formId.questions || []).filter((q: any) => q.active !== false),
         });
       }
       
