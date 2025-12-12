@@ -381,7 +381,7 @@ export class AdminApplicationService {
     const formObject = form.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
 
-    return form;
+     return formObject;
   }
 
   async getAllForms(): Promise<ApplicationForm[]> {
@@ -426,7 +426,7 @@ export class AdminApplicationService {
     const formObject = updatedForm.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
 
-    return updatedForm;
+      return formObject;
   }
 
   async deleteForm(id: string): Promise<{ message: string }> {
