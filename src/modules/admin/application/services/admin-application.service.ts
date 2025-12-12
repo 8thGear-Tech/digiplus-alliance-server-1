@@ -99,6 +99,11 @@ export class AdminApplicationService {
       }
     }
 
+     // Set active to true by default for new questions
+    if (isNewQuestion && processedQuestion.active === undefined) {
+      processedQuestion.active = true;
+    }
+
     if (isNewQuestion || !processedQuestion.data_key) {
       processedQuestion.data_key = this.questionDataKeyService.generate(
         question.question,
@@ -296,7 +301,15 @@ export class AdminApplicationService {
           currentDataKeys,
           false, // isNewQuestion = false
         );
-        Object.assign(existingQuestion, updatedQuestion);
+
+
+        // Handle soft deletion: if active is set to false, mark as inactive
+        if (incomingQuestion.active === false) {
+          existingQuestion.active = false;
+          this.logger.log(`Question with data_key "${dataKey}" marked as inactive (soft deleted)`);
+        } else {
+          Object.assign(existingQuestion, updatedQuestion);
+        }
       } else {
         // ADD NEW QUESTION
         const newQuestion = this.processSingleQuestion(
@@ -313,6 +326,9 @@ export class AdminApplicationService {
         }
       }
     }
+   // HARD DELETE: Remove questions that are marked as inactive (active === false)
+    form.questions = form.questions.filter(q => q.active !== false);
+    this.logger.log(`Hard deleted ${form.questions.length} inactive questions from the database`);
   }
 
   // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
@@ -350,125 +366,7 @@ export class AdminApplicationService {
   return updatedForm.toObject() as ApplicationForm;
 }
 
-  // async updateForm(
-  //   id: string,
-  //   dto: UpdateApplicationFormDto,
-  // ): Promise<ApplicationForm> {
-  //   const form = await this.applicationFormModel.findById(id);
-  //   if (!form) {
-  //     throw new NotFoundException('Application form not found.');
-  //   }
-
-  //   // 1. Update top-level properties (welcome screens, isLive, etc.)
-  //   Object.assign(form, dto);
-
-  //   if (dto.questions) {
-  //     const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
-
-  //     const currentDataKeys: string[] = form.questions
-  //       .map((q) => q.data_key)
-  //       .filter(Boolean) as string[];
-
-  //     for (const question of form.questions) {
-  //       if (question.data_key) {
-  //         existingQuestionsMap.set(question.data_key, question);
-  //       }
-  //     }
-
-  //     const updatedAndNewQuestions: EmbeddedQuestion[] = [];
-  //     const keysEncounteredInDto = new Set<string>();
-
-  //     for (const incomingQuestion of dto.questions) {
-  //       // A question is considered existing if it has a data_key that matches a question already in the form.
-  //       const dataKey = incomingQuestion.data_key;
-  //       const isExisting = dataKey && existingQuestionsMap.has(dataKey);
-
-  //       if (isExisting) {
-  //         // --- UPDATE EXISTING QUESTION IN-PLACE ---
-  //         const existingQuestion = existingQuestionsMap.get(dataKey)!;
-
-  //         const updatedQuestion = this.processSingleQuestion(
-  //           incomingQuestion,
-  //           currentDataKeys,
-  //           false, // isNewQuestion = false
-  //         );
-
-  //         Object.assign(existingQuestion, updatedQuestion);
-
-  //         // Add the now-updated existing question to our new list
-  //         updatedAndNewQuestions.push(existingQuestion);
-  //         keysEncounteredInDto.add(dataKey);
-  //       } else {
-  //         const questionToSave = this.processSingleQuestion(
-  //           incomingQuestion,
-  //           currentDataKeys,
-  //           true,
-  //         );
-
-  //         if (questionToSave.data_key) {
-  //           currentDataKeys.push(questionToSave.data_key);
-  //           keysEncounteredInDto.add(questionToSave.data_key);
-  //         }
-
-  //         updatedAndNewQuestions.push(questionToSave as EmbeddedQuestion);
-  //       }
-  //     }
-
-  //     const questionsToKeep = form.questions.filter((q) => {
-  //       // Keep questions that were NOT included in the incoming DTO (identified by data_key)
-  //       return q.data_key && !keysEncounteredInDto.has(q.data_key);
-  //     });
-
-  //     // The new array is the combination of the retained old questions + the updated/new questions from the DTO
-  //     form.questions = [...questionsToKeep, ...updatedAndNewQuestions];
-  //   }
-
-  //   // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
-  //   if (dto.modules) {
-  //     const existingModulesMap = new Map<string, any>(); // Key: temp_id string
-  //     const tempIdsEncounteredInDto = new Set<string>();
-
-  //     // Map existing modules by their temp_id
-  //     for (const module of form.modules) {
-  //       // Use temp_id as the primary lookup key for modules
-  //       if (module.temp_id) {
-  //         existingModulesMap.set(module.temp_id, module);
-  //       }
-  //     }
-
-  //     const updatedAndNewModules: EmbeddedModule[] = [];
-
-  //     for (const incomingModule of dto.modules) {
-  //       const tempId = incomingModule.temp_id;
-
-  //       // A module is considered existing if its temp_id matches a module already in the form.
-  //       const isExisting = tempId && existingModulesMap.has(tempId);
-
-  //       if (isExisting) {
-  //         // --- UPDATE EXISTING MODULE IN-PLACE ---
-  //         const existingModule = existingModulesMap.get(tempId)!;
-  //         // Apply updates from the DTO to the existing Mongoose subdocument
-  //         Object.assign(existingModule, incomingModule);
-  //         updatedAndNewModules.push(existingModule);
-  //         tempIdsEncounteredInDto.add(tempId);
-  //       } else {
-  //         // --- CREATE/INSERT NEW MODULE ---
-  //         updatedAndNewModules.push(incomingModule as EmbeddedModule);
-  //       }
-  //     }
-
-  //     // Merge: keep old modules that weren't included in the DTO, and append the updated/new modules.
-  //     const modulesToKeep = form.modules.filter((m) => {
-  //       // Keep modules that were NOT included in the incoming DTO (identified by temp_id)
-  //       return m.temp_id && !tempIdsEncounteredInDto.has(m.temp_id);
-  //     });
-
-  //     form.modules = [...modulesToKeep, ...updatedAndNewModules];
-  //   }
-
-  //   const updatedForm = await form.save();
-  //   return updatedForm.toObject() as ApplicationForm;
-  // }
+  
 
   async getSingleForm(formId: string): Promise<ApplicationForm> {
     const form = await this.applicationFormModel.findById(formId).exec();
@@ -680,84 +578,7 @@ export class AdminApplicationService {
     return this.transformTrainingsList(submissions, servicePriceMap);
   }
 
-  // async updateTrainingDetails(
-  //   trainingName: string,
-  //   updateDto: UpdateTrainingDetailsDto,
-  //   file: Express.Multer.File,
-  // ): Promise<any[]> {
-  //   const updatePayload: any = {};
-  //   let timetable_url: string | undefined;
-
-  //   if (file) {
-  //     try {
-  //       const sanitizedName = trainingName
-  //         .replace(/[^a-z0-9]/gi, '_')
-  //         .toLowerCase();
-  //       const filename = `${sanitizedName}-timetable-${Date.now()}`;
-  //       const folder = 'training_timetables';
-
-  //       const uploadResult = await this.uploadService.uploadImage(
-  //         file,
-  //         filename,
-  //         folder,
-  //       );
-  //       timetable_url = uploadResult.secure_url;
-  //     } catch (error) {
-  //       console.error('Cloudinary Upload Error:', error);
-  //       throw new BadRequestException(
-  //         'Failed to upload timetable file to cloud storage.',
-  //       );
-  //     }
-  //   } else if (updateDto.timetable_url) {
-  //     timetable_url = updateDto.timetable_url;
-  //   }
-
-  //   if (timetable_url) {
-  //     updatePayload.timetable_url = timetable_url;
-  //   }
-
-  //   if (updateDto.start_date) {
-  //     updatePayload.start_date = new Date(updateDto.start_date);
-  //   }
-  //   if (updateDto.end_date) {
-  //     updatePayload.end_date = new Date(updateDto.end_date);
-  //   }
-
-  //   if (Object.keys(updatePayload).length === 0) {
-  //     throw new BadRequestException(
-  //       'No valid update fields (file, URL, start date, or end date) were provided.',
-  //     );
-  //   }
-
-  //   const filter: any = {
-  //     service: new RegExp(trainingName.trim(), 'i'),
-  //     status: ApplicationStatus.Approved,
-  //     payment_status: PaymentStatus.Paid,
-  //   };
-
-  //   const updateResult = await this.submissionModel
-  //     .updateMany(filter, { $set: updatePayload })
-  //     .exec();
-
-  //   if (updateResult.matchedCount === 0) {
-  //     throw new NotFoundException(
-  //       `No approved and paid participants found for training "${trainingName}" to update.`,
-  //     );
-  //   }
-
-  //   const updatedSubmissions = await this.submissionModel
-  //     .find(filter)
-  //     .select('+service_type +timetable_url +start_date +end_date')
-  //     .exec();
-
-  //   const services = await this.serviceModel.find().exec();
-  //   const servicePriceMap = services.reduce((map, service) => {
-  //     map[service.name] = service.price;
-  //     return map;
-  //   }, {});
-
-  //   return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
-  // }
+  
 
   async updateTrainingDetails(
     trainingName: string,

@@ -157,6 +157,10 @@ export class EmbeddedQuestion {
   // Add the data_key property here
   @Prop({ type: String, required: false })
   data_key?: string;
+
+   // Add active status field
+  @Prop({ type: Boolean, default: true })
+  active: boolean;
 }
 const EmbeddedQuestionSchema = SchemaFactory.createForClass(EmbeddedQuestion);
 
