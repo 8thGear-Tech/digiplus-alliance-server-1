@@ -336,19 +336,17 @@ export class QuestionDto {
   })
   @IsOptional()
   @IsString()
-  //   @Transform(({ value, obj }) => {
-  //     // If the admin provides a data_key, use it.
-  //     if (value) {
-  //       return customSlugify(value);
-  //     }
-  //     // Otherwise, generate it from the question text.
-  //     if (obj.question) {
-  //       return customSlugify(obj.question);
-  //     }
-  //     return undefined;
-  //   }
-  // )
   data_key?: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Indicates if the question is active. Defaults to true. Set to false for soft deletion.',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class CreateApplicationFormDto {
