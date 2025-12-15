@@ -1,11 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   BadRequestException,
   Inject,
@@ -14,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   ApplicationForm,
   EmbeddedModule,
@@ -46,6 +38,24 @@ import {
   NotificationType,
 } from 'src/modules/notification/schemas/notification.schema';
 import { UserApplicationService } from 'src/modules/business-owner/user-application.service';
+
+interface PopulatedSubmission {
+  _id: any;
+  responses: Record<string, any>;
+  service: string;
+  service_type: string;
+  payment_amount?: number;
+  userId: string;
+  status: ApplicationStatus;
+  payment_status: PaymentStatus;
+  createdAt: Date;
+  formId: {
+    _id: Types.ObjectId;
+    welcome_title: string;
+    slug: string;
+    questions: EmbeddedQuestion[];
+  };
+}
 
 @Injectable()
 export class AdminApplicationService {
@@ -87,6 +97,11 @@ export class AdminApplicationService {
           `Checkbox question "${question.question}": min_selections (${min}) cannot exceed max_selections (${max})`,
         );
       }
+    }
+
+     // Set active to true by default for new questions
+    if (isNewQuestion && processedQuestion.active === undefined) {
+      processedQuestion.active = true;
     }
 
     if (isNewQuestion || !processedQuestion.data_key) {
@@ -161,19 +176,43 @@ export class AdminApplicationService {
     });
   }
 
-  private transformSubmissionsForList(submissions: any[]): any[] {
+  private transformSubmissionsForList(
+  submissions: PopulatedSubmission[],
+  formsMap: Map<string, any>,
+): any[] {
     return submissions.map((submission) => {
       const firstName = submission.responses['firstname'] || 'N/A';
       const lastName = submission.responses['lastname'] || '';
       const email = submission.responses['email'] || 'N/A';
       const specificService = submission.service;
-
       const paymentStatus = submission.payment_status || 'Not Paid';
-
       const name = `${firstName} ${lastName}`.trim();
+// Get form details from the map
+    const formDetails = formsMap.get(submission.formId?._id?.toString() || '') || {};
+    // Transform responses into question-answer pairs
+    const formQuestions = formDetails.questions || [];
+    const questionAnswerPairs = formQuestions
+      .map((question: any) => {
+        const dataKey = question.data_key;
+        const answer = submission.responses[dataKey];
+        
+        // Only include questions that have answers
+        if (answer !== undefined && answer !== null && answer !== '') {
+          return {
+            question: question.question,
+            data_key: dataKey,
+            answer: answer,
+            type: question.type,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean); // Remove null entries
 
       return {
         _id: submission._id,
+        form_title: formDetails.welcome_title || 'N/A',
+         form_slug: formDetails.slug || null,
         name,
         email,
         service: specificService,
@@ -181,6 +220,7 @@ export class AdminApplicationService {
         status: submission.status,
         timestamp: new Date(submission.createdAt).toLocaleString(),
         payment_status: paymentStatus,
+        responses: questionAnswerPairs,
       };
     });
   }
@@ -221,124 +261,112 @@ export class AdminApplicationService {
   }
 
   async updateForm(
-    id: string,
-    dto: UpdateApplicationFormDto,
-  ): Promise<ApplicationForm> {
-    const form = await this.applicationFormModel.findById(id);
-    if (!form) {
-      throw new NotFoundException('Application form not found.');
-    }
-
-    // 1. Update top-level properties (welcome screens, isLive, etc.)
-    Object.assign(form, dto);
-
-    if (dto.questions) {
-      const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
-
-      const currentDataKeys: string[] = form.questions
-        .map((q) => q.data_key)
-        .filter(Boolean) as string[];
-
-      for (const question of form.questions) {
-        if (question.data_key) {
-          existingQuestionsMap.set(question.data_key, question);
-        }
-      }
-
-      const updatedAndNewQuestions: EmbeddedQuestion[] = [];
-      const keysEncounteredInDto = new Set<string>();
-
-      for (const incomingQuestion of dto.questions) {
-        // A question is considered existing if it has a data_key that matches a question already in the form.
-        const dataKey = incomingQuestion.data_key;
-        const isExisting = dataKey && existingQuestionsMap.has(dataKey);
-
-        if (isExisting) {
-          // --- UPDATE EXISTING QUESTION IN-PLACE ---
-          const existingQuestion = existingQuestionsMap.get(dataKey)!;
-
-          const updatedQuestion = this.processSingleQuestion(
-            incomingQuestion,
-            currentDataKeys,
-            false, // isNewQuestion = false
-          );
-
-          Object.assign(existingQuestion, updatedQuestion);
-
-          // Add the now-updated existing question to our new list
-          updatedAndNewQuestions.push(existingQuestion);
-          keysEncounteredInDto.add(dataKey);
-        } else {
-          const questionToSave = this.processSingleQuestion(
-            incomingQuestion,
-            currentDataKeys,
-            true,
-          );
-
-          if (questionToSave.data_key) {
-            currentDataKeys.push(questionToSave.data_key);
-            keysEncounteredInDto.add(questionToSave.data_key);
-          }
-
-          updatedAndNewQuestions.push(questionToSave as EmbeddedQuestion);
-        }
-      }
-
-      const questionsToKeep = form.questions.filter((q) => {
-        // Keep questions that were NOT included in the incoming DTO (identified by data_key)
-        return q.data_key && !keysEncounteredInDto.has(q.data_key);
-      });
-
-      // The new array is the combination of the retained old questions + the updated/new questions from the DTO
-      form.questions = [...questionsToKeep, ...updatedAndNewQuestions];
-    }
-
-    // 3. Modules Update: Implement Add/Update ONLY logic, preserving any modules not included in the DTO.
-    if (dto.modules) {
-      const existingModulesMap = new Map<string, any>(); // Key: temp_id string
-      const tempIdsEncounteredInDto = new Set<string>();
-
-      // Map existing modules by their temp_id
-      for (const module of form.modules) {
-        // Use temp_id as the primary lookup key for modules
-        if (module.temp_id) {
-          existingModulesMap.set(module.temp_id, module);
-        }
-      }
-
-      const updatedAndNewModules: EmbeddedModule[] = [];
-
-      for (const incomingModule of dto.modules) {
-        const tempId = incomingModule.temp_id;
-
-        // A module is considered existing if its temp_id matches a module already in the form.
-        const isExisting = tempId && existingModulesMap.has(tempId);
-
-        if (isExisting) {
-          // --- UPDATE EXISTING MODULE IN-PLACE ---
-          const existingModule = existingModulesMap.get(tempId)!;
-          // Apply updates from the DTO to the existing Mongoose subdocument
-          Object.assign(existingModule, incomingModule);
-          updatedAndNewModules.push(existingModule);
-          tempIdsEncounteredInDto.add(tempId);
-        } else {
-          // --- CREATE/INSERT NEW MODULE ---
-          updatedAndNewModules.push(incomingModule as EmbeddedModule);
-        }
-      }
-
-      // Merge: keep old modules that weren't included in the DTO, and append the updated/new modules.
-      const modulesToKeep = form.modules.filter((m) => {
-        // Keep modules that were NOT included in the incoming DTO (identified by temp_id)
-        return m.temp_id && !tempIdsEncounteredInDto.has(m.temp_id);
-      });
-
-      form.modules = [...modulesToKeep, ...updatedAndNewModules];
-    }
-
-    const updatedForm = await form.save();
-    return updatedForm.toObject() as ApplicationForm;
+  id: string,
+  dto: UpdateApplicationFormDto,
+): Promise<ApplicationForm> {
+  const form = await this.applicationFormModel.findById(id);
+  if (!form) {
+    throw new NotFoundException('Application form not found.');
   }
+
+  // 1. Update top-level properties (welcome screens, isLive, etc.)
+  if (dto.welcome_title !== undefined) form.welcome_title = dto.welcome_title;
+  if (dto.welcome_description !== undefined) form.welcome_description = dto.welcome_description;
+  if (dto.welcome_instruction !== undefined) form.welcome_instruction = dto.welcome_instruction;
+  if (dto.welcome_button_text !== undefined) form.welcome_button_text = dto.welcome_button_text;
+  if (dto.isLive !== undefined) form.isLive = dto.isLive;
+
+  // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
+  if (dto.questions && dto.questions.length > 0) {
+    const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
+    const currentDataKeys: string[] = [];
+
+    // Map existing questions by data_key
+    for (const question of form.questions) {
+      if (question.data_key) {
+        existingQuestionsMap.set(question.data_key, question);
+        currentDataKeys.push(question.data_key);
+      }
+    }
+
+    for (const incomingQuestion of dto.questions) {
+      const dataKey = incomingQuestion.data_key;
+      
+      // Check if this is an update (question with this data_key already exists)
+      if (dataKey && existingQuestionsMap.has(dataKey)) {
+        // UPDATE EXISTING QUESTION
+        const existingQuestion = existingQuestionsMap.get(dataKey)!;
+        const updatedQuestion = this.processSingleQuestion(
+          incomingQuestion,
+          currentDataKeys,
+          false, // isNewQuestion = false
+        );
+
+
+        // Handle soft deletion: if active is set to false, mark as inactive
+        if (incomingQuestion.active === false) {
+          existingQuestion.active = false;
+          this.logger.log(`Question with data_key "${dataKey}" marked as inactive (soft deleted)`);
+        } else {
+          Object.assign(existingQuestion, updatedQuestion);
+        }
+      } else {
+        // ADD NEW QUESTION
+        const newQuestion = this.processSingleQuestion(
+          incomingQuestion,
+          currentDataKeys,
+          true, // isNewQuestion = true
+        );
+        
+        // Prevent duplicates: check if data_key was just generated and already exists
+        if (newQuestion.data_key && !existingQuestionsMap.has(newQuestion.data_key)) {
+          form.questions.push(newQuestion as EmbeddedQuestion);
+          existingQuestionsMap.set(newQuestion.data_key, newQuestion as EmbeddedQuestion);
+          currentDataKeys.push(newQuestion.data_key);
+        }
+      }
+    }
+   // HARD DELETE: Remove questions that are marked as inactive (active === false)
+    form.questions = form.questions.filter(q => q.active !== false);
+    this.logger.log(`Hard deleted ${form.questions.length} inactive questions from the database`);
+  }
+
+  // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
+  if (dto.modules && dto.modules.length > 0) {
+    const existingModulesMap = new Map<string, EmbeddedModule>();
+
+    // Map existing modules by temp_id
+    for (const module of form.modules) {
+      if (module.temp_id) {
+        existingModulesMap.set(module.temp_id, module);
+      }
+    }
+
+    for (const incomingModule of dto.modules) {
+      const tempId = incomingModule.temp_id;
+
+      if (!tempId) {
+        throw new BadRequestException('Module must have a temp_id');
+      }
+
+      // Check if this module already exists
+      if (existingModulesMap.has(tempId)) {
+        // UPDATE EXISTING MODULE
+        const existingModule = existingModulesMap.get(tempId)!;
+        Object.assign(existingModule, incomingModule);
+      } else {
+        // ADD NEW MODULE (prevent duplicates)
+        form.modules.push(incomingModule as EmbeddedModule);
+        existingModulesMap.set(tempId, incomingModule as EmbeddedModule);
+      }
+    }
+  }
+
+  const updatedForm = await form.save();
+  return updatedForm.toObject() as ApplicationForm;
+}
+
+  
 
   async getSingleForm(formId: string): Promise<ApplicationForm> {
     const form = await this.applicationFormModel.findById(formId).exec();
@@ -349,14 +377,43 @@ export class AdminApplicationService {
       );
     }
 
-    return form;
+    // Filter out inactive questions when returning the form
+    const formObject = form.toObject() as ApplicationForm;
+    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+
+     return formObject;
   }
 
   async getAllForms(): Promise<ApplicationForm[]> {
-    return this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
+     const forms = await this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
+    
+    // Filter out inactive questions from each form
+    return forms.map(form => {
+      const formObject = form.toObject() as ApplicationForm;
+      formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+      return formObject;
+    });
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
+
+    const form = await this.applicationFormModel.findById(id).exec();
+  
+  if (!form) {
+    throw new NotFoundException('Application form not found.');
+  }
+
+  // If publishing this form (isLive = true), unpublish all other forms first
+  if (isLive) {
+    await this.applicationFormModel
+      .updateMany(
+        { _id: { $ne: id }, isLive: true }, // Find all other live forms
+        { $set: { isLive: false } } // Set them to unpublished
+      )
+      .exec();
+    
+    this.logger.log(`Unpublished all other forms before publishing form: ${id}`);
+  }
     const updatedForm = await this.applicationFormModel
       .findByIdAndUpdate(id, { $set: { isLive: isLive } }, { new: true })
       .exec();
@@ -365,7 +422,11 @@ export class AdminApplicationService {
       throw new NotFoundException('Application form not found.');
     }
 
-    return updatedForm;
+      // Filter out inactive questions
+    const formObject = updatedForm.toObject() as ApplicationForm;
+    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+
+      return formObject;
   }
 
   async deleteForm(id: string): Promise<{ message: string }> {
@@ -412,7 +473,10 @@ export class AdminApplicationService {
 
     const submissions = await this.submissionModel
       .find(filter)
-
+ .populate({
+      path: 'formId',
+      select: 'welcome_title slug questions',
+    })
       .exec();
 
     if (submissions.length === 0) {
@@ -421,8 +485,47 @@ export class AdminApplicationService {
       );
     }
 
-    return this.transformSubmissionsForList(submissions);
-  }
+     // Create a map of forms for efficient lookup
+  const formsMap = new Map<string, any>();
+    const typedSubmissions: PopulatedSubmission[] = [];
+  
+ submissions.forEach((submission: any) => {
+    // Check if formId is populated (not just an ObjectId)
+    if (submission.formId && typeof submission.formId === 'object' && submission.formId._id) {
+      const formId = submission.formId._id.toString();
+      
+      // Add to forms map (avoid duplicates)
+      if (!formsMap.has(formId)) {
+        formsMap.set(formId, {
+          welcome_title: submission.formId.welcome_title,
+          slug: submission.formId.slug,
+           questions: (submission.formId.questions || []).filter((q: any) => q.active !== false),
+        });
+      }
+      
+      // Add to typed submissions array
+      typedSubmissions.push({
+        _id: submission._id,
+        responses: submission.responses,
+        service: submission.service,
+        service_type: submission.service_type,
+        payment_amount: submission.payment_amount,
+        userId: submission.userId,
+        status: submission.status,
+        payment_status: submission.payment_status,
+        createdAt: submission.createdAt,
+        formId: {
+          _id: submission.formId._id,
+          welcome_title: submission.formId.welcome_title,
+          slug: submission.formId.slug,
+          questions: submission.formId.questions || [],
+        },
+      });
+    }
+  });
+
+  return this.transformSubmissionsForList(typedSubmissions, formsMap);
+}
 
   async updateApplicationStatus(
     id: string,
@@ -490,84 +593,7 @@ export class AdminApplicationService {
     return this.transformTrainingsList(submissions, servicePriceMap);
   }
 
-  // async updateTrainingDetails(
-  //   trainingName: string,
-  //   updateDto: UpdateTrainingDetailsDto,
-  //   file: Express.Multer.File,
-  // ): Promise<any[]> {
-  //   const updatePayload: any = {};
-  //   let timetable_url: string | undefined;
-
-  //   if (file) {
-  //     try {
-  //       const sanitizedName = trainingName
-  //         .replace(/[^a-z0-9]/gi, '_')
-  //         .toLowerCase();
-  //       const filename = `${sanitizedName}-timetable-${Date.now()}`;
-  //       const folder = 'training_timetables';
-
-  //       const uploadResult = await this.uploadService.uploadImage(
-  //         file,
-  //         filename,
-  //         folder,
-  //       );
-  //       timetable_url = uploadResult.secure_url;
-  //     } catch (error) {
-  //       console.error('Cloudinary Upload Error:', error);
-  //       throw new BadRequestException(
-  //         'Failed to upload timetable file to cloud storage.',
-  //       );
-  //     }
-  //   } else if (updateDto.timetable_url) {
-  //     timetable_url = updateDto.timetable_url;
-  //   }
-
-  //   if (timetable_url) {
-  //     updatePayload.timetable_url = timetable_url;
-  //   }
-
-  //   if (updateDto.start_date) {
-  //     updatePayload.start_date = new Date(updateDto.start_date);
-  //   }
-  //   if (updateDto.end_date) {
-  //     updatePayload.end_date = new Date(updateDto.end_date);
-  //   }
-
-  //   if (Object.keys(updatePayload).length === 0) {
-  //     throw new BadRequestException(
-  //       'No valid update fields (file, URL, start date, or end date) were provided.',
-  //     );
-  //   }
-
-  //   const filter: any = {
-  //     service: new RegExp(trainingName.trim(), 'i'),
-  //     status: ApplicationStatus.Approved,
-  //     payment_status: PaymentStatus.Paid,
-  //   };
-
-  //   const updateResult = await this.submissionModel
-  //     .updateMany(filter, { $set: updatePayload })
-  //     .exec();
-
-  //   if (updateResult.matchedCount === 0) {
-  //     throw new NotFoundException(
-  //       `No approved and paid participants found for training "${trainingName}" to update.`,
-  //     );
-  //   }
-
-  //   const updatedSubmissions = await this.submissionModel
-  //     .find(filter)
-  //     .select('+service_type +timetable_url +start_date +end_date')
-  //     .exec();
-
-  //   const services = await this.serviceModel.find().exec();
-  //   const servicePriceMap = services.reduce((map, service) => {
-  //     map[service.name] = service.price;
-  //     return map;
-  //   }, {});
-
-  //   return this.transformTrainingsList(updatedSubmissions, servicePriceMap);
-  // }
+  
 
   async updateTrainingDetails(
     trainingName: string,
