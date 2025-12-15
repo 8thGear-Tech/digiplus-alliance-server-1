@@ -11,6 +11,7 @@ import {
   ValidateIf,
   Min,
   Max,
+  Validate,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -337,18 +338,16 @@ export class QuestionDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  // ✅ ADD THIS CUSTOM VALIDATOR
+@Validate((value: string[]) => {
+  if (!Array.isArray(value)) return false;
+  return value.every(type => 
+    type === 'url' || type.startsWith('.')
+  );
+}, {
+  message: 'accepted_file_types must be file extensions (e.g., .pdf) or "url"'
+})
   accepted_file_types?: string[];
-
-  @ApiProperty({
-    example: true,
-    description: 'Allow URL links in addition to file uploads (for file_upload only)',
-    default: false,
-    required: false,
-  })
-  @ValidateIf((o) => o.type === 'file_upload')
-  @IsOptional()
-  @IsBoolean()
-  allow_url?: boolean;
 
   @ApiProperty({
     example: 'first-name',
