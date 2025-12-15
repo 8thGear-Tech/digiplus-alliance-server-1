@@ -75,6 +75,9 @@ export class EmbeddedModule {
 
   @Prop()
   order?: number; // Optional order field
+
+  @Prop({ type: Boolean, default: true })
+  active: boolean;
 }
 const EmbeddedModuleSchema = SchemaFactory.createForClass(EmbeddedModule);
 
