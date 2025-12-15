@@ -670,6 +670,15 @@ export class CreateModuleDto {
   order: number;
 
   @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this module during update',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
+
+  @ApiProperty({
     example: 50,
     required: false,
     description: 'Maximum points possible in this module',

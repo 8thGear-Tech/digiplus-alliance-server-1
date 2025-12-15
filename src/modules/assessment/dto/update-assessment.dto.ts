@@ -300,6 +300,15 @@ export class UpdateModuleDto {
   @IsString()
   description?: string;
 
+  @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this module',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
+
   @ApiProperty({ example: 1, required: false })
   @IsOptional()
   @IsNumber()

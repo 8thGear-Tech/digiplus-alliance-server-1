@@ -527,6 +527,56 @@ export class AssessmentService {
     const processedModuleIds = new Set<string>();
 
     for (const moduleDto of modules) {
+      /**
+       * 🔴 DELETE MODULE
+       */
+      if (moduleDto.toDelete === true) {
+        if (!moduleDto.id) {
+          continue;
+        }
+
+        // 🔍 Fetch questions under this module
+        const questionsInModule = await this.questionRepository.find({
+          module_id: new Types.ObjectId(moduleDto.id),
+        });
+
+        // ❌ Block deletion if questions exist
+        if (questionsInModule.length > 0) {
+          const questionList = questionsInModule
+            .map((q) => (q as any).question)
+            .join(', ');
+
+          this.logger.log('Affected Questions', `${questionList}`);
+
+          throw BadRequestException.BAD_REQUEST(
+            `Module cannot be deleted because it still contains questions. Reassign them to another module before deleting. Affected questions: ${questionList}`,
+          );
+        }
+
+        // ✅ Safe to delete
+        await this.assessmentModuleRepository.delete({
+          _id: new Types.ObjectId(moduleDto.id),
+        });
+
+        this.logger.log(`Module ${moduleDto.id} deleted`);
+        continue;
+
+        // if (moduleDto.id) {
+        //   await this.assessmentModuleRepository.delete({
+        //     _id: new Types.ObjectId(moduleDto.id),
+        //   });
+
+        //   // OPTIONAL: cascade delete questions under this module
+        //   await this.questionRepository.deleteMany({
+        //     module_id: new Types.ObjectId(moduleDto.id),
+        //   });
+
+        //   this.logger.log(`Module ${moduleDto.id} deleted`);
+        // }
+
+        // // Skip further processing
+        // continue;
+      }
       if (moduleDto.id) {
         // Update existing module
         const updateData: any = {};
@@ -855,6 +905,29 @@ export class AssessmentService {
           if (questionDto.step === undefined || questionDto.step === null) {
             throw BadRequestException.BAD_REQUEST(
               'Question step is required for new questions',
+            );
+          }
+
+          // 🔴 ENFORCE MODULE ASSIGNMENT
+          if (!questionDto.module_id) {
+            throw BadRequestException.BAD_REQUEST(
+              'module_id is required when creating a new question. A question must belong to a module.',
+            );
+          }
+
+          if (!Types.ObjectId.isValid(questionDto.module_id)) {
+            throw BadRequestException.BAD_REQUEST(
+              'Invalid module_id provided for question',
+            );
+          }
+          const moduleExists = await this.assessmentModuleRepository.findOne({
+            _id: new Types.ObjectId(questionDto.module_id),
+            assessment_id: new Types.ObjectId(assessmentId),
+          });
+
+          if (!moduleExists) {
+            throw BadRequestException.BAD_REQUEST(
+              'Module does not exist in this assessment',
             );
           }
 
@@ -2374,9 +2447,14 @@ export class AssessmentService {
         updatedItems.questions = questionUpdates;
 
         // ✅ Track deleted questions (extract from logs or modify updateQuestions to return both)
-        const deletedQuestions = updateAssessmentDto.questions
-          .filter((q) => q.toDelete === true && q.id)
-          .map((q) => q.id);
+        const deletedQuestions: string[] = [];
+
+        for (const q of updateAssessmentDto.questions) {
+          if (q.toDelete === true && q.id) {
+            deletedQuestions.push(q.id);
+          }
+        }
+
         updatedItems.deleted_questions = deletedQuestions;
       }
 
