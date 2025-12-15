@@ -996,7 +996,7 @@ export class AssessmentController {
               type: 'multiple_choice',
               question: 'How would you rate your AI adoption?',
               step: 15,
-              module_ref: 'module-1',
+              module_id: '68f0c71326b429a820bcddd5',
               options: [
                 { id: 'ai-1', text: 'No AI tools', points: 1 },
                 { id: 'ai-2', text: 'Basic AI tools', points: 3 },
