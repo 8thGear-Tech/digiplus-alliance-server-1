@@ -974,6 +974,20 @@ export class AssessmentController {
           is_active: true,
         },
       },
+      updateExistingModule: {
+        summary: 'Update existing module',
+        value: {
+          modules: [
+            {
+              id: '68dd2f298117c98763ffc774',
+              title: 'Updated Module Title',
+              description: 'Updated description for this specific module',
+              order: 1,
+              max_points: 25,
+            },
+          ],
+        },
+      },
       addNewQuestion: {
         summary: 'Add new question to assessment',
         value: {
@@ -1005,6 +1019,37 @@ export class AssessmentController {
                 { id: 'opt-3', text: 'Advanced', points: 8 },
                 { id: 'opt-4', text: 'Expert', points: 10 },
               ],
+            },
+          ],
+        },
+      },
+      deleteQuestion: {
+        summary: 'Delete a question',
+        value: {
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              toDelete: true,
+            },
+          ],
+        },
+      },
+      mixedOperations: {
+        summary: 'Update, delete, and create questions',
+        value: {
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              question: 'Updated question',
+            },
+            {
+              id: '68dd2f2c8117c98763ffc779',
+              toDelete: true,
+            },
+            {
+              type: 'short_text',
+              question: 'New question',
+              step: 15,
             },
           ],
         },
