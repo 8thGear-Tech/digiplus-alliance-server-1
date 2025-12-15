@@ -577,37 +577,242 @@ export class AssessmentService {
     return updatedModuleIds;
   }
 
+  // private async updateQuestions(
+  //   assessmentId: string,
+  //   questions: any[],
+  // ): Promise<string[]> {
+  //   const updatedQuestionIds: string[] = [];
+
+  //   for (const questionDto of questions) {
+  //     try {
+  //       if (questionDto.id) {
+  //         // Update existing question
+  //         const existingQuestion = await this.questionRepository.findById(
+  //           questionDto.id,
+  //         );
+  //         if (!existingQuestion) {
+  //           this.logger.warn(
+  //             `Question with ID ${questionDto.id} not found, skipping...`,
+  //           );
+  //           continue;
+  //         }
+
+  //         const updateData = this.buildQuestionUpdateData(questionDto);
+  //         if (Object.keys(updateData).length > 0) {
+  //           await this.questionRepository.findByIdAndUpdate(
+  //             questionDto.id,
+  //             updateData,
+  //           );
+  //           updatedQuestionIds.push(questionDto.id);
+  //           this.logger.log(`Question ${questionDto.id} updated`);
+  //         }
+  //       } else {
+  //         // Create new question - validate required fields
+  //         if (!questionDto.type) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             'Question type is required for new questions',
+  //           );
+  //         }
+  //         if (questionDto.step === undefined || questionDto.step === null) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             'Question step is required for new questions',
+  //           );
+  //         }
+  //         if (!questionDto.question || questionDto.question.trim() === '') {
+  //           throw BadRequestException.BAD_REQUEST('Question text is required');
+  //         }
+  //         // Create new question
+  //         const questionData = this.buildNewQuestionData(
+  //           assessmentId,
+  //           questionDto,
+  //         );
+  //         const newQuestion =
+  //           await this.questionRepository.create(questionData);
+  //         updatedQuestionIds.push(
+  //           (newQuestion._id as Types.ObjectId).toString(),
+  //         );
+  //         this.logger.log(
+  //           `New question created: ${(newQuestion._id as Types.ObjectId).toString()}`,
+  //         );
+  //       }
+  //     } catch (error) {
+  //       // Add context about which question failed
+  //       const questionInfo = questionDto.id
+  //         ? `question ID ${questionDto.id}`
+  //         : `new question at step ${questionDto.step}`;
+  //       this.logger.error(`Error processing ${questionInfo}:`, error.message);
+
+  //       if (error instanceof BadRequestException) {
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Error with ${questionInfo}: ${error.message}`,
+  //         );
+  //       }
+  //       throw error;
+  //     }
+  //   }
+
+  //   return updatedQuestionIds;
+  // }
+
+  // private async updateQuestions(
+  //   assessmentId: string,
+  //   questions: any[],
+  // ): Promise<string[]> {
+  //   const updatedQuestionIds: string[] = [];
+
+  //   // ✅ Get existing questions for this assessment
+  //   const existingQuestions = await this.questionRepository.find({
+  //     assessment_id: new Types.ObjectId(assessmentId),
+  //   });
+
+  //   const existingQuestionIds = new Set(
+  //     existingQuestions.map((q: any) => q._id.toString()),
+  //   );
+
+  //   const processedQuestionIds = new Set<string>();
+
+  //   for (const questionDto of questions) {
+  //     try {
+  //       if (questionDto.id) {
+  //         // ✅ Validate question ID format
+  //         if (!Types.ObjectId.isValid(questionDto.id)) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             `Invalid question ID format: "${questionDto.id}". Please provide a valid MongoDB ObjectId.`,
+  //           );
+  //         }
+
+  //         // ✅ Check if question exists
+  //         const existingQuestion = await this.questionRepository.findById(
+  //           questionDto.id,
+  //         );
+
+  //         if (!existingQuestion) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             `Question with ID "${questionDto.id}" not found. Please verify the question exists or remove the ID to create a new question.`,
+  //           );
+  //         }
+  //         // ✅ Update existing question
+  //         const updateData = this.buildQuestionUpdateData(questionDto);
+
+  //         if (Object.keys(updateData).length > 0) {
+  //           await this.questionRepository.findByIdAndUpdate(
+  //             questionDto.id,
+  //             updateData,
+  //           );
+  //           updatedQuestionIds.push(questionDto.id);
+  //           processedQuestionIds.add(questionDto.id);
+  //           this.logger.log(`Question ${questionDto.id} updated`);
+  //         } else {
+  //           // Even if no update, mark as processed
+  //           processedQuestionIds.add(questionDto.id);
+  //         }
+  //       } else {
+  //         // ✅ Create new question - validate required fields
+  //         if (!questionDto.type) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             'Question type is required for new questions',
+  //           );
+  //         }
+  //         if (questionDto.step === undefined || questionDto.step === null) {
+  //           throw BadRequestException.BAD_REQUEST(
+  //             'Question step is required for new questions',
+  //           );
+  //         }
+
+  //         const questionData = this.buildNewQuestionData(
+  //           assessmentId,
+  //           questionDto,
+  //         );
+  //         const newQuestion =
+  //           await this.questionRepository.create(questionData);
+  //         const newQuestionId = (newQuestion._id as Types.ObjectId).toString();
+  //         updatedQuestionIds.push(newQuestionId);
+  //         processedQuestionIds.add(newQuestionId);
+  //         this.logger.log(`New question created: ${newQuestionId}`);
+  //       }
+  //     } catch (error) {
+  //       const questionInfo = questionDto.id
+  //         ? `question ID ${questionDto.id}`
+  //         : `new question at step ${questionDto.step}`;
+  //       this.logger.error(`Error processing ${questionInfo}:`, error.message);
+
+  //       if (error instanceof BadRequestException) {
+  //         throw error;
+  //       }
+  //       throw error;
+  //     }
+  //   }
+
+  //   // ✅ Remove questions that weren't in the update (optional - only if you want full replacement)
+  //   // Comment out these lines if you want to keep unmentioned questions
+  //   // const questionsToDelete = Array.from(existingQuestionIds).filter(
+  //   //   id => !processedQuestionIds.has(id)
+  //   // );
+  //   // for (const questionId of questionsToDelete) {
+  //   //   await this.questionRepository.delete({ _id: new Types.ObjectId(questionId) });
+  //   //   this.logger.log(`Question ${questionId} deleted (not in update)`);
+  //   // }
+
+  //   return updatedQuestionIds;
+  // }
+
   private async updateQuestions(
     assessmentId: string,
     questions: any[],
   ): Promise<string[]> {
     const updatedQuestionIds: string[] = [];
 
+    const existingQuestions = await this.questionRepository.find({
+      assessment_id: new Types.ObjectId(assessmentId),
+    });
+
+    const existingQuestionIds = new Set(
+      existingQuestions.map((q: any) => q._id.toString()),
+    );
+
+    const processedQuestionIds = new Set<string>();
+
     for (const questionDto of questions) {
       try {
         if (questionDto.id) {
           // Update existing question
+          if (!Types.ObjectId.isValid(questionDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid question ID format: "${questionDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
+
           const existingQuestion = await this.questionRepository.findById(
             questionDto.id,
           );
+
           if (!existingQuestion) {
-            this.logger.warn(
-              `Question with ID ${questionDto.id} not found, skipping...`,
+            throw BadRequestException.BAD_REQUEST(
+              `Question with ID "${questionDto.id}" not found. Please verify the question exists or remove the ID to create a new question.`,
             );
-            continue;
           }
 
+          // ✅ Determine the type to validate (new type or existing type)
+          const typeToValidate = questionDto.type || existingQuestion.type;
+
+          // ✅ Validate question data matches type
+          this.validateQuestionTypeData(typeToValidate, questionDto, 'update');
+
           const updateData = this.buildQuestionUpdateData(questionDto);
+
           if (Object.keys(updateData).length > 0) {
             await this.questionRepository.findByIdAndUpdate(
               questionDto.id,
               updateData,
             );
             updatedQuestionIds.push(questionDto.id);
+            processedQuestionIds.add(questionDto.id);
             this.logger.log(`Question ${questionDto.id} updated`);
+          } else {
+            processedQuestionIds.add(questionDto.id);
           }
         } else {
-          // Create new question - validate required fields
+          // Create new question
           if (!questionDto.type) {
             throw BadRequestException.BAD_REQUEST(
               'Question type is required for new questions',
@@ -618,34 +823,33 @@ export class AssessmentService {
               'Question step is required for new questions',
             );
           }
-          if (!questionDto.question || questionDto.question.trim() === '') {
-            throw BadRequestException.BAD_REQUEST('Question text is required');
-          }
-          // Create new question
+
+          // ✅ Validate question data matches type
+          this.validateQuestionTypeData(
+            questionDto.type,
+            questionDto,
+            'create',
+          );
+
           const questionData = this.buildNewQuestionData(
             assessmentId,
             questionDto,
           );
           const newQuestion =
             await this.questionRepository.create(questionData);
-          updatedQuestionIds.push(
-            (newQuestion._id as Types.ObjectId).toString(),
-          );
-          this.logger.log(
-            `New question created: ${(newQuestion._id as Types.ObjectId).toString()}`,
-          );
+          const newQuestionId = (newQuestion._id as Types.ObjectId).toString();
+          updatedQuestionIds.push(newQuestionId);
+          processedQuestionIds.add(newQuestionId);
+          this.logger.log(`New question created: ${newQuestionId}`);
         }
       } catch (error) {
-        // Add context about which question failed
         const questionInfo = questionDto.id
           ? `question ID ${questionDto.id}`
           : `new question at step ${questionDto.step}`;
         this.logger.error(`Error processing ${questionInfo}:`, error.message);
 
         if (error instanceof BadRequestException) {
-          throw BadRequestException.BAD_REQUEST(
-            `Error with ${questionInfo}: ${error.message}`,
-          );
+          throw error;
         }
         throw error;
       }
@@ -654,8 +858,211 @@ export class AssessmentService {
     return updatedQuestionIds;
   }
 
+  // ✅ NEW: Validation method for question type data
+  private validateQuestionTypeData(
+    type: QuestionType,
+    questionDto: any,
+    operation: 'create' | 'update',
+  ): void {
+    const isCreating = operation === 'create';
+
+    switch (type) {
+      case QuestionType.MULTIPLE_CHOICE:
+      case QuestionType.DROPDOWN:
+        // Must have options
+        if (questionDto.options !== undefined) {
+          if (
+            !Array.isArray(questionDto.options) ||
+            questionDto.options.length === 0
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `${type} questions must have at least one option. Please provide an options array.`,
+            );
+          }
+          // Validate each option has required fields
+          questionDto.options.forEach((opt: any, index: number) => {
+            if (!opt.id || !opt.text) {
+              throw BadRequestException.BAD_REQUEST(
+                `Option at index ${index} is missing required fields (id, text) for ${type} question.`,
+              );
+            }
+          });
+        } else if (isCreating) {
+          throw BadRequestException.BAD_REQUEST(
+            `${type} questions require an options array when creating.`,
+          );
+        }
+
+        // Reject invalid fields for this type
+        if (questionDto.grid_rows || questionDto.grid_columns) {
+          throw BadRequestException.BAD_REQUEST(
+            `${type} questions cannot have grid_rows or grid_columns. These fields are only for multiple_choice_grid questions.`,
+          );
+        }
+        break;
+
+      case QuestionType.CHECKBOX:
+        // Must have options
+        if (questionDto.options !== undefined) {
+          if (
+            !Array.isArray(questionDto.options) ||
+            questionDto.options.length === 0
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `Checkbox questions must have at least one option. Please provide an options array.`,
+            );
+          }
+          questionDto.options.forEach((opt: any, index: number) => {
+            if (!opt.id || !opt.text) {
+              throw BadRequestException.BAD_REQUEST(
+                `Option at index ${index} is missing required fields (id, text) for checkbox question.`,
+              );
+            }
+          });
+        } else if (isCreating) {
+          throw BadRequestException.BAD_REQUEST(
+            `Checkbox questions require an options array when creating.`,
+          );
+        }
+
+        // Validate selections if provided
+        if (
+          questionDto.min_selections !== undefined &&
+          questionDto.max_selections !== undefined
+        ) {
+          if (questionDto.min_selections > questionDto.max_selections) {
+            throw BadRequestException.BAD_REQUEST(
+              `min_selections (${questionDto.min_selections}) cannot be greater than max_selections (${questionDto.max_selections}).`,
+            );
+          }
+        }
+
+        // Reject invalid fields
+        if (questionDto.grid_rows || questionDto.grid_columns) {
+          throw BadRequestException.BAD_REQUEST(
+            `Checkbox questions cannot have grid_rows or grid_columns.`,
+          );
+        }
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE_GRID:
+        // Must have grid configuration
+        if (
+          questionDto.grid_rows !== undefined ||
+          questionDto.grid_columns !== undefined
+        ) {
+          if (
+            !questionDto.grid_rows ||
+            !Array.isArray(questionDto.grid_rows) ||
+            questionDto.grid_rows.length === 0
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `Multiple choice grid questions must have at least one grid row.`,
+            );
+          }
+          if (
+            !questionDto.grid_columns ||
+            !Array.isArray(questionDto.grid_columns) ||
+            questionDto.grid_columns.length === 0
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `Multiple choice grid questions must have at least one grid column.`,
+            );
+          }
+        } else if (isCreating) {
+          throw BadRequestException.BAD_REQUEST(
+            `Multiple choice grid questions require grid_rows and grid_columns when creating.`,
+          );
+        }
+
+        // Reject invalid fields
+        if (questionDto.options) {
+          throw BadRequestException.BAD_REQUEST(
+            `Multiple choice grid questions cannot have an options array. Use grid_rows and grid_columns instead.`,
+          );
+        }
+        break;
+
+      case QuestionType.SHORT_TEXT:
+      case QuestionType.LONG_TEXT:
+        // Text questions shouldn't have options or grids
+        if (questionDto.options) {
+          throw BadRequestException.BAD_REQUEST(
+            `${type} questions cannot have options. Options are only for multiple choice, checkbox, or dropdown questions.`,
+          );
+        }
+        if (questionDto.grid_rows || questionDto.grid_columns) {
+          throw BadRequestException.BAD_REQUEST(
+            `${type} questions cannot have grid_rows or grid_columns.`,
+          );
+        }
+
+        // Validate character limits if provided
+        if (
+          questionDto.min_character !== undefined &&
+          questionDto.max_character !== undefined
+        ) {
+          if (questionDto.min_character > questionDto.max_character) {
+            throw BadRequestException.BAD_REQUEST(
+              `min_character (${questionDto.min_character}) cannot be greater than max_character (${questionDto.max_character}).`,
+            );
+          }
+        }
+        break;
+
+      case QuestionType.WELCOME_SCREEN:
+        // Welcome screen shouldn't have scoring elements
+        if (
+          questionDto.options ||
+          questionDto.grid_rows ||
+          questionDto.grid_columns
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Welcome screen questions cannot have options, grid_rows, or grid_columns.`,
+          );
+        }
+        break;
+
+      case QuestionType.MODULE_TITLE:
+        // Module title shouldn't have scoring elements
+        if (
+          questionDto.options ||
+          questionDto.grid_rows ||
+          questionDto.grid_columns
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Module title questions cannot have options, grid_rows, or grid_columns.`,
+          );
+        }
+        break;
+
+      case QuestionType.FILE_UPLOAD:
+        // File upload shouldn't have options or grids
+        if (
+          questionDto.options ||
+          questionDto.grid_rows ||
+          questionDto.grid_columns
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `File upload questions cannot have options, grid_rows, or grid_columns.`,
+          );
+        }
+        break;
+
+      default:
+        // Unknown question type
+        throw BadRequestException.BAD_REQUEST(
+          `Unknown question type: "${type}". Valid types are: ${Object.values(QuestionType).join(', ')}.`,
+        );
+    }
+  }
   private buildQuestionUpdateData(questionDto: any): any {
     const updateData: any = {};
+
+    // ✅ CRITICAL FIX: Always include type if provided
+    if (questionDto.type !== undefined) {
+      updateData.type = questionDto.type;
+    }
 
     // Common properties
     if (questionDto.question !== undefined)
@@ -1838,6 +2245,16 @@ export class AssessmentService {
     updateAssessmentDto: UpdateAssessmentDto,
   ): Promise<any> {
     try {
+      // ✅ Validate ObjectId format first
+      if (!Types.ObjectId.isValid(assessmentId)) {
+        this.logger.error(
+          `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
+        );
+        throw BadRequestException.BAD_REQUEST(
+          `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
+        );
+      }
+
       // Validate assessment exists
       const existingAssessment =
         await this.assessmentRepository.findById(assessmentId);
