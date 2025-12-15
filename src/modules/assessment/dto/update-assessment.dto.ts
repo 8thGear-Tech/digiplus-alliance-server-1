@@ -124,6 +124,15 @@ export class UpdateQuestionDto {
   @IsBoolean()
   is_required?: boolean;
 
+  @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this question',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
+
   @ApiProperty({ example: 1, required: false })
   @IsOptional()
   @IsNumber()

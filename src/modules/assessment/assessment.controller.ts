@@ -1023,6 +1023,37 @@ export class AssessmentController {
           ],
         },
       },
+      deleteQuestion: {
+        summary: 'Delete a question',
+        value: {
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              toDelete: true,
+            },
+          ],
+        },
+      },
+      mixedOperations: {
+        summary: 'Update, delete, and create questions',
+        value: {
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              question: 'Updated question',
+            },
+            {
+              id: '68dd2f2c8117c98763ffc779',
+              toDelete: true,
+            },
+            {
+              type: 'short_text',
+              question: 'New question',
+              step: 15,
+            },
+          ],
+        },
+      },
     },
   })
   @ApiResponse({

@@ -761,6 +761,7 @@ export class AssessmentService {
     questions: any[],
   ): Promise<string[]> {
     const updatedQuestionIds: string[] = [];
+    const deletedQuestionIds: string[] = [];
 
     const existingQuestions = await this.questionRepository.find({
       assessment_id: new Types.ObjectId(assessmentId),
@@ -774,8 +775,44 @@ export class AssessmentService {
 
     for (const questionDto of questions) {
       try {
+        // ✅ Handle deletion requests
+        if (questionDto.toDelete === true) {
+          if (!questionDto.id) {
+            throw BadRequestException.BAD_REQUEST(
+              'Question ID is required when toDelete is true',
+            );
+          }
+
+          if (!Types.ObjectId.isValid(questionDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid question ID format: "${questionDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
+
+          const existingQuestion = await this.questionRepository.findById(
+            questionDto.id,
+          );
+
+          if (!existingQuestion) {
+            this.logger.warn(
+              `Question with ID "${questionDto.id}" not found for deletion, skipping...`,
+            );
+            continue;
+          }
+
+          // Delete the question
+          await this.questionRepository.delete({
+            _id: new Types.ObjectId(questionDto.id),
+          });
+
+          deletedQuestionIds.push(questionDto.id);
+          processedQuestionIds.add(questionDto.id);
+          this.logger.log(`Question ${questionDto.id} deleted`);
+          continue; // Skip to next question
+        }
+
+        // ✅ Handle updates
         if (questionDto.id) {
-          // Update existing question
           if (!Types.ObjectId.isValid(questionDto.id)) {
             throw BadRequestException.BAD_REQUEST(
               `Invalid question ID format: "${questionDto.id}". Please provide a valid MongoDB ObjectId.`,
@@ -792,10 +829,7 @@ export class AssessmentService {
             );
           }
 
-          // ✅ Determine the type to validate (new type or existing type)
           const typeToValidate = questionDto.type || existingQuestion.type;
-
-          // ✅ Validate question data matches type
           this.validateQuestionTypeData(typeToValidate, questionDto, 'update');
 
           const updateData = this.buildQuestionUpdateData(questionDto);
@@ -812,7 +846,7 @@ export class AssessmentService {
             processedQuestionIds.add(questionDto.id);
           }
         } else {
-          // Create new question
+          // ✅ Handle creation
           if (!questionDto.type) {
             throw BadRequestException.BAD_REQUEST(
               'Question type is required for new questions',
@@ -824,7 +858,6 @@ export class AssessmentService {
             );
           }
 
-          // ✅ Validate question data matches type
           this.validateQuestionTypeData(
             questionDto.type,
             questionDto,
@@ -845,7 +878,9 @@ export class AssessmentService {
       } catch (error) {
         const questionInfo = questionDto.id
           ? `question ID ${questionDto.id}`
-          : `new question at step ${questionDto.step}`;
+          : questionDto.toDelete
+            ? `deletion request for ${questionDto.id}`
+            : `new question at step ${questionDto.step}`;
         this.logger.error(`Error processing ${questionInfo}:`, error.message);
 
         if (error instanceof BadRequestException) {
@@ -853,6 +888,13 @@ export class AssessmentService {
         }
         throw error;
       }
+    }
+
+    // ✅ Log summary
+    if (deletedQuestionIds.length > 0) {
+      this.logger.log(
+        `Deleted ${deletedQuestionIds.length} question(s): ${deletedQuestionIds.join(', ')}`,
+      );
     }
 
     return updatedQuestionIds;
@@ -2282,6 +2324,7 @@ export class AssessmentService {
         modules: [] as string[],
         questions: [] as string[],
         service_recommendations: [] as string[],
+        deleted_questions: [] as string[],
       };
 
       // Update assessment basic properties
@@ -2329,6 +2372,12 @@ export class AssessmentService {
           updateAssessmentDto.questions,
         );
         updatedItems.questions = questionUpdates;
+
+        // ✅ Track deleted questions (extract from logs or modify updateQuestions to return both)
+        const deletedQuestions = updateAssessmentDto.questions
+          .filter((q) => q.toDelete === true && q.id)
+          .map((q) => q.id);
+        updatedItems.deleted_questions = deletedQuestions;
       }
 
       // Update service recommendations if provided
