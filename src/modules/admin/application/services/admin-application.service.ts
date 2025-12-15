@@ -228,6 +228,25 @@ export class AdminApplicationService {
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
     const existingDataKeys: string[] = [];
 
+     // Validate that all modules referenced in questions exist
+    if (dto.questions && dto.questions.length > 0) {
+      const moduleTempIds = new Set(dto.modules?.map(m => m.temp_id) || []);
+      
+      const invalidQuestions = dto.questions.filter(
+        q => q.module_ref && !moduleTempIds.has(q.module_ref)
+      );
+
+      if (invalidQuestions.length > 0) {
+        const invalidRefs = invalidQuestions.map(q => 
+          `Question "${q.question}" references non-existent module "${q.module_ref}"`
+        ).join('; ');
+        
+        throw new BadRequestException(
+          `Cannot create form. The following questions reference modules that don't exist: ${invalidRefs}`
+        );
+      }
+    }
+
     const processedQuestions =
       dto.questions?.map((question) => {
         // Pass true for isNewQuestion during initial creation
@@ -276,8 +295,44 @@ export class AdminApplicationService {
   if (dto.welcome_button_text !== undefined) form.welcome_button_text = dto.welcome_button_text;
   if (dto.isLive !== undefined) form.isLive = dto.isLive;
 
+
+   // Build a set of all valid module temp_ids (both existing and incoming)
+  const allValidModuleTempIds = new Set<string>();
+  
+  // Add existing active modules
+  form.modules.forEach(m => {
+    if (m.temp_id && m.active !== false) {
+      allValidModuleTempIds.add(m.temp_id);
+    }
+  });
+  
+  // Add incoming modules (including new ones)
+  if (dto.modules && dto.modules.length > 0) {
+    dto.modules.forEach(m => {
+      if (m.temp_id && m.active !== false) {
+        allValidModuleTempIds.add(m.temp_id);
+      }
+    });
+  }
+
   // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
   if (dto.questions && dto.questions.length > 0) {
+
+    // Validate that all questions reference valid modules
+    const invalidQuestions = dto.questions.filter(
+      q => q.module_ref && q.active !== false && !allValidModuleTempIds.has(q.module_ref)
+    );
+
+    if (invalidQuestions.length > 0) {
+      const invalidRefs = invalidQuestions.map(q => 
+        `Question "${q.question}" references non-existent or inactive module "${q.module_ref}"`
+      ).join('; ');
+      
+      throw new BadRequestException(
+        `Cannot update form. The following questions reference modules that don't exist or are inactive: ${invalidRefs}`
+      );
+    }
+
     const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
     const currentDataKeys: string[] = [];
 
@@ -327,8 +382,13 @@ export class AdminApplicationService {
       }
     }
    // HARD DELETE: Remove questions that are marked as inactive (active === false)
+      const originalQuestionsCount = form.questions.length;
     form.questions = form.questions.filter(q => q.active !== false);
-    this.logger.log(`Hard deleted ${form.questions.length} inactive questions from the database`);
+    const deletedQuestionsCount = originalQuestionsCount - form.questions.length;
+    
+    if (deletedQuestionsCount > 0) {
+      this.logger.log(`Hard deleted ${deletedQuestionsCount} inactive question(s) from the database`);
+    }
   }
 
   // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
@@ -353,12 +413,41 @@ export class AdminApplicationService {
       if (existingModulesMap.has(tempId)) {
         // UPDATE EXISTING MODULE
         const existingModule = existingModulesMap.get(tempId)!;
-        Object.assign(existingModule, incomingModule);
+      // Handle soft deletion: if active is set to false, mark as inactive
+        if (incomingModule.active === false) {
+           // Check if any active questions reference this module
+          const questionsUsingModule = form.questions.filter(
+            q => q.module_ref === tempId && q.active !== false
+          );
+
+          if (questionsUsingModule.length > 0) {
+            const questionsList = questionsUsingModule
+              .map(q => `"${q.question}"`)
+              .join(', ');
+            
+            throw new BadRequestException(
+              `Cannot delete module "${existingModule.title}" (${tempId}). The following active question(s) are still using it: ${questionsList}. Please delete or reassign these questions first.`
+            );
+          }
+          existingModule.active = false;
+          this.logger.log(`Module with temp_id "${tempId}" marked as inactive (soft deleted)`);
+        } else {
+          Object.assign(existingModule, incomingModule);
+        }
       } else {
-        // ADD NEW MODULE (prevent duplicates)
-        form.modules.push(incomingModule as EmbeddedModule);
-        existingModulesMap.set(tempId, incomingModule as EmbeddedModule);
+            // ADD NEW MODULE (prevent duplicates)
+        const newModule = { ...incomingModule, active: incomingModule.active ?? true };
+        form.modules.push(newModule as EmbeddedModule);
+        existingModulesMap.set(tempId, newModule as EmbeddedModule);
       }
+    }
+   // HARD DELETE: Remove modules that are marked as inactive (active === false)
+    const originalModulesCount = form.modules.length;
+    form.modules = form.modules.filter(m => m.active !== false);
+    const deletedModulesCount = originalModulesCount - form.modules.length;
+    
+    if (deletedModulesCount > 0) {
+      this.logger.log(`Hard deleted ${deletedModulesCount} inactive module(s) from the database`);
     }
   }
 
@@ -380,6 +469,8 @@ export class AdminApplicationService {
     // Filter out inactive questions when returning the form
     const formObject = form.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+     formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+
 
      return formObject;
   }
@@ -391,6 +482,7 @@ export class AdminApplicationService {
     return forms.map(form => {
       const formObject = form.toObject() as ApplicationForm;
       formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+      formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
       return formObject;
     });
   }
@@ -425,6 +517,8 @@ export class AdminApplicationService {
       // Filter out inactive questions
     const formObject = updatedForm.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+    formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+
 
       return formObject;
   }
