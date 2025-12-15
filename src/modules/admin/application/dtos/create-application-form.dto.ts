@@ -51,6 +51,16 @@ export class ModuleDto {
   @IsOptional()
   @IsNumber()
   order?: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Indicates if the module is active. Defaults to true. Set to false for soft deletion.',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 // Option structure for questions that have options
