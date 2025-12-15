@@ -73,6 +73,15 @@ export class BaseQuestionDto {
   @IsArray()
   @IsString({ each: true })
   scoring_categories?: string[];
+
+  @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this question during update',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
 }
 
 // Welcome Screen DTO
@@ -659,6 +668,15 @@ export class CreateModuleDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
   order: number;
+
+  @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this module during update',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
 
   @ApiProperty({
     example: 50,
