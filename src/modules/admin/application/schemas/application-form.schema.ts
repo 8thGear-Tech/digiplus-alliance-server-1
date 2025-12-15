@@ -145,10 +145,6 @@ export class EmbeddedQuestion {
   @Prop([String])
   accepted_file_types?: string[];
 
-    // For file upload - allow URL links
-  @Prop({ default: false })
-  allow_url?: boolean;
-
   @Prop({ default: true })
   is_required: boolean;
   //opeyemi

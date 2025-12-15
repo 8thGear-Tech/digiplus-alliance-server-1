@@ -327,10 +327,10 @@ export class QuestionDto {
   @IsString()
   placeholder?: string;
 
-  // For file_upload
+   // For file_upload
   @ApiProperty({
-    example: ['.pdf', '.docx', '.jpg'],
-    description: 'Accepted file types (for file upload)',
+    example: ['.pdf', '.docx', '.jpg', 'url'],
+    description: 'Accepted file types (for file upload). Include "url" to allow URL links.',
     required: false,
   })
   @ValidateIf((o) => o.type === 'file_upload')
@@ -338,6 +338,17 @@ export class QuestionDto {
   @IsArray()
   @IsString({ each: true })
   accepted_file_types?: string[];
+
+  @ApiProperty({
+    example: true,
+    description: 'Allow URL links in addition to file uploads (for file_upload only)',
+    default: false,
+    required: false,
+  })
+  @ValidateIf((o) => o.type === 'file_upload')
+  @IsOptional()
+  @IsBoolean()
+  allow_url?: boolean;
 
   @ApiProperty({
     example: 'first-name',
