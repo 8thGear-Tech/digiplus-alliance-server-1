@@ -751,19 +751,22 @@ export class QuestionValidationService {
         }
         break;
 
-      case QuestionType.FILE_UPLOAD:
+     case QuestionType.FILE_UPLOAD:
+        const acceptsUrl = question.accepted_file_types?.includes('url');
+        
         if (question.is_required) {
           validation.rules.push({
             type: 'required_file',
-                     message: question.allow_url 
+            message: acceptsUrl 
               ? 'Please upload a file or provide a URL link'
               : 'Please upload a file',
           });
-
         }
 
-        // If URLs are allowed, add URL validation
-        if (question.allow_url) {
+
+         
+        // If URLs are accepted, add URL validation
+        if (acceptsUrl) {
           validation.rules.push({
             type: 'file_or_url',
             message: 'Please provide either a valid file upload or a URL link',
@@ -771,12 +774,19 @@ export class QuestionValidationService {
           });
         }
 
+
         if (question.accepted_file_types?.length > 0) {
-          validation.rules.push({
-            type: 'file_type',
-            value: question.accepted_file_types,
-            message: `Only ${question.accepted_file_types.join(', ')} files are allowed`,
-          });
+          // Filter out 'url' for file type validation message
+          const fileTypes = question.accepted_file_types.filter(type => type !== 'url');
+          if (fileTypes.length > 0) {
+            validation.rules.push({
+              type: 'file_type',
+              value: fileTypes,
+              message: acceptsUrl
+                ? `Accepted file types: ${fileTypes.join(', ')} or provide a URL`
+                : `Only ${fileTypes.join(', ')} files are allowed`,
+            });
+          }
         }
         break;
     }
@@ -977,11 +987,13 @@ export class QuestionValidationService {
           }
           break;
 
- case QuestionType.FILE_UPLOAD:
+
+        case QuestionType.FILE_UPLOAD:
           if (!value) {
+            const acceptsUrl = question.accepted_file_types?.includes('url');
             errors.push({
               type: 'required_file',
-              message: question.allow_url 
+              message: acceptsUrl 
                 ? 'Please upload a file or provide a URL link'
                 : 'Please upload a file',
               field,
@@ -1009,36 +1021,53 @@ export class QuestionValidationService {
     }
 
     // File type validation
+   // File type validation
     if (
       question.type === QuestionType.FILE_UPLOAD &&
       question.accepted_file_types
     ) {
+      const acceptsUrl = question.accepted_file_types.includes('url');
+      
       // Check if value is a URL (string starting with http/https) or a file
       const isUrl = typeof value === 'string' && /^https?:\/\//i.test(value);
       
-      if (question.allow_url && isUrl) {
-        // Validate URL format
-        const urlRegex =
-          /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-        if (!urlRegex.test(value)) {
+      if (isUrl) {
+        // If it's a URL, check if URLs are accepted
+        if (!acceptsUrl) {
           errors.push({
-            type: 'invalid_url',
-            message: 'Please provide a valid URL (e.g., https://example.com/document.pdf)',
+            type: 'url_not_accepted',
+            message: 'URL links are not accepted for this upload. Please upload a file.',
             field,
           });
+        } else {
+          // Validate URL format
+          const urlRegex =
+            /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+          if (!urlRegex.test(value)) {
+            errors.push({
+              type: 'invalid_url',
+              message: 'Please provide a valid URL (e.g., https://example.com/document.pdf)',
+              field,
+            });
+          }
         }
-      } else if (!isUrl) {
-        // Validate file extension only if it's not a URL
-        const fileName = typeof value === 'string' ? value : value?.name || '';
-        const fileExt = fileName
-          .substring(fileName.lastIndexOf('.'))
-          .toLowerCase();
-        if (!question.accepted_file_types.includes(fileExt)) {
-          errors.push({
-            type: 'file_type',
-            message: `Only ${question.accepted_file_types.join(', ')} files are allowed`,
-            field,
-          });
+      } else {
+        // Validate file extension (excluding 'url' from the list)
+        const fileTypes = question.accepted_file_types.filter(type => type !== 'url');
+        if (fileTypes.length > 0) {
+          const fileName = typeof value === 'string' ? value : value?.name || '';
+          const fileExt = fileName
+            .substring(fileName.lastIndexOf('.'))
+            .toLowerCase();
+          if (!fileTypes.includes(fileExt)) {
+            errors.push({
+              type: 'file_type',
+              message: acceptsUrl
+                ? `Accepted file types: ${fileTypes.join(', ')} or provide a URL`
+                : `Only ${fileTypes.join(', ')} files are allowed`,
+              field,
+            });
+          }
         }
       }
     }
