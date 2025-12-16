@@ -45,7 +45,13 @@ interface PopulatedSubmission {
   service: string;
   service_type: string;
   payment_amount?: number;
-  userId: string;
+  // userId: string;
+  userId: {
+    _id: Types.ObjectId;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
   status: ApplicationStatus;
   payment_status: PaymentStatus;
   createdAt: Date;
@@ -181,9 +187,10 @@ export class AdminApplicationService {
   formsMap: Map<string, any>,
 ): any[] {
     return submissions.map((submission) => {
-      const firstName = submission.responses['firstname'] || 'N/A';
-      const lastName = submission.responses['lastname'] || '';
-      const email = submission.responses['email'] || 'N/A';
+ // Get name and email from the populated user object instead of responses
+    const firstName = submission.userId?.first_name || 'N/A';
+    const lastName = submission.userId?.last_name || '';
+    const email = submission.userId?.email || 'N/A';
       const specificService = submission.service;
       const paymentStatus = submission.payment_status || 'Not Paid';
       const name = `${firstName} ${lastName}`.trim();
@@ -571,6 +578,10 @@ export class AdminApplicationService {
       path: 'formId',
       select: 'welcome_title slug questions',
     })
+    .populate({
+      path: 'userId',
+      select: 'first_name last_name email', // Populate user data
+    })
       .exec();
 
     if (submissions.length === 0) {
@@ -597,24 +608,32 @@ export class AdminApplicationService {
         });
       }
       
-      // Add to typed submissions array
-      typedSubmissions.push({
-        _id: submission._id,
-        responses: submission.responses,
-        service: submission.service,
-        service_type: submission.service_type,
-        payment_amount: submission.payment_amount,
-        userId: submission.userId,
-        status: submission.status,
-        payment_status: submission.payment_status,
-        createdAt: submission.createdAt,
-        formId: {
-          _id: submission.formId._id,
-          welcome_title: submission.formId.welcome_title,
-          slug: submission.formId.slug,
-          questions: submission.formId.questions || [],
-        },
-      });
+          // Check if userId is populated
+      if (submission.userId && typeof submission.userId === 'object') {
+        // Add to typed submissions array
+        typedSubmissions.push({
+          _id: submission._id,
+          responses: submission.responses,
+          service: submission.service,
+          service_type: submission.service_type,
+          payment_amount: submission.payment_amount,
+          userId: {
+            _id: submission.userId._id,
+            first_name: submission.userId.first_name,
+            last_name: submission.userId.last_name,
+            email: submission.userId.email,
+          },
+          status: submission.status,
+          payment_status: submission.payment_status,
+          createdAt: submission.createdAt,
+          formId: {
+            _id: submission.formId._id,
+            welcome_title: submission.formId.welcome_title,
+            slug: submission.formId.slug,
+            questions: submission.formId.questions || [],
+          },
+        });
+      }
     }
   });
 
