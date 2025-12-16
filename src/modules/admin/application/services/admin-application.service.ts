@@ -151,10 +151,11 @@ export class AdminApplicationService {
     servicePriceMap: any,
   ): any[] {
     return submissions.map((submission) => {
-      const firstName = submission.responses['first_name'] || 'N/A';
-      const lastName = submission.responses['last_name'] || '';
-      const name = `${firstName} ${lastName}`.trim();
-      const email = submission.responses['email'] || 'N/A';
+     // ✅ FIXED: Get name and email from populated user instead of responses
+    const firstName = submission.userId?.first_name || 'N/A';
+    const lastName = submission.userId?.last_name || '';
+    const email = submission.userId?.email || 'N/A';
+    const name = `${firstName} ${lastName}`.trim();
       const paymentStatus = submission.payment_status || 'Not Paid';
       const specificService = submission.service;
       const paymentAmount = servicePriceMap[specificService] || 'N/A';
@@ -689,6 +690,10 @@ export class AdminApplicationService {
     const submissions = await this.submissionModel
       .find(filter)
       .select('+service_type +timetable_url +end_date')
+      .populate({
+      path: 'userId',
+      select: 'first_name last_name email', // ✅ ADD THIS: Populate user data
+    })
       .exec();
 
     if (submissions.length === 0) {
