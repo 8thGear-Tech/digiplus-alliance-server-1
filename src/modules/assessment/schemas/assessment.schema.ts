@@ -39,6 +39,9 @@ export class Assessment {
   @Prop() // Add published date
   published_at?: Date;
 
+  @Prop()
+  used_temp_ids?: string[];
+
   @Prop({ default: Date.now })
   updated_at: Date;
   _id: any;
