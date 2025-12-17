@@ -110,80 +110,207 @@ export class AssessmentService {
   private async validateServiceRecommendations(
     serviceRecommendations: any[],
   ): Promise<void> {
-    if (!serviceRecommendations || serviceRecommendations.length === 0) {
-      return; // No validation needed for empty array
+    if (
+      !Array.isArray(serviceRecommendations) ||
+      serviceRecommendations.length === 0
+    ) {
+      return;
     }
 
     const validationErrors: string[] = [];
-    const serviceNames = new Set<string>();
-    const serviceIds = new Set<string>();
+
+    // 🆕 Track only NEW recommendations for duplicate checking
+    const newRecommendationsMap = new Map<
+      number,
+      { serviceName?: string; serviceId?: string }
+    >();
+
+    // First pass: Validate individual items and resolve data
+    const resolvedRecommendations: Array<{
+      index: number;
+      id?: string;
+      serviceName?: string;
+      serviceId?: string;
+      minPoints?: number;
+      maxPoints?: number;
+    }> = [];
 
     for (const [index, serviceDto] of serviceRecommendations.entries()) {
-      // Check for duplicate service names within the assessment
-      if (serviceNames.has(serviceDto.service_name)) {
-        validationErrors.push(
-          `Duplicate service name '${serviceDto.service_name}' found at position ${index + 1}`,
-        );
-      } else {
-        serviceNames.add(serviceDto.service_name);
+      let resolvedServiceName = serviceDto.service_name;
+      let resolvedServiceId = serviceDto.service_id;
+
+      /**
+       * 🔑 UPDATE FLOW — resolve missing fields from DB
+       */
+      if (serviceDto.id) {
+        if (!Types.ObjectId.isValid(serviceDto.id)) {
+          validationErrors.push(
+            `Invalid service recommendation ID at position ${index + 1}`,
+          );
+          continue;
+        }
+
+        const existingRecommendation =
+          await this.serviceRecommendationRepository.findById(serviceDto.id);
+
+        if (!existingRecommendation) {
+          validationErrors.push(
+            `Service recommendation with ID '${serviceDto.id}' not found at position ${index + 1}.`,
+          );
+          continue;
+        }
+
+        // Resolve from DB if not provided
+        resolvedServiceName ??= existingRecommendation.service_name;
+        resolvedServiceId ??= existingRecommendation.service_id?.toString();
       }
 
-      // Check for duplicate service IDs within the assessment
-      if (serviceDto.service_id && serviceIds.has(serviceDto.service_id)) {
-        validationErrors.push(
-          `Duplicate service ID '${serviceDto.service_id}' found at position ${index + 1}`,
-        );
-      } else if (serviceDto.service_id) {
-        serviceIds.add(serviceDto.service_id);
+      /**
+       * 🔴 CREATE FLOW — required fields validation
+       */
+      if (!serviceDto.id) {
+        if (!resolvedServiceName) {
+          validationErrors.push(
+            `service_name is required when creating a service recommendation (position ${index + 1}).`,
+          );
+          continue;
+        }
+
+        // Track new recommendations for duplicate checking
+        newRecommendationsMap.set(index, {
+          serviceName: resolvedServiceName,
+          serviceId: resolvedServiceId,
+        });
       }
 
-      // REQUIRED: Service must exist in the main services catalog
-      try {
-        const existingService = await this.servicesService.findByName(
-          serviceDto.service_name,
-        );
+      /**
+       * 🔍 VERIFY SERVICE EXISTS IN CATALOG
+       */
+      if (resolvedServiceName) {
+        const existingService =
+          await this.servicesService.findByName(resolvedServiceName);
+
         if (!existingService) {
           validationErrors.push(
-            `Service '${serviceDto.service_name}' does not exist in the services catalog. Please create the service first before adding it to recommendations.`,
+            `Service '${resolvedServiceName}' does not exist in the services catalog at position ${index + 1}.`,
           );
         } else {
-          // Verify the service_id matches the existing service if provided
-          if (
-            serviceDto.service_id &&
-            serviceDto.service_id !== existingService._id.toString()
-          ) {
-            this.logger.warn(
-              `Service ID mismatch for '${serviceDto.service_name}': provided '${serviceDto.service_id}' but actual ID is '${existingService._id}'`,
-            );
-            // Auto-correct the service_id to match existing service
-            serviceDto.service_id = existingService._id.toString();
-          } else if (!serviceDto.service_id) {
-            // Auto-assign service_id from existing service
-            serviceDto.service_id = existingService._id.toString();
-          }
+          // Normalize service_id
+          resolvedServiceId = existingService._id.toString();
+          serviceDto.service_id = resolvedServiceId;
         }
-      } catch (error) {
-        // Service doesn't exist - this is now an error since services must exist
-        validationErrors.push(
-          `Service '${serviceDto.service_name}' not found in services catalog. All recommended services must be created before being referenced in assessments.`,
-        );
       }
 
-      // Validate point ranges don't overlap (optional but recommended)
-      const otherServices = serviceRecommendations.filter(
-        (_, i) => i !== index,
-      );
-      for (const otherService of otherServices) {
+      /**
+       * ⚠️ POINT RANGE VALIDATION
+       */
+      if (
+        serviceDto.min_points !== undefined &&
+        serviceDto.max_points !== undefined
+      ) {
+        if (serviceDto.min_points > serviceDto.max_points) {
+          validationErrors.push(
+            `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}) at position ${index + 1}.`,
+          );
+        }
+
+        // Check for negative values
+        if (serviceDto.min_points < 0 || serviceDto.max_points < 0) {
+          validationErrors.push(
+            `Point values cannot be negative at position ${index + 1}.`,
+          );
+        }
+      }
+
+      // Store resolved data for later checks
+      resolvedRecommendations.push({
+        index,
+        id: serviceDto.id,
+        serviceName: resolvedServiceName,
+        serviceId: resolvedServiceId,
+        minPoints: serviceDto.min_points,
+        maxPoints: serviceDto.max_points,
+      });
+    }
+
+    /**
+     * 🔁 DUPLICATE CHECKS - Only within NEW recommendations
+     */
+    const seenServiceNamesInNew = new Set<string>();
+    const seenServiceIdsInNew = new Set<string>();
+
+    for (const [index, newRec] of newRecommendationsMap.entries()) {
+      if (newRec.serviceName) {
+        if (seenServiceNamesInNew.has(newRec.serviceName)) {
+          validationErrors.push(
+            `Duplicate service name '${newRec.serviceName}' found in new recommendations (position ${index + 1}).`,
+          );
+        }
+        seenServiceNamesInNew.add(newRec.serviceName);
+      }
+
+      if (newRec.serviceId) {
+        if (seenServiceIdsInNew.has(newRec.serviceId)) {
+          validationErrors.push(
+            `Duplicate service_id '${newRec.serviceId}' found in new recommendations (position ${index + 1}).`,
+          );
+        }
+        seenServiceIdsInNew.add(newRec.serviceId);
+      }
+    }
+
+    /**
+     * ⚠️ POINT RANGE OVERLAP CHECK - Check across ALL recommendations
+     */
+    for (let i = 0; i < resolvedRecommendations.length; i++) {
+      for (let j = i + 1; j < resolvedRecommendations.length; j++) {
+        const rec1 = resolvedRecommendations[i];
+        const rec2 = resolvedRecommendations[j];
+
+        // Skip if either doesn't have point ranges defined
+        if (
+          rec1.minPoints === undefined ||
+          rec1.maxPoints === undefined ||
+          rec2.minPoints === undefined ||
+          rec2.maxPoints === undefined
+        ) {
+          continue;
+        }
+
+        // Check if ranges overlap
         const hasOverlap = !(
-          serviceDto.max_points < otherService.min_points ||
-          serviceDto.min_points > otherService.max_points
+          rec1.maxPoints < rec2.minPoints || rec1.minPoints > rec2.maxPoints
         );
 
         if (hasOverlap) {
           validationErrors.push(
-            `Service '${serviceDto.service_name}' has overlapping point range (${serviceDto.min_points}-${serviceDto.max_points}) with '${otherService.service_name}' (${otherService.min_points}-${otherService.max_points})`,
+            `Point range overlap detected: ` +
+              `Position ${rec1.index + 1} (${rec1.minPoints}-${rec1.maxPoints}) ` +
+              `overlaps with position ${rec2.index + 1} (${rec2.minPoints}-${rec2.maxPoints}). ` +
+              `Each point range must be unique across all service recommendations.`,
           );
         }
+      }
+    }
+
+    /**
+     * 🚫 CHECK FOR DUPLICATE IDs IN PAYLOAD
+     */
+    const idCounts = new Map<string, number[]>();
+    for (const [index, rec] of resolvedRecommendations.entries()) {
+      if (rec.id) {
+        if (!idCounts.has(rec.id)) {
+          idCounts.set(rec.id, []);
+        }
+        idCounts.get(rec.id)!.push(index + 1);
+      }
+    }
+
+    for (const [id, positions] of idCounts.entries()) {
+      if (positions.length > 1) {
+        validationErrors.push(
+          `Duplicate service recommendation ID '${id}' found at positions: ${positions.join(', ')}. Each ID must be unique in the payload.`,
+        );
       }
     }
 
@@ -193,6 +320,7 @@ export class AssessmentService {
       );
     }
   }
+
   //above: added by opeyemi
 
   private mapAssessmentResponse(assessment: any) {
@@ -1555,8 +1683,12 @@ export class AssessmentService {
   private async updateServiceRecommendations(
     assessmentId: string,
     serviceRecommendations: any[],
-  ): Promise<string[]> {
+  ): Promise<{
+    updatedServiceIds: string[];
+    createdServiceIds: string[]; // 🆕 Track newly created service recommendations
+  }> {
     const updatedServiceIds: string[] = [];
+    const createdServiceIds: string[] = []; // 🆕
 
     // ✅ Get existing service recommendations for this assessment
     const existingRecommendations =
@@ -1707,8 +1839,11 @@ export class AssessmentService {
           const newService =
             await this.serviceRecommendationRepository.create(serviceData);
           const newServiceId = newService._id.toString();
+
           updatedServiceIds.push(newServiceId);
+          createdServiceIds.push(newServiceId); // 🆕 Track this as a new creation
           processedRecommendationIds.add(newServiceId);
+
           this.logger.log(
             `New service recommendation created: ${newServiceId}`,
           );
@@ -1726,7 +1861,7 @@ export class AssessmentService {
       }
     }
 
-    return updatedServiceIds;
+    return { updatedServiceIds, createdServiceIds };
   }
 
   private async recalculateTotalPoints(assessmentId: string): Promise<void> {
@@ -2597,222 +2732,6 @@ export class AssessmentService {
     }
   }
 
-  // Add this method to your AssessmentService class
-  // async updateAssessment(
-  //   assessmentId: string,
-  //   updateAssessmentDto: UpdateAssessmentDto,
-  // ): Promise<any> {
-  //   try {
-  //     // ✅ Validate ObjectId format first
-  //     if (!Types.ObjectId.isValid(assessmentId)) {
-  //       this.logger.error(
-  //         `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
-  //       );
-  //       throw BadRequestException.BAD_REQUEST(
-  //         `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
-  //       );
-  //     }
-
-  //     // Validate assessment exists
-  //     const existingAssessment =
-  //       await this.assessmentRepository.findById(assessmentId);
-  //     if (!existingAssessment) {
-  //       throw BadRequestException.BAD_REQUEST('Assessment not found');
-  //     }
-
-  //     //below: added by opeyemi
-
-  //     // FIXED: Explicit null/undefined check instead of optional chaining with length
-  //     if (
-  //       updateAssessmentDto.service_recommendations &&
-  //       Array.isArray(updateAssessmentDto.service_recommendations) &&
-  //       updateAssessmentDto.service_recommendations.length > 0
-  //     ) {
-  //       await this.validateServiceRecommendations(
-  //         updateAssessmentDto.service_recommendations,
-  //       );
-  //     }
-
-  //     //above: added by opeyemi
-  //     // No authorization check needed here - RolesGuard handles it
-
-  //     const updatedItems = {
-  //       modules: [] as string[],
-  //       questions: [] as string[],
-  //       service_recommendations: [] as string[],
-  //       deleted_questions: [] as string[],
-  //     };
-
-  //     // Update assessment basic properties
-  //     const assessmentUpdateData: any = {};
-  //     if (updateAssessmentDto.title !== undefined) {
-  //       assessmentUpdateData.title = updateAssessmentDto.title;
-  //     }
-  //     if (updateAssessmentDto.description !== undefined) {
-  //       assessmentUpdateData.description = updateAssessmentDto.description;
-  //     }
-  //     if (updateAssessmentDto.instruction !== undefined) {
-  //       assessmentUpdateData.instruction = updateAssessmentDto.instruction;
-  //     }
-  //     if (updateAssessmentDto.is_active !== undefined) {
-  //       assessmentUpdateData.is_active = updateAssessmentDto.is_active;
-  //     }
-
-  //     if (Object.keys(assessmentUpdateData).length > 0) {
-  //       await this.assessmentRepository.findByIdAndUpdate(
-  //         assessmentId,
-  //         assessmentUpdateData,
-  //       );
-  //       this.logger.log(`Assessment ${assessmentId} basic properties updated`);
-  //     }
-
-  //     // Update modules if provided
-  //     if (
-  //       updateAssessmentDto.modules &&
-  //       updateAssessmentDto.modules.length > 0
-  //     ) {
-  //       const moduleUpdates = await this.updateModules(
-  //         assessmentId,
-  //         updateAssessmentDto.modules,
-  //       );
-  //       updatedItems.modules = moduleUpdates;
-  //     }
-
-  //     // Update questions if provided
-  //     if (
-  //       updateAssessmentDto.questions &&
-  //       updateAssessmentDto.questions.length > 0
-  //     ) {
-  //       const questionUpdates = await this.updateQuestions(
-  //         assessmentId,
-  //         updateAssessmentDto.questions,
-  //       );
-  //       updatedItems.questions = questionUpdates;
-
-  //       // ✅ Track deleted questions (extract from logs or modify updateQuestions to return both)
-  //       const deletedQuestions: string[] = [];
-
-  //       for (const q of updateAssessmentDto.questions) {
-  //         if (q.toDelete === true && q.id) {
-  //           deletedQuestions.push(q.id);
-  //         }
-  //       }
-
-  //       updatedItems.deleted_questions = deletedQuestions;
-  //     }
-
-  //     // Update service recommendations if provided
-  //     if (
-  //       updateAssessmentDto.service_recommendations &&
-  //       updateAssessmentDto.service_recommendations.length > 0
-  //     ) {
-  //       const serviceUpdates = await this.updateServiceRecommendations(
-  //         assessmentId,
-  //         updateAssessmentDto.service_recommendations,
-  //       );
-  //       updatedItems.service_recommendations = serviceUpdates;
-  //     }
-
-  //     // Recalculate total possible points if questions were updated
-  //     if (
-  //       updateAssessmentDto.questions &&
-  //       updateAssessmentDto.questions.length > 0
-  //     ) {
-  //       await this.recalculateTotalPoints(assessmentId);
-  //     }
-
-  //     // Get updated assessment with all relations
-  //     const updatedAssessmentData = await this.getAssessmentById(assessmentId);
-
-  //     return {
-  //       success: true,
-  //       message: 'Assessment updated successfully',
-  //       data: {
-  //         ...updatedAssessmentData.data,
-  //         updated_items: updatedItems,
-  //       },
-  //     };
-  //   } catch (error) {
-  //     this.logger.error('Error updating assessment:', error);
-
-  //     // Re-throw known exceptions to preserve their status codes
-
-  //     //below: added by opeyemi
-
-  //     if (error instanceof BadRequestException) {
-  //       // Check if it's a service validation error
-  //       if (
-  //         error.message &&
-  //         error.message.includes('Service recommendation validation failed')
-  //       ) {
-  //         this.logger.error(
-  //           'Service validation failed during assessment update:',
-  //           error.message,
-  //         );
-
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Service validation failed during update: ${error.message}. Please ensure all referenced services exist in the Services catalog (/services). Create missing services first, then update your assessment.`,
-  //         );
-  //       }
-
-  //       // Check for assessment not found errors
-  //       if (error.message && error.message.includes('Assessment not found')) {
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Assessment not found: ${error.message}. Verify the assessment ID is correct and the assessment exists.`,
-  //         );
-  //       }
-
-  //       // Check for module/question validation errors
-  //       if (
-  //         error.message &&
-  //         error.message.includes('Question type is required')
-  //       ) {
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Invalid question update configuration: ${error.message}. When updating questions, ensure type and step are provided for new questions. For existing questions, provide the question ID.`,
-  //         );
-  //       }
-
-  //       // Check for service level configuration errors
-  //       if (
-  //         error.message &&
-  //         error.message.includes('must have at least one level specified')
-  //       ) {
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Service recommendation update error: ${error.message}. Each service recommendation must specify at least one level (Beginner, Foundational, Intermediate, Advanced, Expert) when updating.`,
-  //         );
-  //       }
-
-  //       // Check for point calculation errors
-  //       if (error.message && error.message.includes('Failed to recalculate')) {
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Point calculation error during update: ${error.message}. There was an issue recalculating assessment points after your updates. Please verify your question scoring configuration.`,
-  //         );
-  //       }
-
-  //       // Log and re-throw other BadRequest exceptions with original message
-  //       //   this.logger.error(
-  //       //     'Assessment update validation error:',
-  //       //     error.message || error.response,
-  //       //   );
-  //       //   throw error;
-  //       // }
-
-  //       // Handle unexpected errors during update
-  //       this.logger.error('Unexpected error during assessment update:', error);
-  //       throw BadRequestException.BAD_REQUEST(
-  //         `Failed to update assessment: ${error.message}. Please verify your update data and try again. If the issue persists, contact support.`,
-  //       );
-  //       //a
-  //       // if (error instanceof BadRequestException) {
-  //       //   throw error;
-  //       // }
-
-  //       // // For unknown errors, throw a generic bad request
-  //       // throw BadRequestException.BAD_REQUEST('Failed to update assessment');
-  //     }
-  //   }
-  // }
-
   async updateAssessment(
     assessmentId: string,
     updateAssessmentDto: UpdateAssessmentDto,
@@ -2821,6 +2740,7 @@ export class AssessmentService {
     const createdEntities = {
       moduleIds: [] as string[],
       questionIds: [] as string[],
+      serviceRecommendationIds: [] as string[], // 🆕 Track service recommendations
     };
 
     try {
@@ -2958,11 +2878,13 @@ export class AssessmentService {
         updateAssessmentDto.service_recommendations &&
         updateAssessmentDto.service_recommendations.length > 0
       ) {
-        const serviceUpdates = await this.updateServiceRecommendations(
-          assessmentId,
-          updateAssessmentDto.service_recommendations,
-        );
-        updatedItems.service_recommendations = serviceUpdates;
+        const { updatedServiceIds, createdServiceIds } =
+          await this.updateServiceRecommendations(
+            assessmentId,
+            updateAssessmentDto.service_recommendations,
+          );
+        updatedItems.service_recommendations = updatedServiceIds;
+        createdEntities.serviceRecommendationIds = createdServiceIds; // 🆕 Track newly created
       }
 
       // Recalculate total possible points if questions were updated
