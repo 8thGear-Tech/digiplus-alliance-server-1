@@ -861,194 +861,15 @@ export class AssessmentService {
     return { updatedModuleIds, idMapping, createdModuleIds };
   }
 
-  // private async updateQuestions(
-  //   assessmentId: string,
-  //   questions: any[],
-  // ): Promise<string[]> {
-  //   const updatedQuestionIds: string[] = [];
-
-  //   for (const questionDto of questions) {
-  //     try {
-  //       if (questionDto.id) {
-  //         // Update existing question
-  //         const existingQuestion = await this.questionRepository.findById(
-  //           questionDto.id,
-  //         );
-  //         if (!existingQuestion) {
-  //           this.logger.warn(
-  //             `Question with ID ${questionDto.id} not found, skipping...`,
-  //           );
-  //           continue;
-  //         }
-
-  //         const updateData = this.buildQuestionUpdateData(questionDto);
-  //         if (Object.keys(updateData).length > 0) {
-  //           await this.questionRepository.findByIdAndUpdate(
-  //             questionDto.id,
-  //             updateData,
-  //           );
-  //           updatedQuestionIds.push(questionDto.id);
-  //           this.logger.log(`Question ${questionDto.id} updated`);
-  //         }
-  //       } else {
-  //         // Create new question - validate required fields
-  //         if (!questionDto.type) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             'Question type is required for new questions',
-  //           );
-  //         }
-  //         if (questionDto.step === undefined || questionDto.step === null) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             'Question step is required for new questions',
-  //           );
-  //         }
-  //         if (!questionDto.question || questionDto.question.trim() === '') {
-  //           throw BadRequestException.BAD_REQUEST('Question text is required');
-  //         }
-  //         // Create new question
-  //         const questionData = this.buildNewQuestionData(
-  //           assessmentId,
-  //           questionDto,
-  //         );
-  //         const newQuestion =
-  //           await this.questionRepository.create(questionData);
-  //         updatedQuestionIds.push(
-  //           (newQuestion._id as Types.ObjectId).toString(),
-  //         );
-  //         this.logger.log(
-  //           `New question created: ${(newQuestion._id as Types.ObjectId).toString()}`,
-  //         );
-  //       }
-  //     } catch (error) {
-  //       // Add context about which question failed
-  //       const questionInfo = questionDto.id
-  //         ? `question ID ${questionDto.id}`
-  //         : `new question at step ${questionDto.step}`;
-  //       this.logger.error(`Error processing ${questionInfo}:`, error.message);
-
-  //       if (error instanceof BadRequestException) {
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Error with ${questionInfo}: ${error.message}`,
-  //         );
-  //       }
-  //       throw error;
-  //     }
-  //   }
-
-  //   return updatedQuestionIds;
-  // }
-
-  // private async updateQuestions(
-  //   assessmentId: string,
-  //   questions: any[],
-  // ): Promise<string[]> {
-  //   const updatedQuestionIds: string[] = [];
-
-  //   // ✅ Get existing questions for this assessment
-  //   const existingQuestions = await this.questionRepository.find({
-  //     assessment_id: new Types.ObjectId(assessmentId),
-  //   });
-
-  //   const existingQuestionIds = new Set(
-  //     existingQuestions.map((q: any) => q._id.toString()),
-  //   );
-
-  //   const processedQuestionIds = new Set<string>();
-
-  //   for (const questionDto of questions) {
-  //     try {
-  //       if (questionDto.id) {
-  //         // ✅ Validate question ID format
-  //         if (!Types.ObjectId.isValid(questionDto.id)) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             `Invalid question ID format: "${questionDto.id}". Please provide a valid MongoDB ObjectId.`,
-  //           );
-  //         }
-
-  //         // ✅ Check if question exists
-  //         const existingQuestion = await this.questionRepository.findById(
-  //           questionDto.id,
-  //         );
-
-  //         if (!existingQuestion) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             `Question with ID "${questionDto.id}" not found. Please verify the question exists or remove the ID to create a new question.`,
-  //           );
-  //         }
-  //         // ✅ Update existing question
-  //         const updateData = this.buildQuestionUpdateData(questionDto);
-
-  //         if (Object.keys(updateData).length > 0) {
-  //           await this.questionRepository.findByIdAndUpdate(
-  //             questionDto.id,
-  //             updateData,
-  //           );
-  //           updatedQuestionIds.push(questionDto.id);
-  //           processedQuestionIds.add(questionDto.id);
-  //           this.logger.log(`Question ${questionDto.id} updated`);
-  //         } else {
-  //           // Even if no update, mark as processed
-  //           processedQuestionIds.add(questionDto.id);
-  //         }
-  //       } else {
-  //         // ✅ Create new question - validate required fields
-  //         if (!questionDto.type) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             'Question type is required for new questions',
-  //           );
-  //         }
-  //         if (questionDto.step === undefined || questionDto.step === null) {
-  //           throw BadRequestException.BAD_REQUEST(
-  //             'Question step is required for new questions',
-  //           );
-  //         }
-
-  //         const questionData = this.buildNewQuestionData(
-  //           assessmentId,
-  //           questionDto,
-  //         );
-  //         const newQuestion =
-  //           await this.questionRepository.create(questionData);
-  //         const newQuestionId = (newQuestion._id as Types.ObjectId).toString();
-  //         updatedQuestionIds.push(newQuestionId);
-  //         processedQuestionIds.add(newQuestionId);
-  //         this.logger.log(`New question created: ${newQuestionId}`);
-  //       }
-  //     } catch (error) {
-  //       const questionInfo = questionDto.id
-  //         ? `question ID ${questionDto.id}`
-  //         : `new question at step ${questionDto.step}`;
-  //       this.logger.error(`Error processing ${questionInfo}:`, error.message);
-
-  //       if (error instanceof BadRequestException) {
-  //         throw error;
-  //       }
-  //       throw error;
-  //     }
-  //   }
-
-  //   // ✅ Remove questions that weren't in the update (optional - only if you want full replacement)
-  //   // Comment out these lines if you want to keep unmentioned questions
-  //   // const questionsToDelete = Array.from(existingQuestionIds).filter(
-  //   //   id => !processedQuestionIds.has(id)
-  //   // );
-  //   // for (const questionId of questionsToDelete) {
-  //   //   await this.questionRepository.delete({ _id: new Types.ObjectId(questionId) });
-  //   //   this.logger.log(`Question ${questionId} deleted (not in update)`);
-  //   // }
-
-  //   return updatedQuestionIds;
-  // }
-
   private async updateQuestions(
     assessmentId: string,
     questions: any[],
   ): Promise<{
     updatedQuestionIds: string[];
-    createdQuestionIds: string[]; // 🆕 Track newly created questions
+    createdQuestionIds: string[];
   }> {
     const updatedQuestionIds: string[] = [];
-    const createdQuestionIds: string[] = []; // 🆕
+    const createdQuestionIds: string[] = [];
     const deletedQuestionIds: string[] = [];
 
     const existingQuestions = await this.questionRepository.find({
@@ -1096,7 +917,7 @@ export class AssessmentService {
           deletedQuestionIds.push(questionDto.id);
           processedQuestionIds.add(questionDto.id);
           this.logger.log(`Question ${questionDto.id} deleted`);
-          continue; // Skip to next question
+          continue;
         }
 
         // ✅ Handle updates
@@ -1114,6 +935,30 @@ export class AssessmentService {
           if (!existingQuestion) {
             throw BadRequestException.BAD_REQUEST(
               `Question with ID "${questionDto.id}" not found. Please verify the question exists or remove the ID to create a new question.`,
+            );
+          }
+
+          // 🆕 Validate module_id if provided (for moving question to different module)
+          if (questionDto.module_id) {
+            if (!Types.ObjectId.isValid(questionDto.module_id)) {
+              throw BadRequestException.BAD_REQUEST(
+                `Invalid module_id format: "${questionDto.module_id}". Please provide a valid MongoDB ObjectId.`,
+              );
+            }
+
+            const moduleExists = await this.assessmentModuleRepository.findOne({
+              _id: new Types.ObjectId(questionDto.module_id),
+              assessment_id: new Types.ObjectId(assessmentId),
+            });
+
+            if (!moduleExists) {
+              throw BadRequestException.BAD_REQUEST(
+                `Cannot move question to module "${questionDto.module_id}": Module does not exist in this assessment.`,
+              );
+            }
+
+            this.logger.log(
+              `Moving question ${questionDto.id} from module ${existingQuestion.module_id} to module ${questionDto.module_id}`,
             );
           }
 
@@ -1186,7 +1031,7 @@ export class AssessmentService {
           const newQuestionId = (newQuestion._id as Types.ObjectId).toString();
 
           updatedQuestionIds.push(newQuestionId);
-          createdQuestionIds.push(newQuestionId); // 🆕 Track this as a new creation
+          createdQuestionIds.push(newQuestionId);
           processedQuestionIds.add(newQuestionId);
 
           this.logger.log(`New question created: ${newQuestionId}`);
@@ -1220,6 +1065,79 @@ export class AssessmentService {
     }
 
     return { updatedQuestionIds, createdQuestionIds };
+  }
+
+  // 🆕 Updated buildQuestionUpdateData to handle module_id
+  private buildQuestionUpdateData(questionDto: any): any {
+    const updateData: any = {};
+
+    // 🆕 Allow changing the module
+    if (questionDto.module_id !== undefined) {
+      updateData.module_id = new Types.ObjectId(questionDto.module_id);
+    }
+
+    // Basic fields
+    if (questionDto.question !== undefined) {
+      updateData.question = questionDto.question;
+    }
+    if (questionDto.description !== undefined) {
+      updateData.description = questionDto.description;
+    }
+    if (questionDto.step !== undefined) {
+      updateData.step = questionDto.step;
+    }
+    if (questionDto.is_required !== undefined) {
+      updateData.is_required = questionDto.is_required;
+    }
+    if (questionDto.is_active !== undefined) {
+      updateData.is_active = questionDto.is_active;
+    }
+    if (questionDto.required_score !== undefined) {
+      updateData.required_score = questionDto.required_score;
+    }
+    if (questionDto.max_points !== undefined) {
+      updateData.max_points = questionDto.max_points;
+    }
+
+    // Type-specific fields
+    if (questionDto.options !== undefined) {
+      updateData.options = questionDto.options;
+    }
+    if (questionDto.correct_answer !== undefined) {
+      updateData.correct_answer = questionDto.correct_answer;
+    }
+    if (questionDto.min_value !== undefined) {
+      updateData.min_value = questionDto.min_value;
+    }
+    if (questionDto.max_value !== undefined) {
+      updateData.max_value = questionDto.max_value;
+    }
+    if (questionDto.min_label !== undefined) {
+      updateData.min_label = questionDto.min_label;
+    }
+    if (questionDto.max_label !== undefined) {
+      updateData.max_label = questionDto.max_label;
+    }
+    if (questionDto.grid_rows !== undefined) {
+      updateData.grid_rows = questionDto.grid_rows;
+    }
+    if (questionDto.grid_columns !== undefined) {
+      updateData.grid_columns = questionDto.grid_columns;
+    }
+    if (questionDto.auto_validation !== undefined) {
+      updateData.auto_validation = questionDto.auto_validation;
+    }
+    if (questionDto.validation_rules !== undefined) {
+      updateData.validation_rules = questionDto.validation_rules;
+    }
+    if (questionDto.placeholder !== undefined) {
+      updateData.placeholder = questionDto.placeholder;
+    }
+    if (questionDto.max_length !== undefined) {
+      updateData.max_length = questionDto.max_length;
+    }
+
+    return updateData;
   }
 
   // ✅ NEW: Validation method for question type data
@@ -1419,131 +1337,6 @@ export class AssessmentService {
           `Unknown question type: "${type}". Valid types are: ${Object.values(QuestionType).join(', ')}.`,
         );
     }
-  }
-  private buildQuestionUpdateData(questionDto: any): any {
-    const updateData: any = {};
-
-    // ✅ CRITICAL FIX: Always include type if provided
-    if (questionDto.type !== undefined) {
-      updateData.type = questionDto.type;
-    }
-
-    // Common properties
-    if (questionDto.question !== undefined)
-      updateData.question = questionDto.question;
-    if (questionDto.description !== undefined)
-      updateData.description = questionDto.description;
-    if (questionDto.instruction !== undefined)
-      updateData.instruction = questionDto.instruction;
-    if (questionDto.is_required !== undefined)
-      updateData.is_required = questionDto.is_required;
-    if (questionDto.step !== undefined) updateData.step = questionDto.step;
-    if (questionDto.is_active !== undefined)
-      updateData.is_active = questionDto.is_active;
-    if (questionDto.scoring_categories !== undefined)
-      updateData.scoring_categories = questionDto.scoring_categories;
-
-    // Type-specific properties
-    switch (questionDto.type) {
-      case QuestionType.WELCOME_SCREEN:
-        if (questionDto.welcome_title !== undefined)
-          updateData.welcome_title = questionDto.welcome_title;
-        if (questionDto.welcome_description !== undefined)
-          updateData.welcome_description = questionDto.welcome_description;
-        if (questionDto.button_text !== undefined)
-          updateData.button_text = questionDto.button_text;
-        break;
-
-      case QuestionType.MODULE_TITLE:
-        if (questionDto.module_title !== undefined)
-          updateData.module_title = questionDto.module_title;
-        if (questionDto.module_description !== undefined)
-          updateData.module_description = questionDto.module_description;
-        break;
-
-      case QuestionType.MULTIPLE_CHOICE:
-      case QuestionType.DROPDOWN:
-        if (questionDto.options !== undefined) {
-          updateData.options = questionDto.options;
-          updateData.max_points = this.calculateMultipleChoiceMaxPoints(
-            questionDto.options,
-          );
-        }
-        if (questionDto.placeholder !== undefined)
-          updateData.placeholder = questionDto.placeholder;
-        break;
-
-      case QuestionType.CHECKBOX:
-        if (questionDto.options !== undefined) {
-          updateData.options = questionDto.options;
-          updateData.max_points = this.calculateCheckboxMaxPoints(
-            questionDto.options,
-            questionDto.scoring_method,
-            questionDto.max_selections,
-          );
-        }
-        if (questionDto.min_selections !== undefined)
-          updateData.min_selections = questionDto.min_selections;
-        if (questionDto.max_selections !== undefined)
-          updateData.max_selections = questionDto.max_selections;
-        if (questionDto.scoring_method !== undefined)
-          updateData.scoring_method = questionDto.scoring_method;
-        break;
-
-      case QuestionType.SHORT_TEXT:
-        if (questionDto.placeholder !== undefined)
-          updateData.placeholder = questionDto.placeholder;
-        if (questionDto.max_character !== undefined)
-          updateData.max_character = questionDto.max_character;
-        if (questionDto.min_character !== undefined)
-          updateData.min_character = questionDto.min_character;
-        if (questionDto.completion_points !== undefined) {
-          updateData.completion_points = questionDto.completion_points;
-          updateData.max_points = questionDto.completion_points;
-        }
-        break;
-
-      case QuestionType.LONG_TEXT:
-        if (questionDto.placeholder !== undefined)
-          updateData.placeholder = questionDto.placeholder;
-        if (questionDto.max_character !== undefined)
-          updateData.max_character = questionDto.max_character;
-        if (questionDto.min_character !== undefined)
-          updateData.min_character = questionDto.min_character;
-        if (questionDto.rows !== undefined) updateData.rows = questionDto.rows;
-        if (questionDto.completion_points !== undefined)
-          updateData.completion_points = questionDto.completion_points;
-        if (questionDto.keyword_scoring !== undefined)
-          updateData.keyword_scoring = questionDto.keyword_scoring;
-        if (
-          questionDto.completion_points !== undefined ||
-          questionDto.keyword_scoring !== undefined
-        ) {
-          updateData.max_points = this.calculateLongTextMaxPoints(
-            questionDto.completion_points,
-            questionDto.keyword_scoring,
-          );
-        }
-        break;
-
-      case QuestionType.MULTIPLE_CHOICE_GRID:
-        if (questionDto.grid_columns !== undefined)
-          updateData.grid_columns = questionDto.grid_columns;
-        if (questionDto.grid_rows !== undefined)
-          updateData.grid_rows = questionDto.grid_rows;
-        if (
-          questionDto.grid_columns !== undefined ||
-          questionDto.grid_rows !== undefined
-        ) {
-          updateData.max_points = this.calculateGridMaxPoints(
-            questionDto.grid_columns || [],
-            questionDto.grid_rows || [],
-          );
-        }
-        break;
-    }
-
-    return updateData;
   }
 
   private buildNewQuestionData(assessmentId: string, questionDto: any): any {
