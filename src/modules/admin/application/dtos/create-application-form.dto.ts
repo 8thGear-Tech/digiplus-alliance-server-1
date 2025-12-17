@@ -11,6 +11,7 @@ import {
   ValidateIf,
   Min,
   Max,
+  Validate,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -51,6 +52,16 @@ export class ModuleDto {
   @IsOptional()
   @IsNumber()
   order?: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Indicates if the module is active. Defaults to true. Set to false for soft deletion.',
+    default: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 // Option structure for questions that have options
@@ -317,16 +328,25 @@ export class QuestionDto {
   @IsString()
   placeholder?: string;
 
-  // For file_upload
+   // For file_upload
   @ApiProperty({
-    example: ['.pdf', '.docx', '.jpg'],
-    description: 'Accepted file types (for file upload)',
+    example: ['.pdf', '.docx', '.jpg', 'url'],
+    description: 'Accepted file types (for file upload). Include "url" to allow URL links.',
     required: false,
   })
   @ValidateIf((o) => o.type === 'file_upload')
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  // ✅ ADD THIS CUSTOM VALIDATOR
+@Validate((value: string[]) => {
+  if (!Array.isArray(value)) return false;
+  return value.every(type => 
+    type === 'url' || type.startsWith('.')
+  );
+}, {
+  message: 'accepted_file_types must be file extensions (e.g., .pdf) or "url"'
+})
   accepted_file_types?: string[];
 
   @ApiProperty({

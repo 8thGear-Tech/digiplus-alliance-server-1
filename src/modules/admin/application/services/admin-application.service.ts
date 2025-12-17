@@ -45,7 +45,13 @@ interface PopulatedSubmission {
   service: string;
   service_type: string;
   payment_amount?: number;
-  userId: string;
+  // userId: string;
+  userId: {
+    _id: Types.ObjectId;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
   status: ApplicationStatus;
   payment_status: PaymentStatus;
   createdAt: Date;
@@ -145,10 +151,11 @@ export class AdminApplicationService {
     servicePriceMap: any,
   ): any[] {
     return submissions.map((submission) => {
-      const firstName = submission.responses['first_name'] || 'N/A';
-      const lastName = submission.responses['last_name'] || '';
-      const name = `${firstName} ${lastName}`.trim();
-      const email = submission.responses['email'] || 'N/A';
+     // ✅ FIXED: Get name and email from populated user instead of responses
+    const firstName = submission.userId?.first_name || 'N/A';
+    const lastName = submission.userId?.last_name || '';
+    const email = submission.userId?.email || 'N/A';
+    const name = `${firstName} ${lastName}`.trim();
       const paymentStatus = submission.payment_status || 'Not Paid';
       const specificService = submission.service;
       const paymentAmount = servicePriceMap[specificService] || 'N/A';
@@ -181,9 +188,10 @@ export class AdminApplicationService {
   formsMap: Map<string, any>,
 ): any[] {
     return submissions.map((submission) => {
-      const firstName = submission.responses['firstname'] || 'N/A';
-      const lastName = submission.responses['lastname'] || '';
-      const email = submission.responses['email'] || 'N/A';
+ // Get name and email from the populated user object instead of responses
+    const firstName = submission.userId?.first_name || 'N/A';
+    const lastName = submission.userId?.last_name || '';
+    const email = submission.userId?.email || 'N/A';
       const specificService = submission.service;
       const paymentStatus = submission.payment_status || 'Not Paid';
       const name = `${firstName} ${lastName}`.trim();
@@ -227,6 +235,25 @@ export class AdminApplicationService {
 
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
     const existingDataKeys: string[] = [];
+
+     // Validate that all modules referenced in questions exist
+    if (dto.questions && dto.questions.length > 0) {
+      const moduleTempIds = new Set(dto.modules?.map(m => m.temp_id) || []);
+      
+      const invalidQuestions = dto.questions.filter(
+        q => q.module_ref && !moduleTempIds.has(q.module_ref)
+      );
+
+      if (invalidQuestions.length > 0) {
+        const invalidRefs = invalidQuestions.map(q => 
+          `Question "${q.question}" references non-existent module "${q.module_ref}"`
+        ).join('; ');
+        
+        throw new BadRequestException(
+          `Cannot create form. The following questions reference modules that don't exist: ${invalidRefs}`
+        );
+      }
+    }
 
     const processedQuestions =
       dto.questions?.map((question) => {
@@ -276,8 +303,44 @@ export class AdminApplicationService {
   if (dto.welcome_button_text !== undefined) form.welcome_button_text = dto.welcome_button_text;
   if (dto.isLive !== undefined) form.isLive = dto.isLive;
 
+
+   // Build a set of all valid module temp_ids (both existing and incoming)
+  const allValidModuleTempIds = new Set<string>();
+  
+  // Add existing active modules
+  form.modules.forEach(m => {
+    if (m.temp_id && m.active !== false) {
+      allValidModuleTempIds.add(m.temp_id);
+    }
+  });
+  
+  // Add incoming modules (including new ones)
+  if (dto.modules && dto.modules.length > 0) {
+    dto.modules.forEach(m => {
+      if (m.temp_id && m.active !== false) {
+        allValidModuleTempIds.add(m.temp_id);
+      }
+    });
+  }
+
   // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
   if (dto.questions && dto.questions.length > 0) {
+
+    // Validate that all questions reference valid modules
+    const invalidQuestions = dto.questions.filter(
+      q => q.module_ref && q.active !== false && !allValidModuleTempIds.has(q.module_ref)
+    );
+
+    if (invalidQuestions.length > 0) {
+      const invalidRefs = invalidQuestions.map(q => 
+        `Question "${q.question}" references non-existent or inactive module "${q.module_ref}"`
+      ).join('; ');
+      
+      throw new BadRequestException(
+        `Cannot update form. The following questions reference modules that don't exist or are inactive: ${invalidRefs}`
+      );
+    }
+
     const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
     const currentDataKeys: string[] = [];
 
@@ -327,8 +390,13 @@ export class AdminApplicationService {
       }
     }
    // HARD DELETE: Remove questions that are marked as inactive (active === false)
+      const originalQuestionsCount = form.questions.length;
     form.questions = form.questions.filter(q => q.active !== false);
-    this.logger.log(`Hard deleted ${form.questions.length} inactive questions from the database`);
+    const deletedQuestionsCount = originalQuestionsCount - form.questions.length;
+    
+    if (deletedQuestionsCount > 0) {
+      this.logger.log(`Hard deleted ${deletedQuestionsCount} inactive question(s) from the database`);
+    }
   }
 
   // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
@@ -353,12 +421,41 @@ export class AdminApplicationService {
       if (existingModulesMap.has(tempId)) {
         // UPDATE EXISTING MODULE
         const existingModule = existingModulesMap.get(tempId)!;
-        Object.assign(existingModule, incomingModule);
+      // Handle soft deletion: if active is set to false, mark as inactive
+        if (incomingModule.active === false) {
+           // Check if any active questions reference this module
+          const questionsUsingModule = form.questions.filter(
+            q => q.module_ref === tempId && q.active !== false
+          );
+
+          if (questionsUsingModule.length > 0) {
+            const questionsList = questionsUsingModule
+              .map(q => `"${q.question}"`)
+              .join(', ');
+            
+            throw new BadRequestException(
+              `Cannot delete module "${existingModule.title}" (${tempId}). The following active question(s) are still using it: ${questionsList}. Please delete or reassign these questions first.`
+            );
+          }
+          existingModule.active = false;
+          this.logger.log(`Module with temp_id "${tempId}" marked as inactive (soft deleted)`);
+        } else {
+          Object.assign(existingModule, incomingModule);
+        }
       } else {
-        // ADD NEW MODULE (prevent duplicates)
-        form.modules.push(incomingModule as EmbeddedModule);
-        existingModulesMap.set(tempId, incomingModule as EmbeddedModule);
+            // ADD NEW MODULE (prevent duplicates)
+        const newModule = { ...incomingModule, active: incomingModule.active ?? true };
+        form.modules.push(newModule as EmbeddedModule);
+        existingModulesMap.set(tempId, newModule as EmbeddedModule);
       }
+    }
+   // HARD DELETE: Remove modules that are marked as inactive (active === false)
+    const originalModulesCount = form.modules.length;
+    form.modules = form.modules.filter(m => m.active !== false);
+    const deletedModulesCount = originalModulesCount - form.modules.length;
+    
+    if (deletedModulesCount > 0) {
+      this.logger.log(`Hard deleted ${deletedModulesCount} inactive module(s) from the database`);
     }
   }
 
@@ -380,6 +477,8 @@ export class AdminApplicationService {
     // Filter out inactive questions when returning the form
     const formObject = form.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+     formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+
 
      return formObject;
   }
@@ -391,6 +490,7 @@ export class AdminApplicationService {
     return forms.map(form => {
       const formObject = form.toObject() as ApplicationForm;
       formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+      formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
       return formObject;
     });
   }
@@ -425,6 +525,8 @@ export class AdminApplicationService {
       // Filter out inactive questions
     const formObject = updatedForm.toObject() as ApplicationForm;
     formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
+    formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+
 
       return formObject;
   }
@@ -477,6 +579,10 @@ export class AdminApplicationService {
       path: 'formId',
       select: 'welcome_title slug questions',
     })
+    .populate({
+      path: 'userId',
+      select: 'first_name last_name email', // Populate user data
+    })
       .exec();
 
     if (submissions.length === 0) {
@@ -503,24 +609,32 @@ export class AdminApplicationService {
         });
       }
       
-      // Add to typed submissions array
-      typedSubmissions.push({
-        _id: submission._id,
-        responses: submission.responses,
-        service: submission.service,
-        service_type: submission.service_type,
-        payment_amount: submission.payment_amount,
-        userId: submission.userId,
-        status: submission.status,
-        payment_status: submission.payment_status,
-        createdAt: submission.createdAt,
-        formId: {
-          _id: submission.formId._id,
-          welcome_title: submission.formId.welcome_title,
-          slug: submission.formId.slug,
-          questions: submission.formId.questions || [],
-        },
-      });
+          // Check if userId is populated
+      if (submission.userId && typeof submission.userId === 'object') {
+        // Add to typed submissions array
+        typedSubmissions.push({
+          _id: submission._id,
+          responses: submission.responses,
+          service: submission.service,
+          service_type: submission.service_type,
+          payment_amount: submission.payment_amount,
+          userId: {
+            _id: submission.userId._id,
+            first_name: submission.userId.first_name,
+            last_name: submission.userId.last_name,
+            email: submission.userId.email,
+          },
+          status: submission.status,
+          payment_status: submission.payment_status,
+          createdAt: submission.createdAt,
+          formId: {
+            _id: submission.formId._id,
+            welcome_title: submission.formId.welcome_title,
+            slug: submission.formId.slug,
+            questions: submission.formId.questions || [],
+          },
+        });
+      }
     }
   });
 
@@ -576,6 +690,10 @@ export class AdminApplicationService {
     const submissions = await this.submissionModel
       .find(filter)
       .select('+service_type +timetable_url +end_date')
+      .populate({
+      path: 'userId',
+      select: 'first_name last_name email', // ✅ ADD THIS: Populate user data
+    })
       .exec();
 
     if (submissions.length === 0) {
