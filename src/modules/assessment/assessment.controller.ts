@@ -1006,6 +1006,52 @@ export class AssessmentController {
           ],
         },
       },
+      addNewModuleAndNewQuestion: {
+        summary: 'Add New Module and New Question to it',
+        value: {
+          modules: [
+            {
+              temp_id: 'temp_module_1',
+              title: 'New Module: Advanced Topics',
+              description: 'This is a brand new module',
+              order: 3,
+            },
+            {
+              id: 'existing_module_id_123',
+              title: 'Updated Existing Module',
+              order: 1,
+            },
+          ],
+          questions: [
+            {
+              module_id: 'temp_module_1',
+              type: 'multiple_choice',
+              step: 1,
+              question_text: 'What is the capital of France?',
+              options: [
+                { text: 'Paris', points: 10 },
+                { text: 'London', points: 0 },
+                { text: 'Berlin', points: 0 },
+              ],
+              correct_answer: 'Paris',
+            },
+            {
+              module_id: 'existing_module_id_123',
+              type: 'rating_scale',
+              step: 2,
+              question_text: 'Rate your experience',
+              min_value: 1,
+              max_value: 5,
+              min_label: 'Poor',
+              max_label: 'Excellent',
+            },
+            {
+              id: 'existing_question_id_456',
+              question_text: 'Updated question text',
+            },
+          ],
+        },
+      },
       updateExistingQuestion: {
         summary: 'Update existing question',
         value: {
