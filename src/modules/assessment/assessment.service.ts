@@ -35,6 +35,7 @@ import { NotificationService } from '../notification/notification.service';
 import { Question } from '../assessment/schemas/question.schema';
 
 import { max } from 'class-validator';
+import { RecommendationLevel } from './enums/recommendation-level.enum';
 
 @Injectable()
 export class AssessmentService {
@@ -509,122 +510,227 @@ export class AssessmentService {
   //   return updatedModuleIds;
   // }
 
+  // private async updateModules(
+  //   assessmentId: string,
+  //   modules: any[],
+  // ): Promise<string[]> {
+  //   const updatedModuleIds: string[] = [];
+
+  //   // ✅ Get existing modules for this assessment
+  //   const existingModules = await this.assessmentModuleRepository.find({
+  //     assessment_id: new Types.ObjectId(assessmentId),
+  //   });
+
+  //   const existingModuleIds = new Set(
+  //     existingModules.map((m: any) => m._id.toString()),
+  //   );
+
+  //   const processedModuleIds = new Set<string>();
+
+  //   for (const moduleDto of modules) {
+  //     /**
+  //      * 🔴 DELETE MODULE
+  //      */
+  //     if (moduleDto.toDelete === true) {
+  //       if (!moduleDto.id) {
+  //         continue;
+  //       }
+
+  //       // 🔍 Fetch questions under this module
+  //       const questionsInModule = await this.questionRepository.find({
+  //         module_id: new Types.ObjectId(moduleDto.id),
+  //       });
+
+  //       // ❌ Block deletion if questions exist
+  //       if (questionsInModule.length > 0) {
+  //         const questionList = questionsInModule
+  //           .map((q) => (q as any).question)
+  //           .join(', ');
+
+  //         this.logger.log('Affected Questions', `${questionList}`);
+
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Module cannot be deleted because it still contains questions. Reassign them to another module before deleting. Affected questions: ${questionList}`,
+  //         );
+  //       }
+
+  //       // ✅ Safe to delete
+  //       await this.assessmentModuleRepository.delete({
+  //         _id: new Types.ObjectId(moduleDto.id),
+  //       });
+
+  //       this.logger.log(`Module ${moduleDto.id} deleted`);
+  //       continue;
+
+  //       // if (moduleDto.id) {
+  //       //   await this.assessmentModuleRepository.delete({
+  //       //     _id: new Types.ObjectId(moduleDto.id),
+  //       //   });
+
+  //       //   // OPTIONAL: cascade delete questions under this module
+  //       //   await this.questionRepository.deleteMany({
+  //       //     module_id: new Types.ObjectId(moduleDto.id),
+  //       //   });
+
+  //       //   this.logger.log(`Module ${moduleDto.id} deleted`);
+  //       // }
+
+  //       // // Skip further processing
+  //       // continue;
+  //     }
+  //     if (moduleDto.id) {
+  //       // Update existing module
+  //       const updateData: any = {};
+  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
+  //       if (moduleDto.description !== undefined)
+  //         updateData.description = moduleDto.description;
+  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
+  //       if (moduleDto.max_points !== undefined)
+  //         updateData.max_points = moduleDto.max_points;
+
+  //       if (Object.keys(updateData).length > 0) {
+  //         await this.assessmentModuleRepository.findByIdAndUpdate(
+  //           moduleDto.id,
+  //           updateData,
+  //         );
+  //         updatedModuleIds.push(moduleDto.id);
+  //         processedModuleIds.add(moduleDto.id);
+  //         this.logger.log(`Module ${moduleDto.id} updated`);
+  //       }
+  //     } else {
+  //       // Create new module
+  //       const moduleData = {
+  //         assessment_id: new Types.ObjectId(assessmentId),
+  //         title: moduleDto.title,
+  //         description: moduleDto.description,
+  //         order: moduleDto.order,
+  //         max_points: moduleDto.max_points || 0,
+  //       };
+
+  //       const newModule =
+  //         await this.assessmentModuleRepository.create(moduleData);
+  //       updatedModuleIds.push(newModule._id.toString());
+  //       processedModuleIds.add(newModule._id.toString());
+  //       this.logger.log(`New module created: ${newModule._id}`);
+  //     }
+  //   }
+
+  //   // ✅ Remove modules that weren't in the update (optional - only if you want full replacement)
+  //   // Comment out these lines if you want to keep unmentioned modules
+  //   // const modulesToDelete = Array.from(existingModuleIds).filter(
+  //   //   id => !processedModuleIds.has(id)
+  //   // );
+  //   // for (const moduleId of modulesToDelete) {
+  //   //   await this.assessmentModuleRepository.delete({ _id: new Types.ObjectId(moduleId) });
+  //   //   this.logger.log(`Module ${moduleId} deleted (not in update)`);
+  //   // }
+
+  //   return updatedModuleIds;
+  // }
+
   private async updateModules(
     assessmentId: string,
     modules: any[],
-  ): Promise<string[]> {
+  ): Promise<{
+    updatedModuleIds: string[];
+    idMapping: Map<string, string>;
+    createdModuleIds: string[]; // 🆕 Track newly created modules
+  }> {
     const updatedModuleIds: string[] = [];
-
-    // ✅ Get existing modules for this assessment
-    const existingModules = await this.assessmentModuleRepository.find({
-      assessment_id: new Types.ObjectId(assessmentId),
-    });
-
-    const existingModuleIds = new Set(
-      existingModules.map((m: any) => m._id.toString()),
-    );
-
-    const processedModuleIds = new Set<string>();
+    const createdModuleIds: string[] = []; // 🆕
+    const idMapping = new Map<string, string>();
 
     for (const moduleDto of modules) {
-      /**
-       * 🔴 DELETE MODULE
-       */
-      if (moduleDto.toDelete === true) {
-        if (!moduleDto.id) {
-          continue;
-        }
+      try {
+        // ✅ Handle module updates (existing modules)
+        if (moduleDto.id && !moduleDto.id.startsWith('temp_')) {
+          if (!Types.ObjectId.isValid(moduleDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid module ID format: "${moduleDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
 
-        // 🔍 Fetch questions under this module
-        const questionsInModule = await this.questionRepository.find({
-          module_id: new Types.ObjectId(moduleDto.id),
-        });
-
-        // ❌ Block deletion if questions exist
-        if (questionsInModule.length > 0) {
-          const questionList = questionsInModule
-            .map((q) => (q as any).question)
-            .join(', ');
-
-          this.logger.log('Affected Questions', `${questionList}`);
-
-          throw BadRequestException.BAD_REQUEST(
-            `Module cannot be deleted because it still contains questions. Reassign them to another module before deleting. Affected questions: ${questionList}`,
-          );
-        }
-
-        // ✅ Safe to delete
-        await this.assessmentModuleRepository.delete({
-          _id: new Types.ObjectId(moduleDto.id),
-        });
-
-        this.logger.log(`Module ${moduleDto.id} deleted`);
-        continue;
-
-        // if (moduleDto.id) {
-        //   await this.assessmentModuleRepository.delete({
-        //     _id: new Types.ObjectId(moduleDto.id),
-        //   });
-
-        //   // OPTIONAL: cascade delete questions under this module
-        //   await this.questionRepository.deleteMany({
-        //     module_id: new Types.ObjectId(moduleDto.id),
-        //   });
-
-        //   this.logger.log(`Module ${moduleDto.id} deleted`);
-        // }
-
-        // // Skip further processing
-        // continue;
-      }
-      if (moduleDto.id) {
-        // Update existing module
-        const updateData: any = {};
-        if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
-        if (moduleDto.description !== undefined)
-          updateData.description = moduleDto.description;
-        if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
-        if (moduleDto.max_points !== undefined)
-          updateData.max_points = moduleDto.max_points;
-
-        if (Object.keys(updateData).length > 0) {
-          await this.assessmentModuleRepository.findByIdAndUpdate(
+          const existingModule = await this.assessmentModuleRepository.findById(
             moduleDto.id,
-            updateData,
           );
-          updatedModuleIds.push(moduleDto.id);
-          processedModuleIds.add(moduleDto.id);
-          this.logger.log(`Module ${moduleDto.id} updated`);
-        }
-      } else {
-        // Create new module
-        const moduleData = {
-          assessment_id: new Types.ObjectId(assessmentId),
-          title: moduleDto.title,
-          description: moduleDto.description,
-          order: moduleDto.order,
-          max_points: moduleDto.max_points || 0,
-        };
 
-        const newModule =
-          await this.assessmentModuleRepository.create(moduleData);
-        updatedModuleIds.push(newModule._id.toString());
-        processedModuleIds.add(newModule._id.toString());
-        this.logger.log(`New module created: ${newModule._id}`);
+          if (!existingModule) {
+            throw BadRequestException.BAD_REQUEST(
+              `Module with ID "${moduleDto.id}" not found. Please verify the module exists.`,
+            );
+          }
+
+          const updateData: any = {};
+          if (moduleDto.title !== undefined) {
+            updateData.title = moduleDto.title;
+          }
+          if (moduleDto.description !== undefined) {
+            updateData.description = moduleDto.description;
+          }
+          if (moduleDto.order !== undefined) {
+            updateData.order = moduleDto.order;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await this.assessmentModuleRepository.findByIdAndUpdate(
+              moduleDto.id,
+              updateData,
+            );
+            updatedModuleIds.push(moduleDto.id);
+            this.logger.log(`Module ${moduleDto.id} updated`);
+          }
+        }
+        // 🆕 Handle module creation (new modules with temp IDs or no IDs)
+        else {
+          if (!moduleDto.title) {
+            throw BadRequestException.BAD_REQUEST(
+              'Module title is required for new modules',
+            );
+          }
+
+          const newModuleData = {
+            assessment_id: new Types.ObjectId(assessmentId),
+            title: moduleDto.title,
+            description: moduleDto.description || '',
+            order: moduleDto.order ?? 0,
+          };
+
+          const newModule =
+            await this.assessmentModuleRepository.create(newModuleData);
+          const newModuleId = newModule._id.toString();
+
+          updatedModuleIds.push(newModuleId);
+          createdModuleIds.push(newModuleId); // 🆕 Track this as a new creation
+
+          // Map temporary ID to actual ID
+          if (moduleDto.temp_id) {
+            idMapping.set(moduleDto.temp_id, newModuleId);
+            this.logger.log(
+              `New module created: ${newModuleId} (mapped from temp_id: ${moduleDto.temp_id})`,
+            );
+          } else if (moduleDto.id && moduleDto.id.startsWith('temp_')) {
+            idMapping.set(moduleDto.id, newModuleId);
+            this.logger.log(
+              `New module created: ${newModuleId} (mapped from temp id: ${moduleDto.id})`,
+            );
+          } else {
+            this.logger.log(`New module created: ${newModuleId}`);
+          }
+        }
+      } catch (error) {
+        const moduleInfo = moduleDto.id
+          ? `module ID ${moduleDto.id}`
+          : `new module "${moduleDto.title}"`;
+        this.logger.error(`Error processing ${moduleInfo}:`, error.message);
+
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw error;
       }
     }
 
-    // ✅ Remove modules that weren't in the update (optional - only if you want full replacement)
-    // Comment out these lines if you want to keep unmentioned modules
-    // const modulesToDelete = Array.from(existingModuleIds).filter(
-    //   id => !processedModuleIds.has(id)
-    // );
-    // for (const moduleId of modulesToDelete) {
-    //   await this.assessmentModuleRepository.delete({ _id: new Types.ObjectId(moduleId) });
-    //   this.logger.log(`Module ${moduleId} deleted (not in update)`);
-    // }
-
-    return updatedModuleIds;
+    return { updatedModuleIds, idMapping, createdModuleIds };
   }
 
   // private async updateQuestions(
@@ -809,8 +915,12 @@ export class AssessmentService {
   private async updateQuestions(
     assessmentId: string,
     questions: any[],
-  ): Promise<string[]> {
+  ): Promise<{
+    updatedQuestionIds: string[];
+    createdQuestionIds: string[]; // 🆕 Track newly created questions
+  }> {
     const updatedQuestionIds: string[] = [];
+    const createdQuestionIds: string[] = []; // 🆕
     const deletedQuestionIds: string[] = [];
 
     const existingQuestions = await this.questionRepository.find({
@@ -920,6 +1030,7 @@ export class AssessmentService {
               'Invalid module_id provided for question',
             );
           }
+
           const moduleExists = await this.assessmentModuleRepository.findOne({
             _id: new Types.ObjectId(questionDto.module_id),
             assessment_id: new Types.ObjectId(assessmentId),
@@ -941,11 +1052,15 @@ export class AssessmentService {
             assessmentId,
             questionDto,
           );
+
           const newQuestion =
             await this.questionRepository.create(questionData);
           const newQuestionId = (newQuestion._id as Types.ObjectId).toString();
+
           updatedQuestionIds.push(newQuestionId);
+          createdQuestionIds.push(newQuestionId); // 🆕 Track this as a new creation
           processedQuestionIds.add(newQuestionId);
+
           this.logger.log(`New question created: ${newQuestionId}`);
         }
       } catch (error) {
@@ -970,7 +1085,13 @@ export class AssessmentService {
       );
     }
 
-    return updatedQuestionIds;
+    if (createdQuestionIds.length > 0) {
+      this.logger.log(
+        `Created ${createdQuestionIds.length} new question(s): ${createdQuestionIds.join(', ')}`,
+      );
+    }
+
+    return { updatedQuestionIds, createdQuestionIds };
   }
 
   // ✅ NEW: Validation method for question type data
@@ -1437,49 +1558,171 @@ export class AssessmentService {
   ): Promise<string[]> {
     const updatedServiceIds: string[] = [];
 
+    // ✅ Get existing service recommendations for this assessment
+    const existingRecommendations =
+      await this.serviceRecommendationRepository.find({
+        assessment_id: new Types.ObjectId(assessmentId),
+      });
+
+    const existingRecommendationIds = new Set(
+      existingRecommendations.map((r: any) => r._id.toString()),
+    );
+
+    const processedRecommendationIds = new Set<string>();
+
     for (const serviceDto of serviceRecommendations) {
-      if (serviceDto.id) {
-        // Update existing service recommendation
-        const updateData: any = {};
-        if (serviceDto.service_id !== undefined)
-          updateData.service_id = serviceDto.service_id;
-        if (serviceDto.service_name !== undefined)
-          updateData.service_name = serviceDto.service_name;
-        if (serviceDto.description !== undefined)
-          updateData.description = serviceDto.description;
-        if (serviceDto.min_points !== undefined)
-          updateData.min_points = serviceDto.min_points;
-        if (serviceDto.max_points !== undefined)
-          updateData.max_points = serviceDto.max_points;
-        if (serviceDto.levels !== undefined)
-          updateData.levels = serviceDto.levels;
+      try {
+        if (serviceDto.id) {
+          // ✅ Validate ID format
+          if (!Types.ObjectId.isValid(serviceDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid service recommendation ID format: "${serviceDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
 
-        if (Object.keys(updateData).length > 0) {
-          await this.serviceRecommendationRepository.findByIdAndUpdate(
-            serviceDto.id,
-            updateData,
+          // ✅ Check if service recommendation exists
+          const existingRecommendation =
+            await this.serviceRecommendationRepository.findById(serviceDto.id);
+
+          if (!existingRecommendation) {
+            throw BadRequestException.BAD_REQUEST(
+              `Service recommendation with ID "${serviceDto.id}" not found. Please verify it exists or remove the ID to create a new one.`,
+            );
+          }
+
+          // ✅ Validate levels if provided
+          if (serviceDto.levels !== undefined) {
+            if (
+              !Array.isArray(serviceDto.levels) ||
+              serviceDto.levels.length === 0
+            ) {
+              throw BadRequestException.BAD_REQUEST(
+                `Service recommendation must have at least one level specified. Provide at least one level from: ${Object.values(RecommendationLevel).join(', ')}.`,
+              );
+            }
+          }
+
+          // ✅ Validate point ranges if provided
+          if (
+            serviceDto.min_points !== undefined &&
+            serviceDto.max_points !== undefined
+          ) {
+            if (serviceDto.min_points > serviceDto.max_points) {
+              throw BadRequestException.BAD_REQUEST(
+                `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}) for service recommendation.`,
+              );
+            }
+          }
+
+          // Update existing service recommendation
+          const updateData: any = {};
+
+          if (serviceDto.service_id !== undefined) {
+            updateData.service_id = new Types.ObjectId(serviceDto.service_id);
+          }
+          if (serviceDto.service_name !== undefined) {
+            updateData.service_name = serviceDto.service_name;
+          }
+          if (serviceDto.description !== undefined) {
+            updateData.description = serviceDto.description;
+          }
+          if (serviceDto.min_points !== undefined) {
+            updateData.min_points = serviceDto.min_points;
+          }
+          if (serviceDto.max_points !== undefined) {
+            updateData.max_points = serviceDto.max_points;
+          }
+          if (serviceDto.levels !== undefined) {
+            updateData.levels = serviceDto.levels;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await this.serviceRecommendationRepository.findByIdAndUpdate(
+              serviceDto.id,
+              updateData,
+            );
+            updatedServiceIds.push(serviceDto.id);
+            processedRecommendationIds.add(serviceDto.id);
+            this.logger.log(`Service recommendation ${serviceDto.id} updated`);
+          } else {
+            processedRecommendationIds.add(serviceDto.id);
+          }
+        } else {
+          // ✅ Create new service recommendation - validate required fields
+          if (!serviceDto.service_name) {
+            throw BadRequestException.BAD_REQUEST(
+              'service_name is required when creating a new service recommendation.',
+            );
+          }
+          if (!serviceDto.description) {
+            throw BadRequestException.BAD_REQUEST(
+              'description is required when creating a new service recommendation.',
+            );
+          }
+          if (
+            serviceDto.min_points === undefined ||
+            serviceDto.min_points === null
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              'min_points is required when creating a new service recommendation.',
+            );
+          }
+          if (
+            serviceDto.max_points === undefined ||
+            serviceDto.max_points === null
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              'max_points is required when creating a new service recommendation.',
+            );
+          }
+          if (
+            !serviceDto.levels ||
+            !Array.isArray(serviceDto.levels) ||
+            serviceDto.levels.length === 0
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `levels array is required when creating a new service recommendation. Provide at least one level from: ${Object.values(RecommendationLevel).join(', ')}.`,
+            );
+          }
+
+          // ✅ Validate point range
+          if (serviceDto.min_points > serviceDto.max_points) {
+            throw BadRequestException.BAD_REQUEST(
+              `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}).`,
+            );
+          }
+
+          const serviceData = {
+            assessment_id: new Types.ObjectId(assessmentId),
+            service_id: serviceDto.service_id
+              ? new Types.ObjectId(serviceDto.service_id)
+              : undefined,
+            service_name: serviceDto.service_name,
+            description: serviceDto.description,
+            min_points: serviceDto.min_points,
+            max_points: serviceDto.max_points,
+            levels: serviceDto.levels,
+          };
+
+          const newService =
+            await this.serviceRecommendationRepository.create(serviceData);
+          const newServiceId = newService._id.toString();
+          updatedServiceIds.push(newServiceId);
+          processedRecommendationIds.add(newServiceId);
+          this.logger.log(
+            `New service recommendation created: ${newServiceId}`,
           );
-          updatedServiceIds.push(serviceDto.id);
-          this.logger.log(`Service recommendation ${serviceDto.id} updated`);
         }
-      } else {
-        // Create new service recommendation
-        const serviceData = {
-          assessment_id: new Types.ObjectId(assessmentId),
-          service_id: serviceDto.service_id,
-          service_name: serviceDto.service_name,
-          description: serviceDto.description,
-          min_points: serviceDto.min_points,
-          max_points: serviceDto.max_points,
-          levels: serviceDto.levels || [],
-        };
+      } catch (error) {
+        const serviceInfo = serviceDto.id
+          ? `service recommendation ID ${serviceDto.id}`
+          : `new service recommendation for ${serviceDto.service_name}`;
+        this.logger.error(`Error processing ${serviceInfo}:`, error.message);
 
-        const newService =
-          await this.serviceRecommendationRepository.create(serviceData);
-        updatedServiceIds.push(newService._id.toString());
-        this.logger.log(
-          `New service recommendation created: ${newService._id}`,
-        );
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw error;
       }
     }
 
@@ -2355,10 +2598,231 @@ export class AssessmentService {
   }
 
   // Add this method to your AssessmentService class
+  // async updateAssessment(
+  //   assessmentId: string,
+  //   updateAssessmentDto: UpdateAssessmentDto,
+  // ): Promise<any> {
+  //   try {
+  //     // ✅ Validate ObjectId format first
+  //     if (!Types.ObjectId.isValid(assessmentId)) {
+  //       this.logger.error(
+  //         `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
+  //       );
+  //       throw BadRequestException.BAD_REQUEST(
+  //         `Invalid assessment ID format: "${assessmentId}". Please provide a valid MongoDB ObjectId.`,
+  //       );
+  //     }
+
+  //     // Validate assessment exists
+  //     const existingAssessment =
+  //       await this.assessmentRepository.findById(assessmentId);
+  //     if (!existingAssessment) {
+  //       throw BadRequestException.BAD_REQUEST('Assessment not found');
+  //     }
+
+  //     //below: added by opeyemi
+
+  //     // FIXED: Explicit null/undefined check instead of optional chaining with length
+  //     if (
+  //       updateAssessmentDto.service_recommendations &&
+  //       Array.isArray(updateAssessmentDto.service_recommendations) &&
+  //       updateAssessmentDto.service_recommendations.length > 0
+  //     ) {
+  //       await this.validateServiceRecommendations(
+  //         updateAssessmentDto.service_recommendations,
+  //       );
+  //     }
+
+  //     //above: added by opeyemi
+  //     // No authorization check needed here - RolesGuard handles it
+
+  //     const updatedItems = {
+  //       modules: [] as string[],
+  //       questions: [] as string[],
+  //       service_recommendations: [] as string[],
+  //       deleted_questions: [] as string[],
+  //     };
+
+  //     // Update assessment basic properties
+  //     const assessmentUpdateData: any = {};
+  //     if (updateAssessmentDto.title !== undefined) {
+  //       assessmentUpdateData.title = updateAssessmentDto.title;
+  //     }
+  //     if (updateAssessmentDto.description !== undefined) {
+  //       assessmentUpdateData.description = updateAssessmentDto.description;
+  //     }
+  //     if (updateAssessmentDto.instruction !== undefined) {
+  //       assessmentUpdateData.instruction = updateAssessmentDto.instruction;
+  //     }
+  //     if (updateAssessmentDto.is_active !== undefined) {
+  //       assessmentUpdateData.is_active = updateAssessmentDto.is_active;
+  //     }
+
+  //     if (Object.keys(assessmentUpdateData).length > 0) {
+  //       await this.assessmentRepository.findByIdAndUpdate(
+  //         assessmentId,
+  //         assessmentUpdateData,
+  //       );
+  //       this.logger.log(`Assessment ${assessmentId} basic properties updated`);
+  //     }
+
+  //     // Update modules if provided
+  //     if (
+  //       updateAssessmentDto.modules &&
+  //       updateAssessmentDto.modules.length > 0
+  //     ) {
+  //       const moduleUpdates = await this.updateModules(
+  //         assessmentId,
+  //         updateAssessmentDto.modules,
+  //       );
+  //       updatedItems.modules = moduleUpdates;
+  //     }
+
+  //     // Update questions if provided
+  //     if (
+  //       updateAssessmentDto.questions &&
+  //       updateAssessmentDto.questions.length > 0
+  //     ) {
+  //       const questionUpdates = await this.updateQuestions(
+  //         assessmentId,
+  //         updateAssessmentDto.questions,
+  //       );
+  //       updatedItems.questions = questionUpdates;
+
+  //       // ✅ Track deleted questions (extract from logs or modify updateQuestions to return both)
+  //       const deletedQuestions: string[] = [];
+
+  //       for (const q of updateAssessmentDto.questions) {
+  //         if (q.toDelete === true && q.id) {
+  //           deletedQuestions.push(q.id);
+  //         }
+  //       }
+
+  //       updatedItems.deleted_questions = deletedQuestions;
+  //     }
+
+  //     // Update service recommendations if provided
+  //     if (
+  //       updateAssessmentDto.service_recommendations &&
+  //       updateAssessmentDto.service_recommendations.length > 0
+  //     ) {
+  //       const serviceUpdates = await this.updateServiceRecommendations(
+  //         assessmentId,
+  //         updateAssessmentDto.service_recommendations,
+  //       );
+  //       updatedItems.service_recommendations = serviceUpdates;
+  //     }
+
+  //     // Recalculate total possible points if questions were updated
+  //     if (
+  //       updateAssessmentDto.questions &&
+  //       updateAssessmentDto.questions.length > 0
+  //     ) {
+  //       await this.recalculateTotalPoints(assessmentId);
+  //     }
+
+  //     // Get updated assessment with all relations
+  //     const updatedAssessmentData = await this.getAssessmentById(assessmentId);
+
+  //     return {
+  //       success: true,
+  //       message: 'Assessment updated successfully',
+  //       data: {
+  //         ...updatedAssessmentData.data,
+  //         updated_items: updatedItems,
+  //       },
+  //     };
+  //   } catch (error) {
+  //     this.logger.error('Error updating assessment:', error);
+
+  //     // Re-throw known exceptions to preserve their status codes
+
+  //     //below: added by opeyemi
+
+  //     if (error instanceof BadRequestException) {
+  //       // Check if it's a service validation error
+  //       if (
+  //         error.message &&
+  //         error.message.includes('Service recommendation validation failed')
+  //       ) {
+  //         this.logger.error(
+  //           'Service validation failed during assessment update:',
+  //           error.message,
+  //         );
+
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Service validation failed during update: ${error.message}. Please ensure all referenced services exist in the Services catalog (/services). Create missing services first, then update your assessment.`,
+  //         );
+  //       }
+
+  //       // Check for assessment not found errors
+  //       if (error.message && error.message.includes('Assessment not found')) {
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Assessment not found: ${error.message}. Verify the assessment ID is correct and the assessment exists.`,
+  //         );
+  //       }
+
+  //       // Check for module/question validation errors
+  //       if (
+  //         error.message &&
+  //         error.message.includes('Question type is required')
+  //       ) {
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Invalid question update configuration: ${error.message}. When updating questions, ensure type and step are provided for new questions. For existing questions, provide the question ID.`,
+  //         );
+  //       }
+
+  //       // Check for service level configuration errors
+  //       if (
+  //         error.message &&
+  //         error.message.includes('must have at least one level specified')
+  //       ) {
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Service recommendation update error: ${error.message}. Each service recommendation must specify at least one level (Beginner, Foundational, Intermediate, Advanced, Expert) when updating.`,
+  //         );
+  //       }
+
+  //       // Check for point calculation errors
+  //       if (error.message && error.message.includes('Failed to recalculate')) {
+  //         throw BadRequestException.BAD_REQUEST(
+  //           `Point calculation error during update: ${error.message}. There was an issue recalculating assessment points after your updates. Please verify your question scoring configuration.`,
+  //         );
+  //       }
+
+  //       // Log and re-throw other BadRequest exceptions with original message
+  //       //   this.logger.error(
+  //       //     'Assessment update validation error:',
+  //       //     error.message || error.response,
+  //       //   );
+  //       //   throw error;
+  //       // }
+
+  //       // Handle unexpected errors during update
+  //       this.logger.error('Unexpected error during assessment update:', error);
+  //       throw BadRequestException.BAD_REQUEST(
+  //         `Failed to update assessment: ${error.message}. Please verify your update data and try again. If the issue persists, contact support.`,
+  //       );
+  //       //a
+  //       // if (error instanceof BadRequestException) {
+  //       //   throw error;
+  //       // }
+
+  //       // // For unknown errors, throw a generic bad request
+  //       // throw BadRequestException.BAD_REQUEST('Failed to update assessment');
+  //     }
+  //   }
+  // }
+
   async updateAssessment(
     assessmentId: string,
     updateAssessmentDto: UpdateAssessmentDto,
   ): Promise<any> {
+    // 🆕 Track created entities for potential rollback
+    const createdEntities = {
+      moduleIds: [] as string[],
+      questionIds: [] as string[],
+    };
+
     try {
       // ✅ Validate ObjectId format first
       if (!Types.ObjectId.isValid(assessmentId)) {
@@ -2377,9 +2841,18 @@ export class AssessmentService {
         throw BadRequestException.BAD_REQUEST('Assessment not found');
       }
 
-      //below: added by opeyemi
+      // 🆕 Validate that temp_ids haven't been used before (prevent duplicate module creation)
+      if (
+        updateAssessmentDto.modules &&
+        updateAssessmentDto.modules.length > 0
+      ) {
+        await this.validateTempModuleIds(
+          assessmentId,
+          updateAssessmentDto.modules,
+        );
+      }
 
-      // FIXED: Explicit null/undefined check instead of optional chaining with length
+      // Validate service recommendations if provided
       if (
         updateAssessmentDto.service_recommendations &&
         Array.isArray(updateAssessmentDto.service_recommendations) &&
@@ -2390,15 +2863,15 @@ export class AssessmentService {
         );
       }
 
-      //above: added by opeyemi
-      // No authorization check needed here - RolesGuard handles it
-
       const updatedItems = {
         modules: [] as string[],
         questions: [] as string[],
         service_recommendations: [] as string[],
         deleted_questions: [] as string[],
       };
+
+      // Map to track temporary module IDs to actual MongoDB ObjectIds
+      const moduleIdMapping = new Map<string, string>();
 
       // Update assessment basic properties
       const assessmentUpdateData: any = {};
@@ -2423,38 +2896,60 @@ export class AssessmentService {
         this.logger.log(`Assessment ${assessmentId} basic properties updated`);
       }
 
-      // Update modules if provided
+      // Update modules FIRST and capture ID mappings
       if (
         updateAssessmentDto.modules &&
         updateAssessmentDto.modules.length > 0
       ) {
-        const moduleUpdates = await this.updateModules(
-          assessmentId,
-          updateAssessmentDto.modules,
+        const { updatedModuleIds, idMapping, createdModuleIds } =
+          await this.updateModules(assessmentId, updateAssessmentDto.modules);
+
+        updatedItems.modules = updatedModuleIds;
+        createdEntities.moduleIds = createdModuleIds; // 🆕 Track newly created modules
+
+        // Store the mapping for use in question updates
+        idMapping.forEach((actualId, tempId) => {
+          moduleIdMapping.set(tempId, actualId);
+        });
+
+        this.logger.log(
+          `Module ID mappings created: ${JSON.stringify(Object.fromEntries(moduleIdMapping))}`,
         );
-        updatedItems.modules = moduleUpdates;
       }
 
-      // Update questions if provided
+      // Update questions AFTER modules, replacing temp module IDs
       if (
         updateAssessmentDto.questions &&
         updateAssessmentDto.questions.length > 0
       ) {
-        const questionUpdates = await this.updateQuestions(
-          assessmentId,
-          updateAssessmentDto.questions,
-        );
-        updatedItems.questions = questionUpdates;
+        // Replace temporary module IDs in questions with actual IDs
+        const questionsWithResolvedModuleIds =
+          updateAssessmentDto.questions.map((q) => {
+            if (q.module_id && moduleIdMapping.has(q.module_id)) {
+              return {
+                ...q,
+                module_id: moduleIdMapping.get(q.module_id),
+              };
+            }
+            return q;
+          });
 
-        // ✅ Track deleted questions (extract from logs or modify updateQuestions to return both)
+        const { updatedQuestionIds, createdQuestionIds } =
+          await this.updateQuestions(
+            assessmentId,
+            questionsWithResolvedModuleIds,
+          );
+
+        updatedItems.questions = updatedQuestionIds;
+        createdEntities.questionIds = createdQuestionIds; // 🆕 Track newly created questions
+
+        // Track deleted questions
         const deletedQuestions: string[] = [];
-
         for (const q of updateAssessmentDto.questions) {
           if (q.toDelete === true && q.id) {
             deletedQuestions.push(q.id);
           }
         }
-
         updatedItems.deleted_questions = deletedQuestions;
       }
 
@@ -2478,6 +2973,14 @@ export class AssessmentService {
         await this.recalculateTotalPoints(assessmentId);
       }
 
+      // 🆕 Mark temp_ids as used after successful completion
+      if (moduleIdMapping.size > 0) {
+        await this.markTempIdsAsUsed(
+          assessmentId,
+          Array.from(moduleIdMapping.keys()),
+        );
+      }
+
       // Get updated assessment with all relations
       const updatedAssessmentData = await this.getAssessmentById(assessmentId);
 
@@ -2492,12 +2995,11 @@ export class AssessmentService {
     } catch (error) {
       this.logger.error('Error updating assessment:', error);
 
-      // Re-throw known exceptions to preserve their status codes
-
-      //below: added by opeyemi
+      // 🆕 ROLLBACK: Delete any entities created during this failed operation
+      await this.rollbackCreatedEntities(createdEntities);
 
       if (error instanceof BadRequestException) {
-        // Check if it's a service validation error
+        // Service validation error
         if (
           error.message &&
           error.message.includes('Service recommendation validation failed')
@@ -2506,30 +3008,37 @@ export class AssessmentService {
             'Service validation failed during assessment update:',
             error.message,
           );
-
           throw BadRequestException.BAD_REQUEST(
             `Service validation failed during update: ${error.message}. Please ensure all referenced services exist in the Services catalog (/services). Create missing services first, then update your assessment.`,
           );
         }
 
-        // Check for assessment not found errors
+        // Assessment not found
         if (error.message && error.message.includes('Assessment not found')) {
           throw BadRequestException.BAD_REQUEST(
             `Assessment not found: ${error.message}. Verify the assessment ID is correct and the assessment exists.`,
           );
         }
 
-        // Check for module/question validation errors
+        // Question validation errors
         if (
           error.message &&
-          error.message.includes('Question type is required')
+          (error.message.includes('Question type is required') ||
+            error.message.includes('Question step is required'))
         ) {
           throw BadRequestException.BAD_REQUEST(
-            `Invalid question update configuration: ${error.message}. When updating questions, ensure type and step are provided for new questions. For existing questions, provide the question ID.`,
+            `Invalid question configuration: ${error.message}. When creating questions, ensure type, step, and module_id are provided. The operation has been rolled back.`,
           );
         }
 
-        // Check for service level configuration errors
+        // Module validation errors
+        if (error.message && error.message.includes('module_id is required')) {
+          throw BadRequestException.BAD_REQUEST(
+            `Question creation failed: ${error.message}. All newly created modules have been removed. Please verify your question configuration and try again.`,
+          );
+        }
+
+        // Service level configuration errors
         if (
           error.message &&
           error.message.includes('must have at least one level specified')
@@ -2539,34 +3048,172 @@ export class AssessmentService {
           );
         }
 
-        // Check for point calculation errors
+        // Point calculation errors
         if (error.message && error.message.includes('Failed to recalculate')) {
           throw BadRequestException.BAD_REQUEST(
             `Point calculation error during update: ${error.message}. There was an issue recalculating assessment points after your updates. Please verify your question scoring configuration.`,
           );
         }
 
-        // Log and re-throw other BadRequest exceptions with original message
-        //   this.logger.error(
-        //     'Assessment update validation error:',
-        //     error.message || error.response,
-        //   );
-        //   throw error;
-        // }
+        // 🆕 Temp ID already used error
+        if (error.message && error.message.includes('has already been used')) {
+          throw BadRequestException.BAD_REQUEST(
+            `Duplicate temp_id error: ${error.message}. The module was created in a previous request. Please use the actual module ID instead of the temp_id, or use a new unique temp_id.`,
+          );
+        }
 
-        // Handle unexpected errors during update
+        // Module-related errors
+        if (
+          error.message &&
+          error.message.includes('Module does not exist in this assessment')
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `Module reference error: ${error.message}. If creating a new question in a new module, ensure you provide a temporary module_id (e.g., "temp_module_1") that matches the temp_id in your modules array.`,
+          );
+        }
+
         this.logger.error('Unexpected error during assessment update:', error);
         throw BadRequestException.BAD_REQUEST(
-          `Failed to update assessment: ${error.message}. Please verify your update data and try again. If the issue persists, contact support.`,
+          `Failed to update assessment: ${error.message}. Any newly created modules and questions have been rolled back. Please verify your update data and try again.`,
         );
-        //a
-        // if (error instanceof BadRequestException) {
-        //   throw error;
-        // }
-
-        // // For unknown errors, throw a generic bad request
-        // throw BadRequestException.BAD_REQUEST('Failed to update assessment');
       }
+
+      throw error;
+    }
+  }
+
+  // 🆕 Helper method to validate temp_ids haven't been used before
+  private async validateTempModuleIds(
+    assessmentId: string,
+    modules: any[],
+  ): Promise<void> {
+    const tempIds = modules
+      .map((m) => m.temp_id || (m.id && m.id.startsWith('temp_') ? m.id : null))
+      .filter(Boolean);
+
+    if (tempIds.length === 0) {
+      return;
+    }
+
+    // Check if any temp_ids have been used before
+    const usedTempIds = await this.getTempIdsUsedForAssessment(assessmentId);
+
+    const duplicates = tempIds.filter((tempId) => usedTempIds.includes(tempId));
+
+    if (duplicates.length > 0) {
+      throw BadRequestException.BAD_REQUEST(
+        `The following temp_id(s) have already been used for this assessment: ${duplicates.join(', ')}. ` +
+          `These modules were created in a previous request. ` +
+          `Please use the actual module IDs or create new unique temp_ids.`,
+      );
+    }
+  }
+
+  // 🆕 Helper method to get used temp_ids for an assessment
+  private async getTempIdsUsedForAssessment(
+    assessmentId: string,
+  ): Promise<string[]> {
+    // Check if you have a temp_id tracking collection
+    // If not, you can store this in the assessment document itself
+
+    // Option 1: Using a separate tracking collection
+    // const trackingRecord = await this.tempIdTrackingRepository.findOne({
+    //   assessment_id: new Types.ObjectId(assessmentId),
+    // });
+
+    // return trackingRecord?.used_temp_ids || [];
+
+    // Option 2: Store in assessment document
+    const assessment = await this.assessmentRepository.findById(assessmentId);
+    return assessment?.used_temp_ids || [];
+  }
+
+  // 🆕 Helper method to mark temp_ids as used
+  private async markTempIdsAsUsed(
+    assessmentId: string,
+    tempIds: string[],
+  ): Promise<void> {
+    if (tempIds.length === 0) {
+      return;
+    }
+
+    // Option 1: Using a separate tracking collection
+    // await this.tempIdTrackingRepository.findOneAndUpdate(
+    //   { assessment_id: new Types.ObjectId(assessmentId) },
+    //   {
+    //     $addToSet: { used_temp_ids: { $each: tempIds } },
+    //     $set: { updated_at: new Date() },
+    //   },
+    //   { upsert: true },
+    // );
+
+    // Option 2: Store in assessment document
+    await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
+      $addToSet: { used_temp_ids: { $each: tempIds } },
+    });
+
+    this.logger.log(
+      `Marked temp_ids as used for assessment ${assessmentId}: ${tempIds.join(', ')}`,
+    );
+  }
+
+  // 🆕 Rollback helper method
+  private async rollbackCreatedEntities(createdEntities: {
+    moduleIds: string[];
+    questionIds: string[];
+  }): Promise<void> {
+    try {
+      // Delete created questions first (due to foreign key relationships)
+      if (createdEntities.questionIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.questionIds.length} created question(s)...`,
+        );
+
+        for (const questionId of createdEntities.questionIds) {
+          try {
+            await this.questionRepository.delete({
+              _id: new Types.ObjectId(questionId),
+            });
+            this.logger.log(`Rolled back question: ${questionId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback question ${questionId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      // Then delete created modules
+      if (createdEntities.moduleIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.moduleIds.length} created module(s)...`,
+        );
+
+        for (const moduleId of createdEntities.moduleIds) {
+          try {
+            await this.assessmentModuleRepository.delete({
+              _id: new Types.ObjectId(moduleId),
+            });
+            this.logger.log(`Rolled back module: ${moduleId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback module ${moduleId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      if (
+        createdEntities.moduleIds.length > 0 ||
+        createdEntities.questionIds.length > 0
+      ) {
+        this.logger.log('Rollback completed successfully');
+      }
+    } catch (error) {
+      this.logger.error('Error during rollback:', error);
+      // Don't throw here - we're already in error handling
     }
   }
 

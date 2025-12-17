@@ -375,6 +375,7 @@ export class UpdateServiceRecommendationDto {
     enum: Object.values(RecommendationLevel),
   })
   @IsArray()
+  @IsOptional()
   @IsEnum(RecommendationLevel, { each: true })
   levels: RecommendationLevel[];
 }
