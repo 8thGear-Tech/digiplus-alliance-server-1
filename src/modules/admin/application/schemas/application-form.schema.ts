@@ -161,7 +161,7 @@ export class EmbeddedQuestion {
   @Prop({ type: String, required: false })
   data_key?: string;
 
-   // Add active status field
+  // Add active status field
   @Prop({ type: Boolean, default: true })
   active: boolean;
 }

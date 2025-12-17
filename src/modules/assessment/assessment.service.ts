@@ -1676,6 +1676,140 @@ export class AssessmentService {
     );
   }
 
+  // 🆕 Helper method to validate temp_ids haven't been used before
+  private async validateTempModuleIds(
+    assessmentId: string,
+    modules: any[],
+  ): Promise<void> {
+    const tempIds = modules
+      .map((m) => m.temp_id || (m.id && m.id.startsWith('temp_') ? m.id : null))
+      .filter(Boolean);
+
+    if (tempIds.length === 0) {
+      return;
+    }
+
+    // Check if any temp_ids have been used before
+    const usedTempIds = await this.getTempIdsUsedForAssessment(assessmentId);
+
+    const duplicates = tempIds.filter((tempId) => usedTempIds.includes(tempId));
+
+    if (duplicates.length > 0) {
+      throw BadRequestException.BAD_REQUEST(
+        `The following temp_id(s) have already been used for this assessment: ${duplicates.join(', ')}. ` +
+          `These modules were created in a previous request. ` +
+          `Please use the actual module IDs or create new unique temp_ids.`,
+      );
+    }
+  }
+
+  // 🆕 Helper method to get used temp_ids for an assessment
+  private async getTempIdsUsedForAssessment(
+    assessmentId: string,
+  ): Promise<string[]> {
+    // Check if you have a temp_id tracking collection
+    // If not, you can store this in the assessment document itself
+
+    // Option 1: Using a separate tracking collection
+    // const trackingRecord = await this.tempIdTrackingRepository.findOne({
+    //   assessment_id: new Types.ObjectId(assessmentId),
+    // });
+
+    // return trackingRecord?.used_temp_ids || [];
+
+    // Option 2: Store in assessment document
+    const assessment = await this.assessmentRepository.findById(assessmentId);
+    return assessment?.used_temp_ids || [];
+  }
+
+  // 🆕 Helper method to mark temp_ids as used
+  private async markTempIdsAsUsed(
+    assessmentId: string,
+    tempIds: string[],
+  ): Promise<void> {
+    if (tempIds.length === 0) {
+      return;
+    }
+
+    // Option 1: Using a separate tracking collection
+    // await this.tempIdTrackingRepository.findOneAndUpdate(
+    //   { assessment_id: new Types.ObjectId(assessmentId) },
+    //   {
+    //     $addToSet: { used_temp_ids: { $each: tempIds } },
+    //     $set: { updated_at: new Date() },
+    //   },
+    //   { upsert: true },
+    // );
+
+    // Option 2: Store in assessment document
+    await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
+      $addToSet: { used_temp_ids: { $each: tempIds } },
+    });
+
+    this.logger.log(
+      `Marked temp_ids as used for assessment ${assessmentId}: ${tempIds.join(', ')}`,
+    );
+  }
+
+  // 🆕 Rollback helper method
+  private async rollbackCreatedEntities(createdEntities: {
+    moduleIds: string[];
+    questionIds: string[];
+  }): Promise<void> {
+    try {
+      // Delete created questions first (due to foreign key relationships)
+      if (createdEntities.questionIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.questionIds.length} created question(s)...`,
+        );
+
+        for (const questionId of createdEntities.questionIds) {
+          try {
+            await this.questionRepository.delete({
+              _id: new Types.ObjectId(questionId),
+            });
+            this.logger.log(`Rolled back question: ${questionId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback question ${questionId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      // Then delete created modules
+      if (createdEntities.moduleIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.moduleIds.length} created module(s)...`,
+        );
+
+        for (const moduleId of createdEntities.moduleIds) {
+          try {
+            await this.assessmentModuleRepository.delete({
+              _id: new Types.ObjectId(moduleId),
+            });
+            this.logger.log(`Rolled back module: ${moduleId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback module ${moduleId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      if (
+        createdEntities.moduleIds.length > 0 ||
+        createdEntities.questionIds.length > 0
+      ) {
+        this.logger.log('Rollback completed successfully');
+      }
+    } catch (error) {
+      this.logger.error('Error during rollback:', error);
+      // Don't throw here - we're already in error handling
+    }
+  }
   //below: added by opeyemi
   private determineUserLevel(userScore: number, totalPoints: number): string {
     // Implement your logic here (e.g., 0-30% is 'Beginner', 31-70% is 'Intermediate', etc.)
@@ -2157,41 +2291,41 @@ export class AssessmentService {
         throw BadRequestException.RESOURCE_NOT_FOUND('Assessment not found');
       }
 
-      // if (userId) {
-      //   const lastSubmission = await this.userAssessmentRepository.findOne({
-      //     user_id: new Types.ObjectId(userId),
-      //     assessment_id: new Types.ObjectId(assessmentId),
-      //     is_submitted: true,
-      //   });
+      if (userId) {
+        const lastSubmission = await this.userAssessmentRepository.findOne({
+          user_id: new Types.ObjectId(userId),
+          assessment_id: new Types.ObjectId(assessmentId),
+          is_submitted: true,
+        });
 
-      //   if (lastSubmission) {
-      //     const completedAt = new Date(lastSubmission.completed_at);
-      //     const now = new Date();
+        if (lastSubmission) {
+          const completedAt = new Date(lastSubmission.completed_at);
+          const now = new Date();
 
-      //     const nextEligibleDate = new Date(
-      //       completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
-      //     );
+          const nextEligibleDate = new Date(
+            completedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+          );
 
-      //     if (now <= nextEligibleDate) {
-      //       const daysRemaining = Math.ceil(
-      //         (nextEligibleDate.getTime() - now.getTime()) /
-      //           (1000 * 60 * 60 * 24),
-      //       );
+          if (now <= nextEligibleDate) {
+            const daysRemaining = Math.ceil(
+              (nextEligibleDate.getTime() - now.getTime()) /
+                (1000 * 60 * 60 * 24),
+            );
 
-      //       throw BadRequestException.BAD_REQUEST(
-      //         `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
-      //           'en-US',
-      //           {
-      //             weekday: 'long',
-      //             year: 'numeric',
-      //             month: 'short',
-      //             day: 'numeric',
-      //           },
-      //         )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
-      //       );
-      //     }
-      //   }
-      // }
+            throw BadRequestException.BAD_REQUEST(
+              `Users can only retake the same assessment every 2 weeks. This assessment won't be available for you until after ${nextEligibleDate.toLocaleDateString(
+                'en-US',
+                {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                },
+              )} (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining).`,
+            );
+          }
+        }
+      }
 
       const moduleFilter: any = {
         assessment_id: new Types.ObjectId(assessmentId),
@@ -2794,141 +2928,6 @@ export class AssessmentService {
       }
 
       throw error;
-    }
-  }
-
-  // 🆕 Helper method to validate temp_ids haven't been used before
-  private async validateTempModuleIds(
-    assessmentId: string,
-    modules: any[],
-  ): Promise<void> {
-    const tempIds = modules
-      .map((m) => m.temp_id || (m.id && m.id.startsWith('temp_') ? m.id : null))
-      .filter(Boolean);
-
-    if (tempIds.length === 0) {
-      return;
-    }
-
-    // Check if any temp_ids have been used before
-    const usedTempIds = await this.getTempIdsUsedForAssessment(assessmentId);
-
-    const duplicates = tempIds.filter((tempId) => usedTempIds.includes(tempId));
-
-    if (duplicates.length > 0) {
-      throw BadRequestException.BAD_REQUEST(
-        `The following temp_id(s) have already been used for this assessment: ${duplicates.join(', ')}. ` +
-          `These modules were created in a previous request. ` +
-          `Please use the actual module IDs or create new unique temp_ids.`,
-      );
-    }
-  }
-
-  // 🆕 Helper method to get used temp_ids for an assessment
-  private async getTempIdsUsedForAssessment(
-    assessmentId: string,
-  ): Promise<string[]> {
-    // Check if you have a temp_id tracking collection
-    // If not, you can store this in the assessment document itself
-
-    // Option 1: Using a separate tracking collection
-    // const trackingRecord = await this.tempIdTrackingRepository.findOne({
-    //   assessment_id: new Types.ObjectId(assessmentId),
-    // });
-
-    // return trackingRecord?.used_temp_ids || [];
-
-    // Option 2: Store in assessment document
-    const assessment = await this.assessmentRepository.findById(assessmentId);
-    return assessment?.used_temp_ids || [];
-  }
-
-  // 🆕 Helper method to mark temp_ids as used
-  private async markTempIdsAsUsed(
-    assessmentId: string,
-    tempIds: string[],
-  ): Promise<void> {
-    if (tempIds.length === 0) {
-      return;
-    }
-
-    // Option 1: Using a separate tracking collection
-    // await this.tempIdTrackingRepository.findOneAndUpdate(
-    //   { assessment_id: new Types.ObjectId(assessmentId) },
-    //   {
-    //     $addToSet: { used_temp_ids: { $each: tempIds } },
-    //     $set: { updated_at: new Date() },
-    //   },
-    //   { upsert: true },
-    // );
-
-    // Option 2: Store in assessment document
-    await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
-      $addToSet: { used_temp_ids: { $each: tempIds } },
-    });
-
-    this.logger.log(
-      `Marked temp_ids as used for assessment ${assessmentId}: ${tempIds.join(', ')}`,
-    );
-  }
-
-  // 🆕 Rollback helper method
-  private async rollbackCreatedEntities(createdEntities: {
-    moduleIds: string[];
-    questionIds: string[];
-  }): Promise<void> {
-    try {
-      // Delete created questions first (due to foreign key relationships)
-      if (createdEntities.questionIds.length > 0) {
-        this.logger.warn(
-          `Rolling back ${createdEntities.questionIds.length} created question(s)...`,
-        );
-
-        for (const questionId of createdEntities.questionIds) {
-          try {
-            await this.questionRepository.delete({
-              _id: new Types.ObjectId(questionId),
-            });
-            this.logger.log(`Rolled back question: ${questionId}`);
-          } catch (err) {
-            this.logger.error(
-              `Failed to rollback question ${questionId}:`,
-              err.message,
-            );
-          }
-        }
-      }
-
-      // Then delete created modules
-      if (createdEntities.moduleIds.length > 0) {
-        this.logger.warn(
-          `Rolling back ${createdEntities.moduleIds.length} created module(s)...`,
-        );
-
-        for (const moduleId of createdEntities.moduleIds) {
-          try {
-            await this.assessmentModuleRepository.delete({
-              _id: new Types.ObjectId(moduleId),
-            });
-            this.logger.log(`Rolled back module: ${moduleId}`);
-          } catch (err) {
-            this.logger.error(
-              `Failed to rollback module ${moduleId}:`,
-              err.message,
-            );
-          }
-        }
-      }
-
-      if (
-        createdEntities.moduleIds.length > 0 ||
-        createdEntities.questionIds.length > 0
-      ) {
-        this.logger.log('Rollback completed successfully');
-      }
-    } catch (error) {
-      this.logger.error('Error during rollback:', error);
-      // Don't throw here - we're already in error handling
     }
   }
 
