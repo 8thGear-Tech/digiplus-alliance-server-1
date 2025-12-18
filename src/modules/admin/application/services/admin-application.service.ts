@@ -105,7 +105,7 @@ export class AdminApplicationService {
       }
     }
 
-     // Set active to true by default for new questions
+    // Set active to true by default for new questions
     if (isNewQuestion && processedQuestion.active === undefined) {
       processedQuestion.active = true;
     }
@@ -151,11 +151,11 @@ export class AdminApplicationService {
     servicePriceMap: any,
   ): any[] {
     return submissions.map((submission) => {
-     // ✅ FIXED: Get name and email from populated user instead of responses
-    const firstName = submission.userId?.first_name || 'N/A';
-    const lastName = submission.userId?.last_name || '';
-    const email = submission.userId?.email || 'N/A';
-    const name = `${firstName} ${lastName}`.trim();
+      // ✅ FIXED: Get name and email from populated user instead of responses
+      const firstName = submission.userId?.first_name || 'N/A';
+      const lastName = submission.userId?.last_name || '';
+      const email = submission.userId?.email || 'N/A';
+      const name = `${firstName} ${lastName}`.trim();
       const paymentStatus = submission.payment_status || 'Not Paid';
       const specificService = submission.service;
       const paymentAmount = servicePriceMap[specificService] || 'N/A';
@@ -184,43 +184,44 @@ export class AdminApplicationService {
   }
 
   private transformSubmissionsForList(
-  submissions: PopulatedSubmission[],
-  formsMap: Map<string, any>,
-): any[] {
+    submissions: PopulatedSubmission[],
+    formsMap: Map<string, any>,
+  ): any[] {
     return submissions.map((submission) => {
- // Get name and email from the populated user object instead of responses
-    const firstName = submission.userId?.first_name || 'N/A';
-    const lastName = submission.userId?.last_name || '';
-    const email = submission.userId?.email || 'N/A';
+      // Get name and email from the populated user object instead of responses
+      const firstName = submission.userId?.first_name || 'N/A';
+      const lastName = submission.userId?.last_name || '';
+      const email = submission.userId?.email || 'N/A';
       const specificService = submission.service;
       const paymentStatus = submission.payment_status || 'Not Paid';
       const name = `${firstName} ${lastName}`.trim();
-// Get form details from the map
-    const formDetails = formsMap.get(submission.formId?._id?.toString() || '') || {};
-    // Transform responses into question-answer pairs
-    const formQuestions = formDetails.questions || [];
-    const questionAnswerPairs = formQuestions
-      .map((question: any) => {
-        const dataKey = question.data_key;
-        const answer = submission.responses[dataKey];
-        
-        // Only include questions that have answers
-        if (answer !== undefined && answer !== null && answer !== '') {
-          return {
-            question: question.question,
-            data_key: dataKey,
-            answer: answer,
-            type: question.type,
-          };
-        }
-        return null;
-      })
-      .filter(Boolean); // Remove null entries
+      // Get form details from the map
+      const formDetails =
+        formsMap.get(submission.formId?._id?.toString() || '') || {};
+      // Transform responses into question-answer pairs
+      const formQuestions = formDetails.questions || [];
+      const questionAnswerPairs = formQuestions
+        .map((question: any) => {
+          const dataKey = question.data_key;
+          const answer = submission.responses[dataKey];
+
+          // Only include questions that have answers
+          if (answer !== undefined && answer !== null && answer !== '') {
+            return {
+              question: question.question,
+              data_key: dataKey,
+              answer: answer,
+              type: question.type,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean); // Remove null entries
 
       return {
         _id: submission._id,
         form_title: formDetails.welcome_title || 'N/A',
-         form_slug: formDetails.slug || null,
+        form_slug: formDetails.slug || null,
         name,
         email,
         service: specificService,
@@ -236,21 +237,24 @@ export class AdminApplicationService {
   async createForm(dto: CreateApplicationFormDto): Promise<ApplicationForm> {
     const existingDataKeys: string[] = [];
 
-     // Validate that all modules referenced in questions exist
+    // Validate that all modules referenced in questions exist
     if (dto.questions && dto.questions.length > 0) {
-      const moduleTempIds = new Set(dto.modules?.map(m => m.temp_id) || []);
-      
+      const moduleTempIds = new Set(dto.modules?.map((m) => m.temp_id) || []);
+
       const invalidQuestions = dto.questions.filter(
-        q => q.module_ref && !moduleTempIds.has(q.module_ref)
+        (q) => q.module_ref && !moduleTempIds.has(q.module_ref),
       );
 
       if (invalidQuestions.length > 0) {
-        const invalidRefs = invalidQuestions.map(q => 
-          `Question "${q.question}" references non-existent module "${q.module_ref}"`
-        ).join('; ');
-        
+        const invalidRefs = invalidQuestions
+          .map(
+            (q) =>
+              `Question "${q.question}" references non-existent module "${q.module_ref}"`,
+          )
+          .join('; ');
+
         throw new BadRequestException(
-          `Cannot create form. The following questions reference modules that don't exist: ${invalidRefs}`
+          `Cannot create form. The following questions reference modules that don't exist: ${invalidRefs}`,
         );
       }
     }
@@ -288,182 +292,204 @@ export class AdminApplicationService {
   }
 
   async updateForm(
-  id: string,
-  dto: UpdateApplicationFormDto,
-): Promise<ApplicationForm> {
-  const form = await this.applicationFormModel.findById(id);
-  if (!form) {
-    throw new NotFoundException('Application form not found.');
-  }
-
-  // 1. Update top-level properties (welcome screens, isLive, etc.)
-  if (dto.welcome_title !== undefined) form.welcome_title = dto.welcome_title;
-  if (dto.welcome_description !== undefined) form.welcome_description = dto.welcome_description;
-  if (dto.welcome_instruction !== undefined) form.welcome_instruction = dto.welcome_instruction;
-  if (dto.welcome_button_text !== undefined) form.welcome_button_text = dto.welcome_button_text;
-  if (dto.isLive !== undefined) form.isLive = dto.isLive;
-
-
-   // Build a set of all valid module temp_ids (both existing and incoming)
-  const allValidModuleTempIds = new Set<string>();
-  
-  // Add existing active modules
-  form.modules.forEach(m => {
-    if (m.temp_id && m.active !== false) {
-      allValidModuleTempIds.add(m.temp_id);
+    id: string,
+    dto: UpdateApplicationFormDto,
+  ): Promise<ApplicationForm> {
+    const form = await this.applicationFormModel.findById(id);
+    if (!form) {
+      throw new NotFoundException('Application form not found.');
     }
-  });
-  
-  // Add incoming modules (including new ones)
-  if (dto.modules && dto.modules.length > 0) {
-    dto.modules.forEach(m => {
+
+    // 1. Update top-level properties (welcome screens, isLive, etc.)
+    if (dto.welcome_title !== undefined) form.welcome_title = dto.welcome_title;
+    if (dto.welcome_description !== undefined)
+      form.welcome_description = dto.welcome_description;
+    if (dto.welcome_instruction !== undefined)
+      form.welcome_instruction = dto.welcome_instruction;
+    if (dto.welcome_button_text !== undefined)
+      form.welcome_button_text = dto.welcome_button_text;
+    if (dto.isLive !== undefined) form.isLive = dto.isLive;
+
+    // Build a set of all valid module temp_ids (both existing and incoming)
+    const allValidModuleTempIds = new Set<string>();
+
+    // Add existing active modules
+    form.modules.forEach((m) => {
       if (m.temp_id && m.active !== false) {
         allValidModuleTempIds.add(m.temp_id);
       }
     });
-  }
 
-  // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
-  if (dto.questions && dto.questions.length > 0) {
+    // Add incoming modules (including new ones)
+    if (dto.modules && dto.modules.length > 0) {
+      dto.modules.forEach((m) => {
+        if (m.temp_id && m.active !== false) {
+          allValidModuleTempIds.add(m.temp_id);
+        }
+      });
+    }
 
-    // Validate that all questions reference valid modules
-    const invalidQuestions = dto.questions.filter(
-      q => q.module_ref && q.active !== false && !allValidModuleTempIds.has(q.module_ref)
-    );
-
-    if (invalidQuestions.length > 0) {
-      const invalidRefs = invalidQuestions.map(q => 
-        `Question "${q.question}" references non-existent or inactive module "${q.module_ref}"`
-      ).join('; ');
-      
-      throw new BadRequestException(
-        `Cannot update form. The following questions reference modules that don't exist or are inactive: ${invalidRefs}`
+    // 2. Questions Update: Add new questions or update existing ones (NO DELETION)
+    if (dto.questions && dto.questions.length > 0) {
+      // Validate that all questions reference valid modules
+      const invalidQuestions = dto.questions.filter(
+        (q) =>
+          q.module_ref &&
+          q.active !== false &&
+          !allValidModuleTempIds.has(q.module_ref),
       );
-    }
 
-    const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
-    const currentDataKeys: string[] = [];
+      if (invalidQuestions.length > 0) {
+        const invalidRefs = invalidQuestions
+          .map(
+            (q) =>
+              `Question "${q.question}" references non-existent or inactive module "${q.module_ref}"`,
+          )
+          .join('; ');
 
-    // Map existing questions by data_key
-    for (const question of form.questions) {
-      if (question.data_key) {
-        existingQuestionsMap.set(question.data_key, question);
-        currentDataKeys.push(question.data_key);
+        throw new BadRequestException(
+          `Cannot update form. The following questions reference modules that don't exist or are inactive: ${invalidRefs}`,
+        );
       }
-    }
 
-    for (const incomingQuestion of dto.questions) {
-      const dataKey = incomingQuestion.data_key;
-      
-      // Check if this is an update (question with this data_key already exists)
-      if (dataKey && existingQuestionsMap.has(dataKey)) {
-        // UPDATE EXISTING QUESTION
-        const existingQuestion = existingQuestionsMap.get(dataKey)!;
-        const updatedQuestion = this.processSingleQuestion(
-          incomingQuestion,
-          currentDataKeys,
-          false, // isNewQuestion = false
-        );
+      const existingQuestionsMap = new Map<string, EmbeddedQuestion>();
+      const currentDataKeys: string[] = [];
 
-
-        // Handle soft deletion: if active is set to false, mark as inactive
-        if (incomingQuestion.active === false) {
-          existingQuestion.active = false;
-          this.logger.log(`Question with data_key "${dataKey}" marked as inactive (soft deleted)`);
-        } else {
-          Object.assign(existingQuestion, updatedQuestion);
-        }
-      } else {
-        // ADD NEW QUESTION
-        const newQuestion = this.processSingleQuestion(
-          incomingQuestion,
-          currentDataKeys,
-          true, // isNewQuestion = true
-        );
-        
-        // Prevent duplicates: check if data_key was just generated and already exists
-        if (newQuestion.data_key && !existingQuestionsMap.has(newQuestion.data_key)) {
-          form.questions.push(newQuestion as EmbeddedQuestion);
-          existingQuestionsMap.set(newQuestion.data_key, newQuestion as EmbeddedQuestion);
-          currentDataKeys.push(newQuestion.data_key);
+      // Map existing questions by data_key
+      for (const question of form.questions) {
+        if (question.data_key) {
+          existingQuestionsMap.set(question.data_key, question);
+          currentDataKeys.push(question.data_key);
         }
       }
-    }
-   // HARD DELETE: Remove questions that are marked as inactive (active === false)
-      const originalQuestionsCount = form.questions.length;
-    form.questions = form.questions.filter(q => q.active !== false);
-    const deletedQuestionsCount = originalQuestionsCount - form.questions.length;
-    
-    if (deletedQuestionsCount > 0) {
-      this.logger.log(`Hard deleted ${deletedQuestionsCount} inactive question(s) from the database`);
-    }
-  }
 
-  // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
-  if (dto.modules && dto.modules.length > 0) {
-    const existingModulesMap = new Map<string, EmbeddedModule>();
+      for (const incomingQuestion of dto.questions) {
+        const dataKey = incomingQuestion.data_key;
 
-    // Map existing modules by temp_id
-    for (const module of form.modules) {
-      if (module.temp_id) {
-        existingModulesMap.set(module.temp_id, module);
-      }
-    }
-
-    for (const incomingModule of dto.modules) {
-      const tempId = incomingModule.temp_id;
-
-      if (!tempId) {
-        throw new BadRequestException('Module must have a temp_id');
-      }
-
-      // Check if this module already exists
-      if (existingModulesMap.has(tempId)) {
-        // UPDATE EXISTING MODULE
-        const existingModule = existingModulesMap.get(tempId)!;
-      // Handle soft deletion: if active is set to false, mark as inactive
-        if (incomingModule.active === false) {
-           // Check if any active questions reference this module
-          const questionsUsingModule = form.questions.filter(
-            q => q.module_ref === tempId && q.active !== false
+        // Check if this is an update (question with this data_key already exists)
+        if (dataKey && existingQuestionsMap.has(dataKey)) {
+          // UPDATE EXISTING QUESTION
+          const existingQuestion = existingQuestionsMap.get(dataKey)!;
+          const updatedQuestion = this.processSingleQuestion(
+            incomingQuestion,
+            currentDataKeys,
+            false, // isNewQuestion = false
           );
 
-          if (questionsUsingModule.length > 0) {
-            const questionsList = questionsUsingModule
-              .map(q => `"${q.question}"`)
-              .join(', ');
-            
-            throw new BadRequestException(
-              `Cannot delete module "${existingModule.title}" (${tempId}). The following active question(s) are still using it: ${questionsList}. Please delete or reassign these questions first.`
+          // Handle soft deletion: if active is set to false, mark as inactive
+          if (incomingQuestion.active === false) {
+            existingQuestion.active = false;
+            this.logger.log(
+              `Question with data_key "${dataKey}" marked as inactive (soft deleted)`,
             );
+          } else {
+            Object.assign(existingQuestion, updatedQuestion);
           }
-          existingModule.active = false;
-          this.logger.log(`Module with temp_id "${tempId}" marked as inactive (soft deleted)`);
         } else {
-          Object.assign(existingModule, incomingModule);
+          // ADD NEW QUESTION
+          const newQuestion = this.processSingleQuestion(
+            incomingQuestion,
+            currentDataKeys,
+            true, // isNewQuestion = true
+          );
+
+          // Prevent duplicates: check if data_key was just generated and already exists
+          if (
+            newQuestion.data_key &&
+            !existingQuestionsMap.has(newQuestion.data_key)
+          ) {
+            form.questions.push(newQuestion as EmbeddedQuestion);
+            existingQuestionsMap.set(
+              newQuestion.data_key,
+              newQuestion as EmbeddedQuestion,
+            );
+            currentDataKeys.push(newQuestion.data_key);
+          }
         }
-      } else {
-            // ADD NEW MODULE (prevent duplicates)
-        const newModule = { ...incomingModule, active: incomingModule.active ?? true };
-        form.modules.push(newModule as EmbeddedModule);
-        existingModulesMap.set(tempId, newModule as EmbeddedModule);
+      }
+      // HARD DELETE: Remove questions that are marked as inactive (active === false)
+      const originalQuestionsCount = form.questions.length;
+      form.questions = form.questions.filter((q) => q.active !== false);
+      const deletedQuestionsCount =
+        originalQuestionsCount - form.questions.length;
+
+      if (deletedQuestionsCount > 0) {
+        this.logger.log(
+          `Hard deleted ${deletedQuestionsCount} inactive question(s) from the database`,
+        );
       }
     }
-   // HARD DELETE: Remove modules that are marked as inactive (active === false)
-    const originalModulesCount = form.modules.length;
-    form.modules = form.modules.filter(m => m.active !== false);
-    const deletedModulesCount = originalModulesCount - form.modules.length;
-    
-    if (deletedModulesCount > 0) {
-      this.logger.log(`Hard deleted ${deletedModulesCount} inactive module(s) from the database`);
+
+    // 3. Modules Update: Add new modules or update existing ones (NO DELETION)
+    if (dto.modules && dto.modules.length > 0) {
+      const existingModulesMap = new Map<string, EmbeddedModule>();
+
+      // Map existing modules by temp_id
+      for (const module of form.modules) {
+        if (module.temp_id) {
+          existingModulesMap.set(module.temp_id, module);
+        }
+      }
+
+      for (const incomingModule of dto.modules) {
+        const tempId = incomingModule.temp_id;
+
+        if (!tempId) {
+          throw new BadRequestException('Module must have a temp_id');
+        }
+
+        // Check if this module already exists
+        if (existingModulesMap.has(tempId)) {
+          // UPDATE EXISTING MODULE
+          const existingModule = existingModulesMap.get(tempId)!;
+          // Handle soft deletion: if active is set to false, mark as inactive
+          if (incomingModule.active === false) {
+            // Check if any active questions reference this module
+            const questionsUsingModule = form.questions.filter(
+              (q) => q.module_ref === tempId && q.active !== false,
+            );
+
+            if (questionsUsingModule.length > 0) {
+              const questionsList = questionsUsingModule
+                .map((q) => `"${q.question}"`)
+                .join(', ');
+
+              throw new BadRequestException(
+                `Cannot delete module "${existingModule.title}" (${tempId}). The following active question(s) are still using it: ${questionsList}. Please delete or reassign these questions first.`,
+              );
+            }
+            existingModule.active = false;
+            this.logger.log(
+              `Module with temp_id "${tempId}" marked as inactive (soft deleted)`,
+            );
+          } else {
+            Object.assign(existingModule, incomingModule);
+          }
+        } else {
+          // ADD NEW MODULE (prevent duplicates)
+          const newModule = {
+            ...incomingModule,
+            active: incomingModule.active ?? true,
+          };
+          form.modules.push(newModule as EmbeddedModule);
+          existingModulesMap.set(tempId, newModule as EmbeddedModule);
+        }
+      }
+      // HARD DELETE: Remove modules that are marked as inactive (active === false)
+      const originalModulesCount = form.modules.length;
+      form.modules = form.modules.filter((m) => m.active !== false);
+      const deletedModulesCount = originalModulesCount - form.modules.length;
+
+      if (deletedModulesCount > 0) {
+        this.logger.log(
+          `Hard deleted ${deletedModulesCount} inactive module(s) from the database`,
+        );
+      }
     }
+
+    const updatedForm = await form.save();
+    return updatedForm.toObject() as ApplicationForm;
   }
-
-  const updatedForm = await form.save();
-  return updatedForm.toObject() as ApplicationForm;
-}
-
-  
 
   async getSingleForm(formId: string): Promise<ApplicationForm> {
     const form = await this.applicationFormModel.findById(formId).exec();
@@ -476,44 +502,54 @@ export class AdminApplicationService {
 
     // Filter out inactive questions when returning the form
     const formObject = form.toObject() as ApplicationForm;
-    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
-     formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+    formObject.questions = formObject.questions.filter(
+      (q: any) => q.active !== false,
+    );
+    formObject.modules = formObject.modules.filter(
+      (m: any) => m.active !== false,
+    );
 
-
-     return formObject;
+    return formObject;
   }
 
   async getAllForms(): Promise<ApplicationForm[]> {
-     const forms = await this.applicationFormModel.find({ isDeleted: { $ne: true } }).exec();
-    
+    const forms = await this.applicationFormModel
+      .find({ isDeleted: { $ne: true } })
+      .exec();
+
     // Filter out inactive questions from each form
-    return forms.map(form => {
+    return forms.map((form) => {
       const formObject = form.toObject() as ApplicationForm;
-      formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
-      formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+      formObject.questions = formObject.questions.filter(
+        (q: any) => q.active !== false,
+      );
+      formObject.modules = formObject.modules.filter(
+        (m: any) => m.active !== false,
+      );
       return formObject;
     });
   }
 
   async publishForm(id: string, isLive: boolean): Promise<ApplicationForm> {
-
     const form = await this.applicationFormModel.findById(id).exec();
-  
-  if (!form) {
-    throw new NotFoundException('Application form not found.');
-  }
 
-  // If publishing this form (isLive = true), unpublish all other forms first
-  if (isLive) {
-    await this.applicationFormModel
-      .updateMany(
-        { _id: { $ne: id }, isLive: true }, // Find all other live forms
-        { $set: { isLive: false } } // Set them to unpublished
-      )
-      .exec();
-    
-    this.logger.log(`Unpublished all other forms before publishing form: ${id}`);
-  }
+    if (!form) {
+      throw new NotFoundException('Application form not found.');
+    }
+
+    // If publishing this form (isLive = true), unpublish all other forms first
+    if (isLive) {
+      await this.applicationFormModel
+        .updateMany(
+          { _id: { $ne: id }, isLive: true }, // Find all other live forms
+          { $set: { isLive: false } }, // Set them to unpublished
+        )
+        .exec();
+
+      this.logger.log(
+        `Unpublished all other forms before publishing form: ${id}`,
+      );
+    }
     const updatedForm = await this.applicationFormModel
       .findByIdAndUpdate(id, { $set: { isLive: isLive } }, { new: true })
       .exec();
@@ -522,13 +558,16 @@ export class AdminApplicationService {
       throw new NotFoundException('Application form not found.');
     }
 
-      // Filter out inactive questions
+    // Filter out inactive questions
     const formObject = updatedForm.toObject() as ApplicationForm;
-    formObject.questions = formObject.questions.filter((q: any) => q.active !== false);
-    formObject.modules = formObject.modules.filter((m: any) => m.active !== false);
+    formObject.questions = formObject.questions.filter(
+      (q: any) => q.active !== false,
+    );
+    formObject.modules = formObject.modules.filter(
+      (m: any) => m.active !== false,
+    );
 
-
-      return formObject;
+    return formObject;
   }
 
   async deleteForm(id: string): Promise<{ message: string }> {
@@ -575,14 +614,14 @@ export class AdminApplicationService {
 
     const submissions = await this.submissionModel
       .find(filter)
- .populate({
-      path: 'formId',
-      select: 'welcome_title slug questions',
-    })
-    .populate({
-      path: 'userId',
-      select: 'first_name last_name email', // Populate user data
-    })
+      .populate({
+        path: 'formId',
+        select: 'welcome_title slug questions',
+      })
+      .populate({
+        path: 'userId',
+        select: 'first_name last_name email', // Populate user data
+      })
       .exec();
 
     if (submissions.length === 0) {
@@ -591,55 +630,61 @@ export class AdminApplicationService {
       );
     }
 
-     // Create a map of forms for efficient lookup
-  const formsMap = new Map<string, any>();
+    // Create a map of forms for efficient lookup
+    const formsMap = new Map<string, any>();
     const typedSubmissions: PopulatedSubmission[] = [];
-  
- submissions.forEach((submission: any) => {
-    // Check if formId is populated (not just an ObjectId)
-    if (submission.formId && typeof submission.formId === 'object' && submission.formId._id) {
-      const formId = submission.formId._id.toString();
-      
-      // Add to forms map (avoid duplicates)
-      if (!formsMap.has(formId)) {
-        formsMap.set(formId, {
-          welcome_title: submission.formId.welcome_title,
-          slug: submission.formId.slug,
-           questions: (submission.formId.questions || []).filter((q: any) => q.active !== false),
-        });
-      }
-      
-          // Check if userId is populated
-      if (submission.userId && typeof submission.userId === 'object') {
-        // Add to typed submissions array
-        typedSubmissions.push({
-          _id: submission._id,
-          responses: submission.responses,
-          service: submission.service,
-          service_type: submission.service_type,
-          payment_amount: submission.payment_amount,
-          userId: {
-            _id: submission.userId._id,
-            first_name: submission.userId.first_name,
-            last_name: submission.userId.last_name,
-            email: submission.userId.email,
-          },
-          status: submission.status,
-          payment_status: submission.payment_status,
-          createdAt: submission.createdAt,
-          formId: {
-            _id: submission.formId._id,
+
+    submissions.forEach((submission: any) => {
+      // Check if formId is populated (not just an ObjectId)
+      if (
+        submission.formId &&
+        typeof submission.formId === 'object' &&
+        submission.formId._id
+      ) {
+        const formId = submission.formId._id.toString();
+
+        // Add to forms map (avoid duplicates)
+        if (!formsMap.has(formId)) {
+          formsMap.set(formId, {
             welcome_title: submission.formId.welcome_title,
             slug: submission.formId.slug,
-            questions: submission.formId.questions || [],
-          },
-        });
-      }
-    }
-  });
+            questions: (submission.formId.questions || []).filter(
+              (q: any) => q.active !== false,
+            ),
+          });
+        }
 
-  return this.transformSubmissionsForList(typedSubmissions, formsMap);
-}
+        // Check if userId is populated
+        if (submission.userId && typeof submission.userId === 'object') {
+          // Add to typed submissions array
+          typedSubmissions.push({
+            _id: submission._id,
+            responses: submission.responses,
+            service: submission.service,
+            service_type: submission.service_type,
+            payment_amount: submission.payment_amount,
+            userId: {
+              _id: submission.userId._id,
+              first_name: submission.userId.first_name,
+              last_name: submission.userId.last_name,
+              email: submission.userId.email,
+            },
+            status: submission.status,
+            payment_status: submission.payment_status,
+            createdAt: submission.createdAt,
+            formId: {
+              _id: submission.formId._id,
+              welcome_title: submission.formId.welcome_title,
+              slug: submission.formId.slug,
+              questions: submission.formId.questions || [],
+            },
+          });
+        }
+      }
+    });
+
+    return this.transformSubmissionsForList(typedSubmissions, formsMap);
+  }
 
   async updateApplicationStatus(
     id: string,
@@ -691,9 +736,9 @@ export class AdminApplicationService {
       .find(filter)
       .select('+service_type +timetable_url +end_date')
       .populate({
-      path: 'userId',
-      select: 'first_name last_name email', // ✅ ADD THIS: Populate user data
-    })
+        path: 'userId',
+        select: 'first_name last_name email', // ✅ ADD THIS: Populate user data
+      })
       .exec();
 
     if (submissions.length === 0) {
@@ -710,8 +755,6 @@ export class AdminApplicationService {
 
     return this.transformTrainingsList(submissions, servicePriceMap);
   }
-
-  
 
   async updateTrainingDetails(
     trainingName: string,
