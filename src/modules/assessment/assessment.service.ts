@@ -24,7 +24,10 @@ import {
   CreateAssessmentDto,
   CreateAssessmentResDto,
 } from './dto/create-assessment.dto';
-import { UpdateAssessmentDto } from './dto/update-assessment.dto';
+import {
+  UpdateAssessmentDto,
+  UpdateServiceRecommendationDto,
+} from './dto/update-assessment.dto';
 import { BadRequestException } from 'src/exceptions';
 import { QuestionType } from './enums/question-type.enum';
 import { ServicesService } from '../admin/services/services.service';
@@ -109,6 +112,7 @@ export class AssessmentService {
 
   private async validateServiceRecommendations(
     serviceRecommendations: any[],
+    assessmentId?: string,
   ): Promise<void> {
     if (
       !Array.isArray(serviceRecommendations) ||
@@ -234,6 +238,43 @@ export class AssessmentService {
     }
 
     /**
+     * 📦 FETCH EXISTING SERVICE RECOMMENDATIONS (DB)
+     * Exclude ones marked for deletion in payload
+     */
+    const idsMarkedForDeletion = new Set(
+      serviceRecommendations
+        .filter((sr) => sr.toDelete === true && sr.id)
+        .map((sr) => sr.id),
+    );
+
+    let existingActiveRanges: {
+      id: string;
+      minPoints: number;
+      maxPoints: number;
+    }[] = [];
+
+    if (assessmentId && Types.ObjectId.isValid(assessmentId)) {
+      const idsMarkedForDeletion = new Set(
+        serviceRecommendations
+          .filter((sr) => sr.toDelete === true && sr.id)
+          .map((sr) => sr.id),
+      );
+
+      const existingRecommendations =
+        await this.serviceRecommendationRepository.find({
+          assessment_id: assessmentId,
+        });
+
+      existingActiveRanges = existingRecommendations
+        .filter((er) => !idsMarkedForDeletion.has(er._id.toString()))
+        .map((er) => ({
+          id: er._id.toString(),
+          minPoints: er.min_points,
+          maxPoints: er.max_points,
+        }));
+    }
+
+    /**
      * 🔁 DUPLICATE CHECKS - Only within NEW recommendations
      */
     const seenServiceNamesInNew = new Set<string>();
@@ -256,6 +297,37 @@ export class AssessmentService {
           );
         }
         seenServiceIdsInNew.add(newRec.serviceId);
+      }
+    }
+
+    /**
+     * 🚫 POINT RANGE OVERLAP CHECK — PAYLOAD vs EXISTING DB
+     */
+    if (existingActiveRanges.length > 0) {
+      for (const rec of resolvedRecommendations) {
+        if (rec.minPoints === undefined || rec.maxPoints === undefined) {
+          continue;
+        }
+
+        for (const existing of existingActiveRanges) {
+          if (rec.id && rec.id === existing.id) {
+            continue;
+          }
+
+          const overlaps = !(
+            rec.maxPoints < existing.minPoints ||
+            rec.minPoints > existing.maxPoints
+          );
+
+          if (overlaps) {
+            validationErrors.push(
+              `Point range overlap detected: ` +
+                `(${rec.minPoints}-${rec.maxPoints}) overlaps with an existing service recommendation ` +
+                `(${existing.minPoints}-${existing.maxPoints}). ` +
+                `Point ranges must not intersect.`,
+            );
+          }
+        }
       }
     }
 
@@ -577,199 +649,70 @@ export class AssessmentService {
     return Math.round(maxColumnPoints * totalWeightedRows);
   }
 
-  // private async updateModules(
-  //   assessmentId: string,
-  //   modules: any[],
-  // ): Promise<string[]> {
-  //   const updatedModuleIds: string[] = [];
-  //   const moduleMapping = new Map<string, Types.ObjectId>();
-
-  //   for (const moduleDto of modules) {
-  //     if (moduleDto.id) {
-  //       // Update existing module
-  //       const existingModule = await this.assessmentModuleRepository.findById(
-  //         moduleDto.id,
-  //       );
-  //       if (!existingModule) {
-  //         this.logger.warn(
-  //           `Module with ID ${moduleDto.id} not found, skipping...`,
-  //         );
-  //         continue;
-  //       }
-
-  //       const updateData: any = {};
-  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
-  //       if (moduleDto.description !== undefined)
-  //         updateData.description = moduleDto.description;
-  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
-  //       if (moduleDto.max_points !== undefined)
-  //         updateData.max_points = moduleDto.max_points;
-
-  //       if (Object.keys(updateData).length > 0) {
-  //         await this.assessmentModuleRepository.findByIdAndUpdate(
-  //           moduleDto.id,
-  //           updateData,
-  //         );
-  //         updatedModuleIds.push(moduleDto.id);
-  //         moduleMapping.set(
-  //           moduleDto.temp_id || moduleDto.id,
-  //           new Types.ObjectId(moduleDto.id),
-  //         );
-  //         this.logger.log(`Module ${moduleDto.id} updated`);
-  //       }
-  //     } else if (moduleDto.temp_id) {
-  //       // Create new module
-  //       const moduleData = {
-  //         assessment_id: new Types.ObjectId(assessmentId),
-  //         title: moduleDto.title,
-  //         description: moduleDto.description,
-  //         order: moduleDto.order,
-  //         max_points: moduleDto.max_points || 0,
-  //       };
-
-  //       const newModule =
-  //         await this.assessmentModuleRepository.create(moduleData);
-  //       moduleMapping.set(moduleDto.temp_id, newModule._id);
-  //       updatedModuleIds.push(newModule._id.toString());
-  //       this.logger.log(`New module created: ${newModule._id}`);
-  //     }
-  //   }
-
-  //   return updatedModuleIds;
-  // }
-
-  // private async updateModules(
-  //   assessmentId: string,
-  //   modules: any[],
-  // ): Promise<string[]> {
-  //   const updatedModuleIds: string[] = [];
-
-  //   // ✅ Get existing modules for this assessment
-  //   const existingModules = await this.assessmentModuleRepository.find({
-  //     assessment_id: new Types.ObjectId(assessmentId),
-  //   });
-
-  //   const existingModuleIds = new Set(
-  //     existingModules.map((m: any) => m._id.toString()),
-  //   );
-
-  //   const processedModuleIds = new Set<string>();
-
-  //   for (const moduleDto of modules) {
-  //     /**
-  //      * 🔴 DELETE MODULE
-  //      */
-  //     if (moduleDto.toDelete === true) {
-  //       if (!moduleDto.id) {
-  //         continue;
-  //       }
-
-  //       // 🔍 Fetch questions under this module
-  //       const questionsInModule = await this.questionRepository.find({
-  //         module_id: new Types.ObjectId(moduleDto.id),
-  //       });
-
-  //       // ❌ Block deletion if questions exist
-  //       if (questionsInModule.length > 0) {
-  //         const questionList = questionsInModule
-  //           .map((q) => (q as any).question)
-  //           .join(', ');
-
-  //         this.logger.log('Affected Questions', `${questionList}`);
-
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Module cannot be deleted because it still contains questions. Reassign them to another module before deleting. Affected questions: ${questionList}`,
-  //         );
-  //       }
-
-  //       // ✅ Safe to delete
-  //       await this.assessmentModuleRepository.delete({
-  //         _id: new Types.ObjectId(moduleDto.id),
-  //       });
-
-  //       this.logger.log(`Module ${moduleDto.id} deleted`);
-  //       continue;
-
-  //       // if (moduleDto.id) {
-  //       //   await this.assessmentModuleRepository.delete({
-  //       //     _id: new Types.ObjectId(moduleDto.id),
-  //       //   });
-
-  //       //   // OPTIONAL: cascade delete questions under this module
-  //       //   await this.questionRepository.deleteMany({
-  //       //     module_id: new Types.ObjectId(moduleDto.id),
-  //       //   });
-
-  //       //   this.logger.log(`Module ${moduleDto.id} deleted`);
-  //       // }
-
-  //       // // Skip further processing
-  //       // continue;
-  //     }
-  //     if (moduleDto.id) {
-  //       // Update existing module
-  //       const updateData: any = {};
-  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
-  //       if (moduleDto.description !== undefined)
-  //         updateData.description = moduleDto.description;
-  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
-  //       if (moduleDto.max_points !== undefined)
-  //         updateData.max_points = moduleDto.max_points;
-
-  //       if (Object.keys(updateData).length > 0) {
-  //         await this.assessmentModuleRepository.findByIdAndUpdate(
-  //           moduleDto.id,
-  //           updateData,
-  //         );
-  //         updatedModuleIds.push(moduleDto.id);
-  //         processedModuleIds.add(moduleDto.id);
-  //         this.logger.log(`Module ${moduleDto.id} updated`);
-  //       }
-  //     } else {
-  //       // Create new module
-  //       const moduleData = {
-  //         assessment_id: new Types.ObjectId(assessmentId),
-  //         title: moduleDto.title,
-  //         description: moduleDto.description,
-  //         order: moduleDto.order,
-  //         max_points: moduleDto.max_points || 0,
-  //       };
-
-  //       const newModule =
-  //         await this.assessmentModuleRepository.create(moduleData);
-  //       updatedModuleIds.push(newModule._id.toString());
-  //       processedModuleIds.add(newModule._id.toString());
-  //       this.logger.log(`New module created: ${newModule._id}`);
-  //     }
-  //   }
-
-  //   // ✅ Remove modules that weren't in the update (optional - only if you want full replacement)
-  //   // Comment out these lines if you want to keep unmentioned modules
-  //   // const modulesToDelete = Array.from(existingModuleIds).filter(
-  //   //   id => !processedModuleIds.has(id)
-  //   // );
-  //   // for (const moduleId of modulesToDelete) {
-  //   //   await this.assessmentModuleRepository.delete({ _id: new Types.ObjectId(moduleId) });
-  //   //   this.logger.log(`Module ${moduleId} deleted (not in update)`);
-  //   // }
-
-  //   return updatedModuleIds;
-  // }
-
   private async updateModules(
     assessmentId: string,
     modules: any[],
   ): Promise<{
     updatedModuleIds: string[];
     idMapping: Map<string, string>;
-    createdModuleIds: string[]; // 🆕 Track newly created modules
+    createdModuleIds: string[];
+    deletedModuleIds: string[]; // 🆕 Track deleted modules
   }> {
     const updatedModuleIds: string[] = [];
-    const createdModuleIds: string[] = []; // 🆕
+    const createdModuleIds: string[] = [];
+    const deletedModuleIds: string[] = []; // 🆕
     const idMapping = new Map<string, string>();
 
     for (const moduleDto of modules) {
       try {
+        // 🆕 Handle deletion requests
+        if (moduleDto.toDelete === true) {
+          if (!moduleDto.id) {
+            throw BadRequestException.BAD_REQUEST(
+              'Module ID is required when toDelete is true',
+            );
+          }
+
+          if (!Types.ObjectId.isValid(moduleDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid module ID format: "${moduleDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
+
+          const existingModule = await this.assessmentModuleRepository.findById(
+            moduleDto.id,
+          );
+
+          if (!existingModule) {
+            this.logger.warn(
+              `Module with ID "${moduleDto.id}" not found for deletion, skipping...`,
+            );
+            continue;
+          }
+
+          // 🔴 Check if module has questions before deleting
+          const questionsInModule = await this.questionRepository.find({
+            module_id: new Types.ObjectId(moduleDto.id),
+          });
+
+          if (questionsInModule && questionsInModule.length > 0) {
+            throw BadRequestException.BAD_REQUEST(
+              `Cannot delete module "${existingModule.title}" (${moduleDto.id}): ` +
+                `Module contains ${questionsInModule.length} question(s). ` +
+                `Please delete or move all questions to another module first.`,
+            );
+          }
+
+          // Delete the module
+          await this.assessmentModuleRepository.delete({
+            _id: new Types.ObjectId(moduleDto.id),
+          });
+
+          deletedModuleIds.push(moduleDto.id);
+          this.logger.log(`Module ${moduleDto.id} deleted`);
+          continue; // Skip to next module
+        }
+
         // ✅ Handle module updates (existing modules)
         if (moduleDto.id && !moduleDto.id.startsWith('temp_')) {
           if (!Types.ObjectId.isValid(moduleDto.id)) {
@@ -828,7 +771,7 @@ export class AssessmentService {
           const newModuleId = newModule._id.toString();
 
           updatedModuleIds.push(newModuleId);
-          createdModuleIds.push(newModuleId); // 🆕 Track this as a new creation
+          createdModuleIds.push(newModuleId); // Track this as a new creation
 
           // Map temporary ID to actual ID
           if (moduleDto.temp_id) {
@@ -847,7 +790,9 @@ export class AssessmentService {
         }
       } catch (error) {
         const moduleInfo = moduleDto.id
-          ? `module ID ${moduleDto.id}`
+          ? moduleDto.toDelete
+            ? `deletion request for module ${moduleDto.id}`
+            : `module ID ${moduleDto.id}`
           : `new module "${moduleDto.title}"`;
         this.logger.error(`Error processing ${moduleInfo}:`, error.message);
 
@@ -858,7 +803,20 @@ export class AssessmentService {
       }
     }
 
-    return { updatedModuleIds, idMapping, createdModuleIds };
+    // ✅ Log summary
+    if (deletedModuleIds.length > 0) {
+      this.logger.log(
+        `Deleted ${deletedModuleIds.length} module(s): ${deletedModuleIds.join(', ')}`,
+      );
+    }
+
+    if (createdModuleIds.length > 0) {
+      this.logger.log(
+        `Created ${createdModuleIds.length} new module(s): ${createdModuleIds.join(', ')}`,
+      );
+    }
+
+    return { updatedModuleIds, idMapping, createdModuleIds, deletedModuleIds };
   }
 
   private async updateQuestions(
@@ -1475,91 +1433,122 @@ export class AssessmentService {
 
   private async updateServiceRecommendations(
     assessmentId: string,
-    serviceRecommendations: any[],
+    serviceRecommendations: UpdateServiceRecommendationDto[],
   ): Promise<{
     updatedServiceIds: string[];
-    createdServiceIds: string[]; // 🆕 Track newly created service recommendations
+    createdServiceIds: string[];
+    deletedServiceIds: string[];
   }> {
     const updatedServiceIds: string[] = [];
-    const createdServiceIds: string[] = []; // 🆕
-
-    // ✅ Get existing service recommendations for this assessment
-    const existingRecommendations =
-      await this.serviceRecommendationRepository.find({
-        assessment_id: new Types.ObjectId(assessmentId),
-      });
-
-    const existingRecommendationIds = new Set(
-      existingRecommendations.map((r: any) => r._id.toString()),
-    );
-
-    const processedRecommendationIds = new Set<string>();
+    const createdServiceIds: string[] = [];
+    const deletedServiceIds: string[] = [];
 
     for (const serviceDto of serviceRecommendations) {
       try {
-        if (serviceDto.id) {
-          // ✅ Validate ID format
-          if (!Types.ObjectId.isValid(serviceDto.id)) {
+        /**
+         * ============================
+         * 🔴 HANDLE DELETION
+         * ============================
+         */
+        if (serviceDto.toDelete === true) {
+          if (!serviceDto.id) {
             throw BadRequestException.BAD_REQUEST(
-              `Invalid service recommendation ID format: "${serviceDto.id}". Please provide a valid MongoDB ObjectId.`,
+              'Service recommendation ID is required when toDelete is true',
             );
           }
 
-          // ✅ Check if service recommendation exists
+          if (!Types.ObjectId.isValid(serviceDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid service recommendation ID format: "${serviceDto.id}".`,
+            );
+          }
+
+          const existingRecommendation =
+            await this.serviceRecommendationRepository.findById(serviceDto.id);
+
+          if (!existingRecommendation) {
+            this.logger.warn(
+              `Service recommendation "${serviceDto.id}" not found for deletion, skipping...`,
+            );
+            continue;
+          }
+
+          // 🔒 Optional safety: ensure it belongs to this assessment
+          if (
+            existingRecommendation.assessment_id.toString() !== assessmentId
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              `Service recommendation "${serviceDto.id}" does not belong to this assessment.`,
+            );
+          }
+
+          await this.serviceRecommendationRepository.delete({
+            _id: new Types.ObjectId(serviceDto.id),
+          });
+
+          deletedServiceIds.push(serviceDto.id);
+          this.logger.log(`Service recommendation ${serviceDto.id} deleted`);
+          continue; // ⛔ Skip update/create logic
+        }
+
+        /**
+         * ============================
+         * 🔁 UPDATE EXISTING
+         * ============================
+         */
+        if (serviceDto.id) {
+          if (!Types.ObjectId.isValid(serviceDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid service recommendation ID format: "${serviceDto.id}".`,
+            );
+          }
+
           const existingRecommendation =
             await this.serviceRecommendationRepository.findById(serviceDto.id);
 
           if (!existingRecommendation) {
             throw BadRequestException.BAD_REQUEST(
-              `Service recommendation with ID "${serviceDto.id}" not found. Please verify it exists or remove the ID to create a new one.`,
+              `Service recommendation with ID "${serviceDto.id}" not found.`,
             );
           }
 
-          // ✅ Validate levels if provided
-          if (serviceDto.levels !== undefined) {
-            if (
-              !Array.isArray(serviceDto.levels) ||
-              serviceDto.levels.length === 0
-            ) {
-              throw BadRequestException.BAD_REQUEST(
-                `Service recommendation must have at least one level specified. Provide at least one level from: ${Object.values(RecommendationLevel).join(', ')}.`,
-              );
-            }
-          }
-
-          // ✅ Validate point ranges if provided
+          // PATCH-style validation
           if (
             serviceDto.min_points !== undefined &&
-            serviceDto.max_points !== undefined
+            serviceDto.max_points !== undefined &&
+            serviceDto.min_points > serviceDto.max_points
           ) {
-            if (serviceDto.min_points > serviceDto.max_points) {
-              throw BadRequestException.BAD_REQUEST(
-                `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}) for service recommendation.`,
-              );
-            }
+            throw BadRequestException.BAD_REQUEST(
+              `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}).`,
+            );
           }
 
-          // Update existing service recommendation
+          if (
+            serviceDto.levels !== undefined &&
+            (!Array.isArray(serviceDto.levels) ||
+              serviceDto.levels.length === 0)
+          ) {
+            throw BadRequestException.BAD_REQUEST(
+              'levels must contain at least one value.',
+            );
+          }
+
           const updateData: any = {};
 
-          if (serviceDto.service_id !== undefined) {
-            updateData.service_id = new Types.ObjectId(serviceDto.service_id);
-          }
-          if (serviceDto.service_name !== undefined) {
-            updateData.service_name = serviceDto.service_name;
-          }
-          if (serviceDto.description !== undefined) {
+          if (serviceDto.description !== undefined)
             updateData.description = serviceDto.description;
-          }
-          if (serviceDto.min_points !== undefined) {
+
+          if (serviceDto.min_points !== undefined)
             updateData.min_points = serviceDto.min_points;
-          }
-          if (serviceDto.max_points !== undefined) {
+
+          if (serviceDto.max_points !== undefined)
             updateData.max_points = serviceDto.max_points;
-          }
-          if (serviceDto.levels !== undefined) {
+
+          if (serviceDto.levels !== undefined)
             updateData.levels = serviceDto.levels;
-          }
+
+          if (serviceDto.service_name !== undefined)
+            updateData.service_name = serviceDto.service_name;
 
           if (Object.keys(updateData).length > 0) {
             await this.serviceRecommendationRepository.findByIdAndUpdate(
@@ -1567,94 +1556,105 @@ export class AssessmentService {
               updateData,
             );
             updatedServiceIds.push(serviceDto.id);
-            processedRecommendationIds.add(serviceDto.id);
             this.logger.log(`Service recommendation ${serviceDto.id} updated`);
-          } else {
-            processedRecommendationIds.add(serviceDto.id);
-          }
-        } else {
-          // ✅ Create new service recommendation - validate required fields
-          if (!serviceDto.service_name) {
-            throw BadRequestException.BAD_REQUEST(
-              'service_name is required when creating a new service recommendation.',
-            );
-          }
-          if (!serviceDto.description) {
-            throw BadRequestException.BAD_REQUEST(
-              'description is required when creating a new service recommendation.',
-            );
-          }
-          if (
-            serviceDto.min_points === undefined ||
-            serviceDto.min_points === null
-          ) {
-            throw BadRequestException.BAD_REQUEST(
-              'min_points is required when creating a new service recommendation.',
-            );
-          }
-          if (
-            serviceDto.max_points === undefined ||
-            serviceDto.max_points === null
-          ) {
-            throw BadRequestException.BAD_REQUEST(
-              'max_points is required when creating a new service recommendation.',
-            );
-          }
-          if (
-            !serviceDto.levels ||
-            !Array.isArray(serviceDto.levels) ||
-            serviceDto.levels.length === 0
-          ) {
-            throw BadRequestException.BAD_REQUEST(
-              `levels array is required when creating a new service recommendation. Provide at least one level from: ${Object.values(RecommendationLevel).join(', ')}.`,
-            );
           }
 
-          // ✅ Validate point range
-          if (serviceDto.min_points > serviceDto.max_points) {
-            throw BadRequestException.BAD_REQUEST(
-              `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}).`,
-            );
-          }
+          continue;
+        }
 
-          const serviceData = {
-            assessment_id: new Types.ObjectId(assessmentId),
-            service_id: serviceDto.service_id
-              ? new Types.ObjectId(serviceDto.service_id)
-              : undefined,
-            service_name: serviceDto.service_name,
-            description: serviceDto.description,
-            min_points: serviceDto.min_points,
-            max_points: serviceDto.max_points,
-            levels: serviceDto.levels,
-          };
-
-          const newService =
-            await this.serviceRecommendationRepository.create(serviceData);
-          const newServiceId = newService._id.toString();
-
-          updatedServiceIds.push(newServiceId);
-          createdServiceIds.push(newServiceId); // 🆕 Track this as a new creation
-          processedRecommendationIds.add(newServiceId);
-
-          this.logger.log(
-            `New service recommendation created: ${newServiceId}`,
+        /**
+         * ============================
+         * 🆕 CREATE NEW
+         * ============================
+         */
+        if (!serviceDto.service_id) {
+          throw BadRequestException.BAD_REQUEST(
+            'service_id is required when creating a service recommendation.',
           );
         }
+
+        if (!Types.ObjectId.isValid(serviceDto.service_id)) {
+          throw BadRequestException.BAD_REQUEST(
+            `Invalid service_id format: "${serviceDto.service_id}".`,
+          );
+        }
+
+        if (!serviceDto.service_name) {
+          throw BadRequestException.BAD_REQUEST(
+            'service_name is required when creating a service recommendation.',
+          );
+        }
+
+        if (!serviceDto.description) {
+          throw BadRequestException.BAD_REQUEST(
+            'description is required when creating a service recommendation.',
+          );
+        }
+
+        if (
+          serviceDto.min_points === undefined ||
+          serviceDto.max_points === undefined
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            'min_points and max_points are required when creating a service recommendation.',
+          );
+        }
+
+        if (serviceDto.min_points > serviceDto.max_points) {
+          throw BadRequestException.BAD_REQUEST(
+            `min_points (${serviceDto.min_points}) cannot be greater than max_points (${serviceDto.max_points}).`,
+          );
+        }
+
+        if (
+          !Array.isArray(serviceDto.levels) ||
+          serviceDto.levels.length === 0
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            'levels array is required when creating a service recommendation.',
+          );
+        }
+
+        const newService = await this.serviceRecommendationRepository.create({
+          assessment_id: new Types.ObjectId(assessmentId),
+          service_id: new Types.ObjectId(serviceDto.service_id), // ✅ FIX
+          service_name: serviceDto.service_name,
+          description: serviceDto.description,
+          min_points: serviceDto.min_points,
+          max_points: serviceDto.max_points,
+          levels: serviceDto.levels,
+        });
+
+        createdServiceIds.push(newService._id.toString());
+        updatedServiceIds.push(newService._id.toString());
+
+        this.logger.log(
+          `New service recommendation created: ${newService._id}`,
+        );
       } catch (error) {
-        const serviceInfo = serviceDto.id
-          ? `service recommendation ID ${serviceDto.id}`
-          : `new service recommendation for ${serviceDto.service_name}`;
-        this.logger.error(`Error processing ${serviceInfo}:`, error.message);
+        const context = serviceDto.id
+          ? serviceDto.toDelete
+            ? `deletion request for service ${serviceDto.id}`
+            : `service recommendation ${serviceDto.id}`
+          : `new service recommendation "${serviceDto.service_name}"`;
+
+        this.logger.error(`Error processing ${context}:`, error.message);
 
         if (error instanceof BadRequestException) {
           throw error;
         }
-        throw error;
+
+        throw BadRequestException.BAD_REQUEST(
+          `Failed to process ${context}: ${error.message}`,
+        );
       }
     }
 
-    return { updatedServiceIds, createdServiceIds };
+    return {
+      updatedServiceIds,
+      createdServiceIds,
+      deletedServiceIds,
+    };
   }
 
   private async recalculateTotalPoints(assessmentId: string): Promise<void> {
@@ -1707,17 +1707,7 @@ export class AssessmentService {
   private async getTempIdsUsedForAssessment(
     assessmentId: string,
   ): Promise<string[]> {
-    // Check if you have a temp_id tracking collection
-    // If not, you can store this in the assessment document itself
-
-    // Option 1: Using a separate tracking collection
-    // const trackingRecord = await this.tempIdTrackingRepository.findOne({
-    //   assessment_id: new Types.ObjectId(assessmentId),
-    // });
-
-    // return trackingRecord?.used_temp_ids || [];
-
-    // Option 2: Store in assessment document
+    //Store in assessment document
     const assessment = await this.assessmentRepository.findById(assessmentId);
     return assessment?.used_temp_ids || [];
   }
@@ -1731,17 +1721,7 @@ export class AssessmentService {
       return;
     }
 
-    // Option 1: Using a separate tracking collection
-    // await this.tempIdTrackingRepository.findOneAndUpdate(
-    //   { assessment_id: new Types.ObjectId(assessmentId) },
-    //   {
-    //     $addToSet: { used_temp_ids: { $each: tempIds } },
-    //     $set: { updated_at: new Date() },
-    //   },
-    //   { upsert: true },
-    // );
-
-    // Option 2: Store in assessment document
+    // Store in assessment document
     await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
       $addToSet: { used_temp_ids: { $each: tempIds } },
     });
@@ -1755,6 +1735,7 @@ export class AssessmentService {
   private async rollbackCreatedEntities(createdEntities: {
     moduleIds: string[];
     questionIds: string[];
+    serviceRecommendationIds: string[];
   }): Promise<void> {
     try {
       // Delete created questions first (due to foreign key relationships)
@@ -1772,6 +1753,27 @@ export class AssessmentService {
           } catch (err) {
             this.logger.error(
               `Failed to rollback question ${questionId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      // Delete created service recommendations
+      if (createdEntities.serviceRecommendationIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.serviceRecommendationIds.length} created service recommendation(s)...`,
+        );
+
+        for (const serviceId of createdEntities.serviceRecommendationIds) {
+          try {
+            await this.serviceRecommendationRepository.delete({
+              _id: new Types.ObjectId(serviceId),
+            });
+            this.logger.log(`Rolled back service recommendation: ${serviceId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback service recommendation ${serviceId}:`,
               err.message,
             );
           }
@@ -1801,7 +1803,8 @@ export class AssessmentService {
 
       if (
         createdEntities.moduleIds.length > 0 ||
-        createdEntities.questionIds.length > 0
+        createdEntities.questionIds.length > 0 ||
+        createdEntities.serviceRecommendationIds.length > 0
       ) {
         this.logger.log('Rollback completed successfully');
       }
