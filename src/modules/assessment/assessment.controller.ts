@@ -1006,6 +1006,93 @@ export class AssessmentController {
           ],
         },
       },
+      // 🆕 NEW: Add file upload question
+      addFileUploadQuestion: {
+        summary: 'Add file upload question',
+        value: {
+          questions: [
+            {
+              type: 'file_upload',
+              question: 'Upload your business registration certificate',
+              description:
+                'Please provide a clear copy of your official business registration document',
+              step: 10,
+              module_id: '68f0c71326b429a820bcddd5',
+              upload_instructions:
+                'Accepted formats: PDF, JPG, PNG. Maximum size: 5MB per file',
+              allowed_file_types: [
+                'application/pdf',
+                'image/jpeg',
+                'image/png',
+              ],
+              max_file_size: 5,
+              min_files: 1,
+              max_files: 3,
+              is_required: true,
+              max_points: 10,
+            },
+          ],
+        },
+      },
+      // 🆕 NEW: Update existing file upload question
+      updateFileUploadQuestion: {
+        summary: 'Update file upload question',
+        value: {
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              question: 'Upload updated business documents',
+              upload_instructions:
+                'Updated instructions: Please upload clear, legible documents',
+              allowed_file_types: ['application/pdf', 'image/*', '.docx'],
+              max_file_size: 10,
+              max_files: 5,
+            },
+          ],
+        },
+      },
+      // 🆕 NEW: Add module with file upload question
+      addModuleWithFileUpload: {
+        summary: 'Add new module with file upload question',
+        value: {
+          modules: [
+            {
+              temp_id: 'temp_docs_module',
+              title: 'Document Verification',
+              description: 'Upload required business documents',
+              order: 4,
+            },
+          ],
+          questions: [
+            {
+              module_id: 'temp_docs_module',
+              type: 'file_upload',
+              question: 'Upload business license',
+              step: 1,
+              upload_instructions: 'PDF or image format, max 5MB',
+              allowed_file_types: ['application/pdf', 'image/*'],
+              max_file_size: 5,
+              min_files: 1,
+              max_files: 2,
+              is_required: true,
+              max_points: 15,
+            },
+            {
+              module_id: 'temp_docs_module',
+              type: 'file_upload',
+              question: 'Upload company logo (optional)',
+              step: 2,
+              upload_instructions: 'High-resolution image only',
+              allowed_file_types: ['image/jpeg', 'image/png', 'image/svg+xml'],
+              max_file_size: 2,
+              min_files: 0,
+              max_files: 1,
+              is_required: false,
+              max_points: 5,
+            },
+          ],
+        },
+      },
       addNewModuleAndNewQuestion: {
         summary: 'Add New Module and New Question to it',
         value: {
@@ -1027,27 +1114,24 @@ export class AssessmentController {
               module_id: 'temp_module_1',
               type: 'multiple_choice',
               step: 1,
-              question_text: 'What is the capital of France?',
+              question: 'What is the capital of France?',
               options: [
                 { text: 'Paris', points: 10 },
                 { text: 'London', points: 0 },
                 { text: 'Berlin', points: 0 },
               ],
-              correct_answer: 'Paris',
             },
             {
               module_id: 'existing_module_id_123',
-              type: 'rating_scale',
+              type: 'short_text',
               step: 2,
-              question_text: 'Rate your experience',
-              min_value: 1,
-              max_value: 5,
-              min_label: 'Poor',
-              max_label: 'Excellent',
+              question: 'Describe your experience',
+              placeholder: 'Type your answer here...',
+              max_character: 500,
             },
             {
               id: 'existing_question_id_456',
-              question_text: 'Updated question text',
+              question: 'Updated question text',
             },
           ],
         },
@@ -1080,6 +1164,28 @@ export class AssessmentController {
           ],
         },
       },
+      // 🆕 NEW: Delete module with its questions
+      deleteModuleAndQuestions: {
+        summary: 'Delete module and its questions',
+        value: {
+          modules: [
+            {
+              id: '68dd2f298117c98763ffc774',
+              toDelete: true,
+            },
+          ],
+          questions: [
+            {
+              id: '68dd2f2c8117c98763ffc778',
+              toDelete: true,
+            },
+            {
+              id: '68dd2f2c8117c98763ffc779',
+              toDelete: true,
+            },
+          ],
+        },
+      },
       mixedOperations: {
         summary: 'Update, delete, and create questions',
         value: {
@@ -1096,6 +1202,70 @@ export class AssessmentController {
               type: 'short_text',
               question: 'New question',
               step: 15,
+              module_id: '68f0c71326b429a820bcddd5',
+              placeholder: 'Enter your answer',
+            },
+          ],
+        },
+      },
+      // 🆕 NEW: Complex workflow with file uploads
+      complexFileUploadWorkflow: {
+        summary: 'Complex: Create module, add file upload, move questions',
+        value: {
+          modules: [
+            {
+              temp_id: 'temp_verification',
+              title: 'Business Verification',
+              description: 'Upload all required verification documents',
+              order: 1,
+            },
+            {
+              id: 'old_module_id',
+              toDelete: true,
+            },
+          ],
+          questions: [
+            // Move existing question to new module
+            {
+              id: 'existing_question_1',
+              module_id: 'temp_verification',
+            },
+            // Add new file upload question
+            {
+              module_id: 'temp_verification',
+              type: 'file_upload',
+              question: 'Upload business registration',
+              step: 1,
+              upload_instructions: 'PDF format preferred, max 5MB',
+              allowed_file_types: ['application/pdf', 'image/*'],
+              max_file_size: 5,
+              min_files: 1,
+              max_files: 2,
+              is_required: true,
+              max_points: 20,
+            },
+            // Add another file upload
+            {
+              module_id: 'temp_verification',
+              type: 'file_upload',
+              question: 'Upload tax identification documents',
+              step: 2,
+              upload_instructions: 'Any official tax documents',
+              allowed_file_types: ['application/pdf', '.docx'],
+              max_file_size: 10,
+              min_files: 1,
+              max_files: 5,
+              is_required: true,
+              max_points: 15,
+            },
+            // Delete questions from old module
+            {
+              id: 'old_question_1',
+              toDelete: true,
+            },
+            {
+              id: 'old_question_2',
+              toDelete: true,
             },
           ],
         },

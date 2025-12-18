@@ -11,6 +11,7 @@ import {
   IsEnum,
   Min,
   IsMongoId,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
@@ -170,6 +171,57 @@ export class UpdateQuestionDto {
   @IsArray()
   @IsString({ each: true })
   scoring_categories?: string[];
+
+  // 🆕 FILE UPLOAD FIELDS
+  @ApiProperty({
+    description: 'Allowed file types for upload',
+    example: ['application/pdf', 'image/jpeg', 'image/png'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowed_file_types?: string[];
+
+  @ApiProperty({
+    description: 'Maximum file size in MB',
+    example: 5,
+    minimum: 0.1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(100)
+  max_file_size?: number;
+
+  @ApiProperty({
+    description: 'Minimum number of files required',
+    example: 1,
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  min_files?: number;
+
+  @ApiProperty({
+    description: 'Maximum number of files allowed',
+    example: 3,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  max_files?: number;
+
+  @ApiProperty({
+    description: 'Instructions for file upload',
+    example: 'Please upload clear, legible documents in PDF or image format',
+  })
+  @IsOptional()
+  @IsString()
+  upload_instructions?: string;
 
   // Welcome Screen specific fields
   @ApiProperty({ example: 'Welcome to Assessment', required: false })

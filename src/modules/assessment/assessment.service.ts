@@ -1041,6 +1041,9 @@ export class AssessmentService {
     if (questionDto.description !== undefined) {
       updateData.description = questionDto.description;
     }
+    if (questionDto.instruction !== undefined) {
+      updateData.instruction = questionDto.instruction;
+    }
     if (questionDto.step !== undefined) {
       updateData.step = questionDto.step;
     }
@@ -1056,14 +1059,66 @@ export class AssessmentService {
     if (questionDto.max_points !== undefined) {
       updateData.max_points = questionDto.max_points;
     }
+    if (questionDto.scoring_categories !== undefined) {
+      updateData.scoring_categories = questionDto.scoring_categories;
+    }
 
-    // Type-specific fields
+    // 🆕 FILE UPLOAD SPECIFIC FIELDS
+    if (questionDto.allowed_file_types !== undefined) {
+      updateData.allowed_file_types = questionDto.allowed_file_types;
+    }
+    if (questionDto.max_file_size !== undefined) {
+      updateData.max_file_size = questionDto.max_file_size;
+    }
+    if (questionDto.min_files !== undefined) {
+      updateData.min_files = questionDto.min_files;
+    }
+    if (questionDto.max_files !== undefined) {
+      updateData.max_files = questionDto.max_files;
+    }
+    if (questionDto.upload_instructions !== undefined) {
+      updateData.upload_instructions = questionDto.upload_instructions;
+    }
+
+    // WELCOME SCREEN FIELDS
+    if (questionDto.welcome_title !== undefined) {
+      updateData.welcome_title = questionDto.welcome_title;
+    }
+    if (questionDto.welcome_description !== undefined) {
+      updateData.welcome_description = questionDto.welcome_description;
+    }
+    if (questionDto.button_text !== undefined) {
+      updateData.button_text = questionDto.button_text;
+    }
+
+    // MODULE TITLE FIELDS
+    if (questionDto.module_title !== undefined) {
+      updateData.module_title = questionDto.module_title;
+    }
+    if (questionDto.module_description !== undefined) {
+      updateData.module_description = questionDto.module_description;
+    }
+
+    // MULTIPLE CHOICE / CHECKBOX / DROPDOWN FIELDS
     if (questionDto.options !== undefined) {
       updateData.options = questionDto.options;
     }
     if (questionDto.correct_answer !== undefined) {
       updateData.correct_answer = questionDto.correct_answer;
     }
+
+    // CHECKBOX SPECIFIC
+    if (questionDto.min_selections !== undefined) {
+      updateData.min_selections = questionDto.min_selections;
+    }
+    if (questionDto.max_selections !== undefined) {
+      updateData.max_selections = questionDto.max_selections;
+    }
+    if (questionDto.scoring_method !== undefined) {
+      updateData.scoring_method = questionDto.scoring_method;
+    }
+
+    // RATING SCALE FIELDS
     if (questionDto.min_value !== undefined) {
       updateData.min_value = questionDto.min_value;
     }
@@ -1076,11 +1131,27 @@ export class AssessmentService {
     if (questionDto.max_label !== undefined) {
       updateData.max_label = questionDto.max_label;
     }
+
+    // GRID FIELDS
     if (questionDto.grid_rows !== undefined) {
       updateData.grid_rows = questionDto.grid_rows;
     }
     if (questionDto.grid_columns !== undefined) {
       updateData.grid_columns = questionDto.grid_columns;
+    }
+
+    // TEXT FIELDS (SHORT_TEXT / LONG_TEXT)
+    if (questionDto.placeholder !== undefined) {
+      updateData.placeholder = questionDto.placeholder;
+    }
+    if (questionDto.max_character !== undefined) {
+      updateData.max_character = questionDto.max_character;
+    }
+    if (questionDto.min_character !== undefined) {
+      updateData.min_character = questionDto.min_character;
+    }
+    if (questionDto.max_length !== undefined) {
+      updateData.max_length = questionDto.max_length;
     }
     if (questionDto.auto_validation !== undefined) {
       updateData.auto_validation = questionDto.auto_validation;
@@ -1088,17 +1159,22 @@ export class AssessmentService {
     if (questionDto.validation_rules !== undefined) {
       updateData.validation_rules = questionDto.validation_rules;
     }
-    if (questionDto.placeholder !== undefined) {
-      updateData.placeholder = questionDto.placeholder;
+
+    // LONG TEXT SPECIFIC
+    if (questionDto.rows !== undefined) {
+      updateData.rows = questionDto.rows;
     }
-    if (questionDto.max_length !== undefined) {
-      updateData.max_length = questionDto.max_length;
+    if (questionDto.completion_points !== undefined) {
+      updateData.completion_points = questionDto.completion_points;
+    }
+    if (questionDto.keyword_scoring !== undefined) {
+      updateData.keyword_scoring = questionDto.keyword_scoring;
     }
 
     return updateData;
   }
 
-  // ✅ NEW: Validation method for question type data
+  // ✅ Complete validateQuestionTypeData with all question types
   private validateQuestionTypeData(
     type: QuestionType,
     questionDto: any,
@@ -1107,65 +1183,101 @@ export class AssessmentService {
     const isCreating = operation === 'create';
 
     switch (type) {
-      case QuestionType.MULTIPLE_CHOICE:
-      case QuestionType.DROPDOWN:
-        // Must have options
-        if (questionDto.options !== undefined) {
-          if (
-            !Array.isArray(questionDto.options) ||
-            questionDto.options.length === 0
-          ) {
+      case QuestionType.FILE_UPLOAD:
+        // Set defaults for create mode
+        if (isCreating) {
+          if (questionDto.max_files === undefined) {
+            questionDto.max_files = 1;
+          }
+          if (questionDto.min_files === undefined) {
+            questionDto.min_files = 1;
+          }
+          if (questionDto.max_file_size === undefined) {
+            questionDto.max_file_size = 10; // 10MB default
+          }
+        }
+
+        // Validate file count constraints
+        if (
+          questionDto.min_files !== undefined &&
+          questionDto.max_files !== undefined
+        ) {
+          if (questionDto.min_files > questionDto.max_files) {
             throw BadRequestException.BAD_REQUEST(
-              `${type} questions must have at least one option. Please provide an options array.`,
+              `min_files (${questionDto.min_files}) cannot be greater than max_files (${questionDto.max_files}) for file upload question.`,
             );
           }
-          // Validate each option has required fields
-          questionDto.options.forEach((opt: any, index: number) => {
-            if (!opt.id || !opt.text) {
-              throw BadRequestException.BAD_REQUEST(
-                `Option at index ${index} is missing required fields (id, text) for ${type} question.`,
-              );
-            }
-          });
-        } else if (isCreating) {
+          if (questionDto.min_files < 0 || questionDto.max_files < 1) {
+            throw BadRequestException.BAD_REQUEST(
+              'min_files must be >= 0 and max_files must be >= 1 for file upload question.',
+            );
+          }
+        }
+
+        // Validate file size
+        if (
+          questionDto.max_file_size !== undefined &&
+          questionDto.max_file_size <= 0
+        ) {
           throw BadRequestException.BAD_REQUEST(
-            `${type} questions require an options array when creating.`,
+            'max_file_size must be greater than 0 MB for file upload question.',
           );
         }
 
-        // Reject invalid fields for this type
-        if (questionDto.grid_rows || questionDto.grid_columns) {
+        // Validate allowed file types format
+        if (questionDto.allowed_file_types !== undefined) {
+          if (!Array.isArray(questionDto.allowed_file_types)) {
+            throw BadRequestException.BAD_REQUEST(
+              'allowed_file_types must be an array of strings (e.g., ["image/*", "application/pdf"]).',
+            );
+          }
+        }
+        break;
+
+      case QuestionType.MULTIPLE_CHOICE:
+      case QuestionType.DROPDOWN:
+        // Validate options exist
+        if (
+          isCreating &&
+          (!questionDto.options || questionDto.options.length === 0)
+        ) {
           throw BadRequestException.BAD_REQUEST(
-            `${type} questions cannot have grid_rows or grid_columns. These fields are only for multiple_choice_grid questions.`,
+            `${type} questions must have at least one option.`,
           );
+        }
+
+        // Validate option structure
+        if (questionDto.options) {
+          for (const [index, option] of questionDto.options.entries()) {
+            if (!option.text) {
+              throw BadRequestException.BAD_REQUEST(
+                `Option at position ${index + 1} must have a 'text' field.`,
+              );
+            }
+            if (
+              option.points !== undefined &&
+              typeof option.points !== 'number'
+            ) {
+              throw BadRequestException.BAD_REQUEST(
+                `Option at position ${index + 1} has invalid 'points' value. Must be a number.`,
+              );
+            }
+          }
         }
         break;
 
       case QuestionType.CHECKBOX:
-        // Must have options
-        if (questionDto.options !== undefined) {
-          if (
-            !Array.isArray(questionDto.options) ||
-            questionDto.options.length === 0
-          ) {
-            throw BadRequestException.BAD_REQUEST(
-              `Checkbox questions must have at least one option. Please provide an options array.`,
-            );
-          }
-          questionDto.options.forEach((opt: any, index: number) => {
-            if (!opt.id || !opt.text) {
-              throw BadRequestException.BAD_REQUEST(
-                `Option at index ${index} is missing required fields (id, text) for checkbox question.`,
-              );
-            }
-          });
-        } else if (isCreating) {
+        // Validate options exist
+        if (
+          isCreating &&
+          (!questionDto.options || questionDto.options.length === 0)
+        ) {
           throw BadRequestException.BAD_REQUEST(
-            `Checkbox questions require an options array when creating.`,
+            'Checkbox questions must have at least one option.',
           );
         }
 
-        // Validate selections if provided
+        // Validate selection constraints
         if (
           questionDto.min_selections !== undefined &&
           questionDto.max_selections !== undefined
@@ -1175,69 +1287,73 @@ export class AssessmentService {
               `min_selections (${questionDto.min_selections}) cannot be greater than max_selections (${questionDto.max_selections}).`,
             );
           }
+          if (questionDto.max_selections > (questionDto.options?.length || 0)) {
+            throw BadRequestException.BAD_REQUEST(
+              `max_selections (${questionDto.max_selections}) cannot be greater than the number of options (${questionDto.options?.length || 0}).`,
+            );
+          }
         }
 
-        // Reject invalid fields
-        if (questionDto.grid_rows || questionDto.grid_columns) {
-          throw BadRequestException.BAD_REQUEST(
-            `Checkbox questions cannot have grid_rows or grid_columns.`,
-          );
+        // Validate scoring method
+        if (questionDto.scoring_method !== undefined) {
+          const validMethods = ['sum', 'average', 'all_or_nothing'];
+          if (!validMethods.includes(questionDto.scoring_method)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid scoring_method '${questionDto.scoring_method}'. Must be one of: ${validMethods.join(', ')}.`,
+            );
+          }
         }
         break;
 
       case QuestionType.MULTIPLE_CHOICE_GRID:
-        // Must have grid configuration
-        if (
-          questionDto.grid_rows !== undefined ||
-          questionDto.grid_columns !== undefined
-        ) {
-          if (
-            !questionDto.grid_rows ||
-            !Array.isArray(questionDto.grid_rows) ||
-            questionDto.grid_rows.length === 0
-          ) {
+        // Validate grid structure
+        if (isCreating) {
+          if (!questionDto.grid_rows || questionDto.grid_rows.length === 0) {
             throw BadRequestException.BAD_REQUEST(
-              `Multiple choice grid questions must have at least one grid row.`,
+              'Grid questions must have at least one row.',
             );
           }
           if (
             !questionDto.grid_columns ||
-            !Array.isArray(questionDto.grid_columns) ||
             questionDto.grid_columns.length === 0
           ) {
             throw BadRequestException.BAD_REQUEST(
-              `Multiple choice grid questions must have at least one grid column.`,
+              'Grid questions must have at least one column.',
             );
           }
-        } else if (isCreating) {
-          throw BadRequestException.BAD_REQUEST(
-            `Multiple choice grid questions require grid_rows and grid_columns when creating.`,
-          );
         }
 
-        // Reject invalid fields
-        if (questionDto.options) {
-          throw BadRequestException.BAD_REQUEST(
-            `Multiple choice grid questions cannot have an options array. Use grid_rows and grid_columns instead.`,
-          );
+        // Validate row structure
+        if (questionDto.grid_rows) {
+          for (const [index, row] of questionDto.grid_rows.entries()) {
+            if (!row.label) {
+              throw BadRequestException.BAD_REQUEST(
+                `Grid row at position ${index + 1} must have a 'label' field.`,
+              );
+            }
+          }
+        }
+
+        // Validate column structure
+        if (questionDto.grid_columns) {
+          for (const [index, col] of questionDto.grid_columns.entries()) {
+            if (!col.label) {
+              throw BadRequestException.BAD_REQUEST(
+                `Grid column at position ${index + 1} must have a 'label' field.`,
+              );
+            }
+            if (col.points !== undefined && typeof col.points !== 'number') {
+              throw BadRequestException.BAD_REQUEST(
+                `Grid column at position ${index + 1} has invalid 'points' value. Must be a number.`,
+              );
+            }
+          }
         }
         break;
 
       case QuestionType.SHORT_TEXT:
       case QuestionType.LONG_TEXT:
-        // Text questions shouldn't have options or grids
-        if (questionDto.options) {
-          throw BadRequestException.BAD_REQUEST(
-            `${type} questions cannot have options. Options are only for multiple choice, checkbox, or dropdown questions.`,
-          );
-        }
-        if (questionDto.grid_rows || questionDto.grid_columns) {
-          throw BadRequestException.BAD_REQUEST(
-            `${type} questions cannot have grid_rows or grid_columns.`,
-          );
-        }
-
-        // Validate character limits if provided
+        // Validate character limits
         if (
           questionDto.min_character !== undefined &&
           questionDto.max_character !== undefined
@@ -1248,55 +1364,71 @@ export class AssessmentService {
             );
           }
         }
+
+        // Validate rows for long text
+        if (type === QuestionType.LONG_TEXT && questionDto.rows !== undefined) {
+          if (questionDto.rows < 1 || questionDto.rows > 20) {
+            throw BadRequestException.BAD_REQUEST(
+              'Long text rows must be between 1 and 20.',
+            );
+          }
+        }
+
+        // Validate keyword scoring structure
+        if (
+          questionDto.keyword_scoring &&
+          Array.isArray(questionDto.keyword_scoring)
+        ) {
+          for (const [
+            index,
+            keyword,
+          ] of questionDto.keyword_scoring.entries()) {
+            if (!keyword.keyword) {
+              throw BadRequestException.BAD_REQUEST(
+                `Keyword scoring at position ${index + 1} must have a 'keyword' field.`,
+              );
+            }
+            if (
+              keyword.points === undefined ||
+              typeof keyword.points !== 'number'
+            ) {
+              throw BadRequestException.BAD_REQUEST(
+                `Keyword scoring at position ${index + 1} must have a valid 'points' value.`,
+              );
+            }
+          }
+        }
         break;
 
       case QuestionType.WELCOME_SCREEN:
-        // Welcome screen shouldn't have scoring elements
-        if (
-          questionDto.options ||
-          questionDto.grid_rows ||
-          questionDto.grid_columns
-        ) {
-          throw BadRequestException.BAD_REQUEST(
-            `Welcome screen questions cannot have options, grid_rows, or grid_columns.`,
-          );
+        // Validate welcome screen fields
+        if (isCreating) {
+          if (!questionDto.welcome_title) {
+            throw BadRequestException.BAD_REQUEST(
+              'Welcome screen must have a welcome_title.',
+            );
+          }
         }
         break;
 
       case QuestionType.MODULE_TITLE:
-        // Module title shouldn't have scoring elements
-        if (
-          questionDto.options ||
-          questionDto.grid_rows ||
-          questionDto.grid_columns
-        ) {
-          throw BadRequestException.BAD_REQUEST(
-            `Module title questions cannot have options, grid_rows, or grid_columns.`,
-          );
-        }
-        break;
-
-      case QuestionType.FILE_UPLOAD:
-        // File upload shouldn't have options or grids
-        if (
-          questionDto.options ||
-          questionDto.grid_rows ||
-          questionDto.grid_columns
-        ) {
-          throw BadRequestException.BAD_REQUEST(
-            `File upload questions cannot have options, grid_rows, or grid_columns.`,
-          );
+        // Validate module title fields
+        if (isCreating) {
+          if (!questionDto.module_title) {
+            throw BadRequestException.BAD_REQUEST(
+              'Module title screen must have a module_title.',
+            );
+          }
         }
         break;
 
       default:
-        // Unknown question type
-        throw BadRequestException.BAD_REQUEST(
-          `Unknown question type: "${type}". Valid types are: ${Object.values(QuestionType).join(', ')}.`,
-        );
+        // No specific validation for other types
+        break;
     }
   }
 
+  // ✅ Updated buildNewQuestionData - Combines both versions with file upload
   private buildNewQuestionData(assessmentId: string, questionDto: any): any {
     // Validate required fields for new questions
     if (!questionDto.type) {
@@ -1310,14 +1442,14 @@ export class AssessmentService {
       );
     }
 
-    // Use existing logic from createAssessment but for single question
+    // Base question data
     const baseQuestionData = {
       assessment_id: new Types.ObjectId(assessmentId),
       module_id: questionDto.module_id
         ? new Types.ObjectId(questionDto.module_id)
         : undefined,
       type: questionDto.type,
-      question: questionDto.question || '', // Provide default if missing
+      question: questionDto.question || '',
       description: questionDto.description,
       instruction: questionDto.instruction,
       is_required: questionDto.is_required ?? false,
@@ -1327,9 +1459,9 @@ export class AssessmentService {
       is_active: questionDto.is_active ?? true,
     };
 
-    // Apply type-specific data using existing logic
     let questionData: any = { ...baseQuestionData };
 
+    // Apply type-specific data
     switch (questionDto.type) {
       case QuestionType.WELCOME_SCREEN:
         questionData = {
@@ -1420,6 +1552,19 @@ export class AssessmentService {
             questionDto.grid_columns,
             questionDto.grid_rows,
           ),
+        };
+        break;
+
+      // 🆕 FILE UPLOAD CASE
+      case QuestionType.FILE_UPLOAD:
+        questionData = {
+          ...baseQuestionData,
+          allowed_file_types: questionDto.allowed_file_types || [],
+          max_file_size: questionDto.max_file_size || 10, // 10MB default
+          min_files: questionDto.min_files ?? 1,
+          max_files: questionDto.max_files ?? 1,
+          upload_instructions: questionDto.upload_instructions || '',
+          max_points: questionDto.max_points || 0,
         };
         break;
 

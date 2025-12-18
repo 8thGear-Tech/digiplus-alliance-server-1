@@ -22,6 +22,15 @@ export interface GridRow {
   text: string;
 }
 
+// 🆕 File upload configuration interface
+export interface FileUploadConfig {
+  allowed_file_types?: string[]; // e.g., ['image/*', 'application/pdf', '.docx']
+  max_file_size?: number; // in MB
+  min_files?: number;
+  max_files?: number;
+  upload_instructions?: string;
+}
+
 export type QuestionDocument = Question & Document;
 
 @Schema({
@@ -89,6 +98,22 @@ export class Question {
 
   @Prop({ default: Date.now })
   updated_at: Date;
+
+  // 🆕 File upload specific fields
+  @Prop({ type: [String], default: [] })
+  allowed_file_types: string[]; // ['image/*', 'application/pdf', '.docx', etc.]
+
+  @Prop({ type: Number, default: 10 }) // Default 10MB
+  max_file_size: number; // in MB
+
+  @Prop({ type: Number, default: 1 })
+  min_files: number;
+
+  @Prop({ type: Number, default: 1 })
+  max_files: number;
+
+  @Prop({ type: String })
+  upload_instructions: string;
 }
 
 export const QuestionSchema = SchemaFactory.createForClass(Question);
