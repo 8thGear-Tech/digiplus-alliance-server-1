@@ -369,6 +369,15 @@ export class UpdateServiceRecommendationDto {
   max_points?: number;
 
   @ApiProperty({
+    default: false,
+    description: 'Set to true to delete this recommendation',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  toDelete?: boolean;
+
+  @ApiProperty({
     example: ['Beginner', 'Foundational'],
     description: 'Array of recommendation levels this service applies to',
     type: [String],
