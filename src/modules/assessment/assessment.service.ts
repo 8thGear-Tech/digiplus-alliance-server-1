@@ -577,199 +577,70 @@ export class AssessmentService {
     return Math.round(maxColumnPoints * totalWeightedRows);
   }
 
-  // private async updateModules(
-  //   assessmentId: string,
-  //   modules: any[],
-  // ): Promise<string[]> {
-  //   const updatedModuleIds: string[] = [];
-  //   const moduleMapping = new Map<string, Types.ObjectId>();
-
-  //   for (const moduleDto of modules) {
-  //     if (moduleDto.id) {
-  //       // Update existing module
-  //       const existingModule = await this.assessmentModuleRepository.findById(
-  //         moduleDto.id,
-  //       );
-  //       if (!existingModule) {
-  //         this.logger.warn(
-  //           `Module with ID ${moduleDto.id} not found, skipping...`,
-  //         );
-  //         continue;
-  //       }
-
-  //       const updateData: any = {};
-  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
-  //       if (moduleDto.description !== undefined)
-  //         updateData.description = moduleDto.description;
-  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
-  //       if (moduleDto.max_points !== undefined)
-  //         updateData.max_points = moduleDto.max_points;
-
-  //       if (Object.keys(updateData).length > 0) {
-  //         await this.assessmentModuleRepository.findByIdAndUpdate(
-  //           moduleDto.id,
-  //           updateData,
-  //         );
-  //         updatedModuleIds.push(moduleDto.id);
-  //         moduleMapping.set(
-  //           moduleDto.temp_id || moduleDto.id,
-  //           new Types.ObjectId(moduleDto.id),
-  //         );
-  //         this.logger.log(`Module ${moduleDto.id} updated`);
-  //       }
-  //     } else if (moduleDto.temp_id) {
-  //       // Create new module
-  //       const moduleData = {
-  //         assessment_id: new Types.ObjectId(assessmentId),
-  //         title: moduleDto.title,
-  //         description: moduleDto.description,
-  //         order: moduleDto.order,
-  //         max_points: moduleDto.max_points || 0,
-  //       };
-
-  //       const newModule =
-  //         await this.assessmentModuleRepository.create(moduleData);
-  //       moduleMapping.set(moduleDto.temp_id, newModule._id);
-  //       updatedModuleIds.push(newModule._id.toString());
-  //       this.logger.log(`New module created: ${newModule._id}`);
-  //     }
-  //   }
-
-  //   return updatedModuleIds;
-  // }
-
-  // private async updateModules(
-  //   assessmentId: string,
-  //   modules: any[],
-  // ): Promise<string[]> {
-  //   const updatedModuleIds: string[] = [];
-
-  //   // ✅ Get existing modules for this assessment
-  //   const existingModules = await this.assessmentModuleRepository.find({
-  //     assessment_id: new Types.ObjectId(assessmentId),
-  //   });
-
-  //   const existingModuleIds = new Set(
-  //     existingModules.map((m: any) => m._id.toString()),
-  //   );
-
-  //   const processedModuleIds = new Set<string>();
-
-  //   for (const moduleDto of modules) {
-  //     /**
-  //      * 🔴 DELETE MODULE
-  //      */
-  //     if (moduleDto.toDelete === true) {
-  //       if (!moduleDto.id) {
-  //         continue;
-  //       }
-
-  //       // 🔍 Fetch questions under this module
-  //       const questionsInModule = await this.questionRepository.find({
-  //         module_id: new Types.ObjectId(moduleDto.id),
-  //       });
-
-  //       // ❌ Block deletion if questions exist
-  //       if (questionsInModule.length > 0) {
-  //         const questionList = questionsInModule
-  //           .map((q) => (q as any).question)
-  //           .join(', ');
-
-  //         this.logger.log('Affected Questions', `${questionList}`);
-
-  //         throw BadRequestException.BAD_REQUEST(
-  //           `Module cannot be deleted because it still contains questions. Reassign them to another module before deleting. Affected questions: ${questionList}`,
-  //         );
-  //       }
-
-  //       // ✅ Safe to delete
-  //       await this.assessmentModuleRepository.delete({
-  //         _id: new Types.ObjectId(moduleDto.id),
-  //       });
-
-  //       this.logger.log(`Module ${moduleDto.id} deleted`);
-  //       continue;
-
-  //       // if (moduleDto.id) {
-  //       //   await this.assessmentModuleRepository.delete({
-  //       //     _id: new Types.ObjectId(moduleDto.id),
-  //       //   });
-
-  //       //   // OPTIONAL: cascade delete questions under this module
-  //       //   await this.questionRepository.deleteMany({
-  //       //     module_id: new Types.ObjectId(moduleDto.id),
-  //       //   });
-
-  //       //   this.logger.log(`Module ${moduleDto.id} deleted`);
-  //       // }
-
-  //       // // Skip further processing
-  //       // continue;
-  //     }
-  //     if (moduleDto.id) {
-  //       // Update existing module
-  //       const updateData: any = {};
-  //       if (moduleDto.title !== undefined) updateData.title = moduleDto.title;
-  //       if (moduleDto.description !== undefined)
-  //         updateData.description = moduleDto.description;
-  //       if (moduleDto.order !== undefined) updateData.order = moduleDto.order;
-  //       if (moduleDto.max_points !== undefined)
-  //         updateData.max_points = moduleDto.max_points;
-
-  //       if (Object.keys(updateData).length > 0) {
-  //         await this.assessmentModuleRepository.findByIdAndUpdate(
-  //           moduleDto.id,
-  //           updateData,
-  //         );
-  //         updatedModuleIds.push(moduleDto.id);
-  //         processedModuleIds.add(moduleDto.id);
-  //         this.logger.log(`Module ${moduleDto.id} updated`);
-  //       }
-  //     } else {
-  //       // Create new module
-  //       const moduleData = {
-  //         assessment_id: new Types.ObjectId(assessmentId),
-  //         title: moduleDto.title,
-  //         description: moduleDto.description,
-  //         order: moduleDto.order,
-  //         max_points: moduleDto.max_points || 0,
-  //       };
-
-  //       const newModule =
-  //         await this.assessmentModuleRepository.create(moduleData);
-  //       updatedModuleIds.push(newModule._id.toString());
-  //       processedModuleIds.add(newModule._id.toString());
-  //       this.logger.log(`New module created: ${newModule._id}`);
-  //     }
-  //   }
-
-  //   // ✅ Remove modules that weren't in the update (optional - only if you want full replacement)
-  //   // Comment out these lines if you want to keep unmentioned modules
-  //   // const modulesToDelete = Array.from(existingModuleIds).filter(
-  //   //   id => !processedModuleIds.has(id)
-  //   // );
-  //   // for (const moduleId of modulesToDelete) {
-  //   //   await this.assessmentModuleRepository.delete({ _id: new Types.ObjectId(moduleId) });
-  //   //   this.logger.log(`Module ${moduleId} deleted (not in update)`);
-  //   // }
-
-  //   return updatedModuleIds;
-  // }
-
   private async updateModules(
     assessmentId: string,
     modules: any[],
   ): Promise<{
     updatedModuleIds: string[];
     idMapping: Map<string, string>;
-    createdModuleIds: string[]; // 🆕 Track newly created modules
+    createdModuleIds: string[];
+    deletedModuleIds: string[]; // 🆕 Track deleted modules
   }> {
     const updatedModuleIds: string[] = [];
-    const createdModuleIds: string[] = []; // 🆕
+    const createdModuleIds: string[] = [];
+    const deletedModuleIds: string[] = []; // 🆕
     const idMapping = new Map<string, string>();
 
     for (const moduleDto of modules) {
       try {
+        // 🆕 Handle deletion requests
+        if (moduleDto.toDelete === true) {
+          if (!moduleDto.id) {
+            throw BadRequestException.BAD_REQUEST(
+              'Module ID is required when toDelete is true',
+            );
+          }
+
+          if (!Types.ObjectId.isValid(moduleDto.id)) {
+            throw BadRequestException.BAD_REQUEST(
+              `Invalid module ID format: "${moduleDto.id}". Please provide a valid MongoDB ObjectId.`,
+            );
+          }
+
+          const existingModule = await this.assessmentModuleRepository.findById(
+            moduleDto.id,
+          );
+
+          if (!existingModule) {
+            this.logger.warn(
+              `Module with ID "${moduleDto.id}" not found for deletion, skipping...`,
+            );
+            continue;
+          }
+
+          // 🔴 Check if module has questions before deleting
+          const questionsInModule = await this.questionRepository.find({
+            module_id: new Types.ObjectId(moduleDto.id),
+          });
+
+          if (questionsInModule && questionsInModule.length > 0) {
+            throw BadRequestException.BAD_REQUEST(
+              `Cannot delete module "${existingModule.title}" (${moduleDto.id}): ` +
+                `Module contains ${questionsInModule.length} question(s). ` +
+                `Please delete or move all questions to another module first.`,
+            );
+          }
+
+          // Delete the module
+          await this.assessmentModuleRepository.delete({
+            _id: new Types.ObjectId(moduleDto.id),
+          });
+
+          deletedModuleIds.push(moduleDto.id);
+          this.logger.log(`Module ${moduleDto.id} deleted`);
+          continue; // Skip to next module
+        }
+
         // ✅ Handle module updates (existing modules)
         if (moduleDto.id && !moduleDto.id.startsWith('temp_')) {
           if (!Types.ObjectId.isValid(moduleDto.id)) {
@@ -828,7 +699,7 @@ export class AssessmentService {
           const newModuleId = newModule._id.toString();
 
           updatedModuleIds.push(newModuleId);
-          createdModuleIds.push(newModuleId); // 🆕 Track this as a new creation
+          createdModuleIds.push(newModuleId); // Track this as a new creation
 
           // Map temporary ID to actual ID
           if (moduleDto.temp_id) {
@@ -847,7 +718,9 @@ export class AssessmentService {
         }
       } catch (error) {
         const moduleInfo = moduleDto.id
-          ? `module ID ${moduleDto.id}`
+          ? moduleDto.toDelete
+            ? `deletion request for module ${moduleDto.id}`
+            : `module ID ${moduleDto.id}`
           : `new module "${moduleDto.title}"`;
         this.logger.error(`Error processing ${moduleInfo}:`, error.message);
 
@@ -858,7 +731,20 @@ export class AssessmentService {
       }
     }
 
-    return { updatedModuleIds, idMapping, createdModuleIds };
+    // ✅ Log summary
+    if (deletedModuleIds.length > 0) {
+      this.logger.log(
+        `Deleted ${deletedModuleIds.length} module(s): ${deletedModuleIds.join(', ')}`,
+      );
+    }
+
+    if (createdModuleIds.length > 0) {
+      this.logger.log(
+        `Created ${createdModuleIds.length} new module(s): ${createdModuleIds.join(', ')}`,
+      );
+    }
+
+    return { updatedModuleIds, idMapping, createdModuleIds, deletedModuleIds };
   }
 
   private async updateQuestions(
@@ -1707,17 +1593,7 @@ export class AssessmentService {
   private async getTempIdsUsedForAssessment(
     assessmentId: string,
   ): Promise<string[]> {
-    // Check if you have a temp_id tracking collection
-    // If not, you can store this in the assessment document itself
-
-    // Option 1: Using a separate tracking collection
-    // const trackingRecord = await this.tempIdTrackingRepository.findOne({
-    //   assessment_id: new Types.ObjectId(assessmentId),
-    // });
-
-    // return trackingRecord?.used_temp_ids || [];
-
-    // Option 2: Store in assessment document
+    //Store in assessment document
     const assessment = await this.assessmentRepository.findById(assessmentId);
     return assessment?.used_temp_ids || [];
   }
@@ -1731,17 +1607,7 @@ export class AssessmentService {
       return;
     }
 
-    // Option 1: Using a separate tracking collection
-    // await this.tempIdTrackingRepository.findOneAndUpdate(
-    //   { assessment_id: new Types.ObjectId(assessmentId) },
-    //   {
-    //     $addToSet: { used_temp_ids: { $each: tempIds } },
-    //     $set: { updated_at: new Date() },
-    //   },
-    //   { upsert: true },
-    // );
-
-    // Option 2: Store in assessment document
+    // Store in assessment document
     await this.assessmentRepository.findByIdAndUpdate(assessmentId, {
       $addToSet: { used_temp_ids: { $each: tempIds } },
     });
@@ -1755,6 +1621,7 @@ export class AssessmentService {
   private async rollbackCreatedEntities(createdEntities: {
     moduleIds: string[];
     questionIds: string[];
+    serviceRecommendationIds: string[];
   }): Promise<void> {
     try {
       // Delete created questions first (due to foreign key relationships)
@@ -1772,6 +1639,27 @@ export class AssessmentService {
           } catch (err) {
             this.logger.error(
               `Failed to rollback question ${questionId}:`,
+              err.message,
+            );
+          }
+        }
+      }
+
+      // Delete created service recommendations
+      if (createdEntities.serviceRecommendationIds.length > 0) {
+        this.logger.warn(
+          `Rolling back ${createdEntities.serviceRecommendationIds.length} created service recommendation(s)...`,
+        );
+
+        for (const serviceId of createdEntities.serviceRecommendationIds) {
+          try {
+            await this.serviceRecommendationRepository.delete({
+              _id: new Types.ObjectId(serviceId),
+            });
+            this.logger.log(`Rolled back service recommendation: ${serviceId}`);
+          } catch (err) {
+            this.logger.error(
+              `Failed to rollback service recommendation ${serviceId}:`,
               err.message,
             );
           }
@@ -1801,7 +1689,8 @@ export class AssessmentService {
 
       if (
         createdEntities.moduleIds.length > 0 ||
-        createdEntities.questionIds.length > 0
+        createdEntities.questionIds.length > 0 ||
+        createdEntities.serviceRecommendationIds.length > 0
       ) {
         this.logger.log('Rollback completed successfully');
       }
