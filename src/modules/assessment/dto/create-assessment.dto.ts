@@ -8,7 +8,7 @@ import {
   IsNumber,
   IsEnum,
   Min,
-  // Max,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '../enums/question-type.enum';
@@ -206,6 +206,65 @@ export class CreateMultipleChoiceQuestionDto extends BaseQuestionDto {
   @ValidateNested({ each: true })
   @Type(() => QuestionOptionDto)
   options: QuestionOptionDto[];
+}
+
+export class CreateFileUploadQuestionDTO extends BaseQuestionDto {
+  @ApiProperty({ enum: [QuestionType.FILE_UPLOAD] })
+  @IsEnum([QuestionType.FILE_UPLOAD])
+  type: QuestionType.FILE_UPLOAD;
+
+  @ApiProperty({
+    description: 'Allowed file types for upload (file_upload type only)',
+    example: ['application/pdf', 'image/jpeg', 'image/png'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowed_file_types?: string[];
+
+  @ApiProperty({
+    description: 'Maximum file size in MB (file_upload type only)',
+    example: 5,
+    minimum: 0.1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(100)
+  max_file_size?: number;
+
+  @ApiProperty({
+    description: 'Minimum number of files required (file_upload type only)',
+    example: 1,
+    minimum: 0,
+    default: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  min_files?: number;
+
+  @ApiProperty({
+    description: 'Maximum number of files allowed (file_upload type only)',
+    example: 3,
+    minimum: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  max_files?: number;
+
+  @ApiProperty({
+    description: 'Instructions for file upload (file_upload type only)',
+    example:
+      'Please upload clear, legible documents in PDF or image format. Maximum 5MB per file.',
+  })
+  @IsOptional()
+  @IsString()
+  upload_instructions?: string;
 }
 
 // Checkbox Question DTO (Multiple selections allowed)
@@ -645,7 +704,8 @@ export type CreateQuestionDto =
   | CreateShortTextQuestionDto
   | CreateLongTextQuestionDto
   | CreateDropdownQuestionDto
-  | CreateMultipleChoiceGridQuestionDto;
+  | CreateMultipleChoiceGridQuestionDto
+  | CreateFileUploadQuestionDTO;
 
 // Module DTO
 export class CreateModuleDto {
