@@ -2001,9 +2001,7 @@ export class AssessmentService {
         instruction: createAssessmentDto.instruction,
         is_active: createAssessmentDto.is_active ?? true,
         is_published: false,
-
         ia_submitted: false,
-
         created_by: new Types.ObjectId(userId),
         total_possible_points: 0,
       };
@@ -2168,6 +2166,19 @@ export class AssessmentService {
             };
             break;
 
+          // 🆕 FILE UPLOAD CASE
+          case QuestionType.FILE_UPLOAD:
+            questionData = {
+              ...baseQuestionData,
+              allowed_file_types: questionDto.allowed_file_types || [],
+              max_file_size: questionDto.max_file_size || 10, // 10MB default
+              min_files: questionDto.min_files ?? 1,
+              max_files: questionDto.max_files ?? 1,
+              upload_instructions: questionDto.upload_instructions || '',
+              max_points: questionDto.max_points || 0,
+            };
+            break;
+
           default:
             questionData = baseQuestionData;
             break;
@@ -2273,6 +2284,18 @@ export class AssessmentService {
         ) {
           throw BadRequestException.BAD_REQUEST(
             `Service recommendation configuration error: ${error.message}. Ensure all questions have a valid type and required fields are provided.`,
+          );
+        }
+
+        // 🆕 File upload validation errors
+        if (
+          error.message &&
+          (error.message.includes('min_files') ||
+            error.message.includes('max_files') ||
+            error.message.includes('max_file_size'))
+        ) {
+          throw BadRequestException.BAD_REQUEST(
+            `File upload configuration error: ${error.message}. Please verify your file upload question settings.`,
           );
         }
       }

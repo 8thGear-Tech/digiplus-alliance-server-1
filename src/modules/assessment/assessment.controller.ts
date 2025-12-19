@@ -7,19 +7,14 @@ import {
   Controller,
   Get,
   Post,
-  //   Put,
-  //   Delete,
   Body,
   Param,
   UseGuards,
   Request,
-  // Put,
   Patch,
   Logger,
   Query,
   Delete,
-  // Put,
-  // Delete,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -354,6 +349,47 @@ export class AssessmentController {
               module_ref: 'profile-module',
             },
           ],
+        },
+      },
+      'Assessment With File Upload Question': {
+        summary: 'Create assessment with file upload question',
+        description:
+          'Assessment containing a file upload question for document submission',
+        value: {
+          title: 'Business Verification Assessment',
+          description: 'Collect required business documents',
+          instruction: 'Upload all required documents clearly',
+          modules: [
+            {
+              temp_id: 'verification-module',
+              title: 'Business Verification',
+              description: 'Upload business documents',
+              order: 1,
+            },
+          ],
+          questions: [
+            {
+              type: 'file_upload',
+              question: 'Upload your business registration certificate',
+              description:
+                'Provide a clear and valid copy of your business registration',
+              upload_instructions:
+                'Accepted formats: PDF, JPG, PNG. Maximum size: 5MB',
+              allowed_file_types: [
+                'application/pdf',
+                'image/jpeg',
+                'image/png',
+              ],
+              max_file_size: 5,
+              min_files: 1,
+              max_files: 3,
+              is_required: true,
+              max_points: 10,
+              step: 1,
+              module_ref: 'verification-module',
+            },
+          ],
+          is_active: true,
         },
       },
       'Complete Points-Based Assessment': {
