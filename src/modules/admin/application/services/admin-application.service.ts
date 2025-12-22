@@ -626,7 +626,7 @@ export class AdminApplicationService {
 
     if (submissions.length === 0) {
       throw new NotFoundException(
-        'No submissions found for the selected service type.',
+        'No submissions found.',
       );
     }
 

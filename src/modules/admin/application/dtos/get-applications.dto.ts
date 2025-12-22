@@ -5,7 +5,7 @@ import { ServicesTypes } from 'src/shared/enums';
 export class GetApplicationsDto {
   @ApiProperty({
     enum: ServicesTypes,
-    example: ServicesTypes.digital_skills_and_training,
+    example: ServicesTypes.skills_and_development,
     description: 'Optional filter to fetch applications by service type.',
     required: false,
   })
