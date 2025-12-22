@@ -223,6 +223,7 @@ export enum PricingUnit {
   ONE_TIME_PAYMENT = 'one_time_payment',
   PER_DAY = 'per_day',
   PER_MONTH = 'per_month',
+  PER_QUARTER = 'per_quarter',
 }
 
 export class CurrencyUtil {
@@ -232,6 +233,7 @@ export class CurrencyUtil {
     [PricingUnit.ONE_TIME_PAYMENT]: '', // No unit for one-time payments
     [PricingUnit.PER_DAY]: 'per day',
     [PricingUnit.PER_MONTH]: 'per month',
+    [PricingUnit.PER_QUARTER]: 'per quarter',
   };
 
   static formatNaira(amount: number): string {
