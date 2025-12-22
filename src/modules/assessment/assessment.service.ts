@@ -1326,9 +1326,9 @@ export class AssessmentService {
         // Validate row structure
         if (questionDto.grid_rows) {
           for (const [index, row] of questionDto.grid_rows.entries()) {
-            if (!row.label) {
+            if (!row.text) {
               throw BadRequestException.BAD_REQUEST(
-                `Grid row at position ${index + 1} must have a 'label' field.`,
+                `Grid row at position ${index + 1} must have a 'text' field.`,
               );
             }
           }
@@ -1337,9 +1337,9 @@ export class AssessmentService {
         // Validate column structure
         if (questionDto.grid_columns) {
           for (const [index, col] of questionDto.grid_columns.entries()) {
-            if (!col.label) {
+            if (!col.text) {
               throw BadRequestException.BAD_REQUEST(
-                `Grid column at position ${index + 1} must have a 'label' field.`,
+                `Grid column at position ${index + 1} must have a 'text' field.`,
               );
             }
             if (col.points !== undefined && typeof col.points !== 'number') {
