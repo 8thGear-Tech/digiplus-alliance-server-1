@@ -150,11 +150,11 @@ export enum UserTypes {
 
 export enum ServicesTypes {
   ecosystem_building = 'Ecosystem Building',
-  digital_skills_and_training = 'Digital Skills & Training',
-  digital_infrastructure_and_tools = 'Digital Infrastructure / Tools',
-  business_advisory_and_ecosystem_support = 'Business Advisory & Ecosystem Support',
-  research_and_insights = 'Research & Insights',
-  innovation_and_co_creation_labs = 'Innovation & Co-creation Labs',
+  skills_and_development = 'Skills and Development',
+  access_to_finance = 'Access to Finance',
+  test_before_invest = 'Test Before Invest',
+  market_and_policy_insight= 'Market and Policy Insight',
+  research_commercialisation = 'Research Commercialisation',
 }
 
 // export enum QuestionType {

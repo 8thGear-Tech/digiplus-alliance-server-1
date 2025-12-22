@@ -17,7 +17,7 @@ export class ServiceResponseDto {
   @ApiProperty({
     description: 'The type or category of the service.',
     enum: ServicesTypes,
-    example: ServicesTypes.digital_skills_and_training,
+    example: ServicesTypes.skills_and_development,
   })
   service_type: ServicesTypes;
 
