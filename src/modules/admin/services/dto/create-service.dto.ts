@@ -59,16 +59,40 @@ export class CreateServiceDto {
   @IsEnum(ServicesTypes)
   service_type: ServicesTypes;
 
-  @ApiProperty({
-     description: 'Service base price (optional for equity-based services, required for all others)',
+//   @ApiProperty({
+//      description: 'Service base price (optional for equity-based services, required for all others)',
+//     example: 2000,
+//     required: false,
+//   })
+//   @IsNotEmpty()
+//   @Type(() => Number)
+//   @IsNumber()
+// @Min(0) // Changed from @IsPositive()
+//   @Validate(IsPriceRequiredForPaidServices)
+//   price: number;
+
+@ApiProperty({
+    description: 'Service base price (optional for equity-based services, required for all others)',
     example: 2000,
+    required: false,
   })
-  @IsNotEmpty()
-  @Type(() => Number)
-  @IsNumber()
-@Min(0) // Changed from @IsPositive()
+  @IsOptional() // Changed from @IsNotEmpty()
+  @Transform(({ value }) => {
+    // Convert empty string to undefined
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    const num = Number(value);
+    // If conversion results in NaN, return undefined
+    if (isNaN(num)) {
+      return undefined;
+    }
+    return num;
+  })
+  @IsNumber({}, { message: 'Price must be a valid number' })
+  @Min(0, { message: 'Price must not be less than 0' })
   @Validate(IsPriceRequiredForPaidServices)
-  price: number;
+  price?: number; // Made optional with ?
 
   @ApiPropertyOptional({
    description: 'Discounted price (only applicable for paid services)',
