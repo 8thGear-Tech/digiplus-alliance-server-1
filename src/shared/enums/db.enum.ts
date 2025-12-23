@@ -224,6 +224,8 @@ export enum PricingUnit {
   PER_DAY = 'per_day',
   PER_MONTH = 'per_month',
   PER_QUARTER = 'per_quarter',
+  EQUITY_BASED = 'equity_based',
+
 }
 
 export class CurrencyUtil {

@@ -133,7 +133,8 @@ export class ServicesService {
         const uploadPromises = imageFiles.map(async (file, index) => {
           const serviceName = (updateServiceDto.name || service.name)
             .toLowerCase()
-            .replace(/\s+/g, '-');
+          .replace(/[^a-z0-9]+/g, '-') // FIX: Sanitize special characters
+          .replace(/^-+|-+$/g, ''); // FIX: Remove leading/trailing dashes
           const fileName = `${serviceName}-${Date.now()}-${index}`;
           const uploadResult = await this.uploadService.uploadImage(
             file,
@@ -169,7 +170,13 @@ export class ServicesService {
       ) {
         throw error;
       }
-      throw new BadRequestException('Failed to update service with images');
+       // Log the actual error for debugging
+    console.error('Service update error:', error);
+    
+    // Provide more detailed error message
+    throw new BadRequestException(
+      `Failed to update service: ${error.message || 'Unknown error'}`,
+    );
     }
   }
 
