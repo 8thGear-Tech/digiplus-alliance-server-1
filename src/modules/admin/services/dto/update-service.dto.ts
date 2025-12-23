@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsOptional,
   ValidateIf,
+  Min,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -37,7 +38,7 @@ export class UpdateServiceDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   price?: number;
 
   @ApiPropertyOptional({
@@ -60,7 +61,7 @@ export class UpdateServiceDto {
     return value !== undefined;
   })
   @IsNumber()
-  @IsPositive()
+@Min(0)
   discounted_price?: number;
 
   @ApiProperty({
