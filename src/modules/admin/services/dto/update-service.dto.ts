@@ -34,14 +34,35 @@ export class UpdateServiceDto {
   @IsEnum(ServicesTypes)
   service_type?: ServicesTypes;
 
-  @ApiPropertyOptional({
-   description: 'Service base price (optional for equity-based services)',
+  // @ApiPropertyOptional({
+  //  description: 'Service base price (optional for equity-based services)',
+  //   example: 2000,
+  // })
+  // @IsOptional()
+  // @Type(() => Number)
+  // @IsNumber()
+  // @Min(0)
+  // @Validate(IsPriceRequiredForPaidServices)
+  // price?: number;
+
+
+    @ApiPropertyOptional({
+    description: 'Service base price (optional for equity-based services)',
     example: 2000,
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    const num = Number(value);
+    if (isNaN(num)) {
+      return undefined;
+    }
+    return num;
+  })
+  @IsNumber({}, { message: 'Price must be a valid number' })
+  @Min(0, { message: 'Price must not be less than 0' })
   @Validate(IsPriceRequiredForPaidServices)
   price?: number;
 
