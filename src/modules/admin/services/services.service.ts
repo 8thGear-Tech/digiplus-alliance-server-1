@@ -92,171 +92,49 @@ export class ServicesService {
     }
   }
 
-  async update(
-    id: string,
-    updateServiceDto: UpdateServiceDto,
-    imageFiles?: Express.Multer.File[],
-  ): Promise<ServiceDocument> {
-    if (!id) {
-      throw new BadRequestException('Service ID is required');
-    }
-
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('Invalid service ID format');
-    }
-
-    try {
-      // Check if service exists
-      const service = await this.findOne(id);
-
-      // If name is being updated, check for conflicts
-      if (updateServiceDto.name && updateServiceDto.name !== service.name) {
-        const existingService = await this.serviceModel.findOne({
-          name: updateServiceDto.name,
-          _id: { $ne: id },
-          deletedAt: null,
-        });
-
-        if (existingService) {
-          throw new ConflictException(
-            `Service with name '${updateServiceDto.name}' already exists`,
-          );
-        }
-      }
-
-      const updateData: Partial<Service> = { ...updateServiceDto };
-
-      // Upload new images if provided - ADD TO EXISTING IMAGES
-      if (imageFiles && imageFiles.length > 0) {
-        this.validateImageFiles(imageFiles);
-
-        const uploadPromises = imageFiles.map(async (file, index) => {
-          const serviceName = (updateServiceDto.name || service.name)
-            .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-') // FIX: Sanitize special characters
-          .replace(/^-+|-+$/g, ''); // FIX: Remove leading/trailing dashes
-          const fileName = `${serviceName}-${Date.now()}-${index}`;
-          const uploadResult = await this.uploadService.uploadImage(
-            file,
-            fileName,
-            'services',
-          );
-          return uploadResult.secure_url;
-        });
-
-        const newUploadedUrls = await Promise.all(uploadPromises);
-
-        // Add new images to existing ones
-        const existingImages = service.images || [];
-        updateData.images = [...existingImages, ...newUploadedUrls];
-      }
-
-      const updatedService = await this.serviceModel.findOneAndUpdate(
-        { _id: id, deletedAt: null },
-        updateData,
-        { new: true, runValidators: true },
-      );
-
-      if (!updatedService) {
-        throw new NotFoundException(`Service with ID '${id}' not found`);
-      }
-
-      return updatedService;
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-       // Log the actual error for debugging
-    console.error('Service update error:', error);
-    
-    // Provide more detailed error message
-    throw new BadRequestException(
-      `Failed to update service: ${error.message || 'Unknown error'}`,
-    );
-    }
+async update(
+  id: string,
+  updateServiceDto: UpdateServiceDto,
+  imageFiles?: Express.Multer.File[],
+): Promise<ServiceDocument> {
+  if (!id) {
+    throw new BadRequestException('Service ID is required');
   }
 
-  async updateMainImage(
-    id: string,
-    imageFile: Express.Multer.File,
-  ): Promise<ServiceDocument> {
-    if (!id) {
-      throw new BadRequestException('Service ID is required');
-    }
-
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('Invalid service ID format');
-    }
-
-    if (!imageFile) {
-      throw new BadRequestException('Image file is required');
-    }
-
-    try {
-      const service = await this.findOne(id);
-
-      // Validate single image file
-      this.validateImageFiles([imageFile]);
-
-      const serviceName = service.name.toLowerCase().replace(/\s+/g, '-');
-      const fileName = `${serviceName}-main-${Date.now()}`;
-      const uploadResult = await this.uploadService.uploadImage(
-        imageFile,
-        fileName,
-        'services',
-      );
-
-      const updatedService = await this.serviceModel.findOneAndUpdate(
-        { _id: id, deletedAt: null },
-        { image: uploadResult.secure_url },
-        { new: true, runValidators: true },
-      );
-
-      if (!updatedService) {
-        throw new NotFoundException(`Service with ID '${id}' not found`);
-      }
-
-      return updatedService;
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to update main image');
-    }
+  if (!Types.ObjectId.isValid(id)) {
+    throw new BadRequestException('Invalid service ID format');
   }
-  async uploadServiceImages(
-    id: string,
-    imageFiles: Express.Multer.File[],
-    replaceExisting: boolean = false,
-  ): Promise<{ success: boolean; urls: string[] }> {
-    if (!id) {
-      throw new BadRequestException('Service ID is required');
+
+  try {
+    // Check if service exists
+    const service = await this.findOne(id);
+
+    // If name is being updated, check for conflicts
+    if (updateServiceDto.name && updateServiceDto.name !== service.name) {
+      const existingService = await this.serviceModel.findOne({
+        name: updateServiceDto.name,
+        _id: { $ne: id },
+        deletedAt: null,
+      });
+
+      if (existingService) {
+        throw new ConflictException(
+          `Service with name '${updateServiceDto.name}' already exists`,
+        );
+      }
     }
 
-    if (!Types.ObjectId.isValid(id)) {
-      throw new BadRequestException('Invalid service ID format');
-    }
+    const updateData: Partial<Service> = { ...updateServiceDto };
 
-    if (!imageFiles || imageFiles.length === 0) {
-      throw new BadRequestException('At least one image file is required');
-    }
-
-    try {
-      const service = await this.findOne(id);
-
-      // Validate image files
+    // Upload new images if provided
+    if (imageFiles && imageFiles.length > 0) {
       this.validateImageFiles(imageFiles);
 
-      const serviceName = service.name.toLowerCase().replace(/\s+/g, '-');
-
       const uploadPromises = imageFiles.map(async (file, index) => {
+        const serviceName = (updateServiceDto.name || service.name)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
         const fileName = `${serviceName}-${Date.now()}-${index}`;
         const uploadResult = await this.uploadService.uploadImage(
           file,
@@ -266,39 +144,182 @@ export class ServicesService {
         return uploadResult.secure_url;
       });
 
-      const uploadedImageUrls = await Promise.all(uploadPromises);
+      const newUploadedUrls = await Promise.all(uploadPromises);
 
-      // Update service with new images
-      const updateData: Partial<Service> = {};
+      // First uploaded image becomes the new main image
+      updateData.image = newUploadedUrls[0];
 
-      if (replaceExisting) {
-        // Replace all images
-        updateData.image = uploadedImageUrls[0];
-        updateData.images =
-          uploadedImageUrls.length > 1 ? uploadedImageUrls.slice(1) : [];
+      // Rest go to images array (along with existing images)
+      const existingImages = service.images || [];
+      
+      // If there are more than 1 new images, add the rest to the images array
+      if (newUploadedUrls.length > 1) {
+        updateData.images = [...existingImages, ...newUploadedUrls.slice(1)];
       } else {
-        // Append to existing images
-        const existingImages = service.images || [];
-        updateData.images = [...existingImages, ...uploadedImageUrls];
+        // Keep existing images if only one new image was uploaded (which became the main image)
+        updateData.images = existingImages;
       }
-
-      await this.serviceModel.findOneAndUpdate(
-        { _id: id, deletedAt: null },
-        updateData,
-        { new: true, runValidators: true },
-      );
-
-      return { success: true, urls: uploadedImageUrls };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to upload service images');
     }
+
+    const updatedService = await this.serviceModel.findOneAndUpdate(
+      { _id: id, deletedAt: null },
+      updateData,
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedService) {
+      throw new NotFoundException(`Service with ID '${id}' not found`);
+    }
+
+    return updatedService;
+  } catch (error) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof ConflictException ||
+      error instanceof BadRequestException
+    ) {
+      throw error;
+    }
+    console.error('Service update error:', error);
+    throw new BadRequestException(
+      `Failed to update service: ${error.message || 'Unknown error'}`,
+    );
   }
+}
+
+ async updateMainImage(
+  id: string,
+  imageFile: Express.Multer.File,
+): Promise<ServiceDocument> {
+  if (!id) {
+    throw new BadRequestException('Service ID is required');
+  }
+
+  if (!Types.ObjectId.isValid(id)) {
+    throw new BadRequestException('Invalid service ID format');
+  }
+
+  if (!imageFile) {
+    throw new BadRequestException('Image file is required');
+  }
+
+  try {
+    const service = await this.findOne(id);
+
+    // Validate single image file
+    this.validateImageFiles([imageFile]);
+
+    const serviceName = service.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const fileName = `${serviceName}-main-${Date.now()}`;
+    const uploadResult = await this.uploadService.uploadImage(
+      imageFile,
+      fileName,
+      'services',
+    );
+
+    const updatedService = await this.serviceModel.findOneAndUpdate(
+      { _id: id, deletedAt: null },
+      { image: uploadResult.secure_url },
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedService) {
+      throw new NotFoundException(`Service with ID '${id}' not found`);
+    }
+
+    return updatedService;
+  } catch (error) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof BadRequestException
+    ) {
+      throw error;
+    }
+    console.error('Main image update error:', error);
+    throw new BadRequestException(
+      `Failed to update main image: ${error.message || 'Unknown error'}`,
+    );
+  }
+}
+
+
+  async uploadServiceImages(
+  id: string,
+  imageFiles: Express.Multer.File[],
+  replaceExisting: boolean = false,
+): Promise<{ success: boolean; urls: string[] }> {
+  if (!id) {
+    throw new BadRequestException('Service ID is required');
+  }
+
+  if (!Types.ObjectId.isValid(id)) {
+    throw new BadRequestException('Invalid service ID format');
+  }
+
+  if (!imageFiles || imageFiles.length === 0) {
+    throw new BadRequestException('At least one image file is required');
+  }
+
+  try {
+    const service = await this.findOne(id);
+
+    // Validate image files
+    this.validateImageFiles(imageFiles);
+
+    const serviceName = service.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const uploadPromises = imageFiles.map(async (file, index) => {
+      const fileName = `${serviceName}-${Date.now()}-${index}`;
+      const uploadResult = await this.uploadService.uploadImage(
+        file,
+        fileName,
+        'services',
+      );
+      return uploadResult.secure_url;
+    });
+
+    const uploadedImageUrls = await Promise.all(uploadPromises);
+
+    // Update service with new images
+    const updateData: Partial<Service> = {};
+
+    if (replaceExisting) {
+      // Replace all images - first becomes main image
+      updateData.image = uploadedImageUrls[0];
+      updateData.images =
+        uploadedImageUrls.length > 1 ? uploadedImageUrls.slice(1) : [];
+    } else {
+      // Append to existing images - do NOT change main image
+      const existingImages = service.images || [];
+      updateData.images = [...existingImages, ...uploadedImageUrls];
+    }
+
+    await this.serviceModel.findOneAndUpdate(
+      { _id: id, deletedAt: null },
+      updateData,
+      { new: true, runValidators: true },
+    );
+
+    return { success: true, urls: uploadedImageUrls };
+  } catch (error) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof BadRequestException
+    ) {
+      throw error;
+    }
+    console.error('Service images upload error:', error);
+    throw new BadRequestException(
+      `Failed to upload service images: ${error.message || 'Unknown error'}`,
+    );
+  }
+}
 
   private validateImageFiles(files: Express.Multer.File[]): void {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
