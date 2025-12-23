@@ -7,10 +7,13 @@ import {
   IsOptional,
   ValidateIf,
   Min,
+  Validate,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PricingUnit, ServicesTypes } from 'src/shared/enums';
+import { IsPriceRequiredForPaidServices } from './create-service.dto';
+
 
 export class UpdateServiceDto {
   @ApiPropertyOptional({
@@ -32,13 +35,14 @@ export class UpdateServiceDto {
   service_type?: ServicesTypes;
 
   @ApiPropertyOptional({
-    description: 'Service base price',
+   description: 'Service base price (optional for equity-based services)',
     example: 2000,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Validate(IsPriceRequiredForPaidServices)
   price?: number;
 
   @ApiPropertyOptional({

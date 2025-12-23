@@ -5,6 +5,11 @@ import { CurrencyUtil, PricingUnit } from 'src/shared/enums';
 export function toServiceResponse(
   service: ServiceDocument,
 ): ServiceResponseDto {
+  const pricingUnit = (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT;
+  
+  // Only equity-based services get special treatment
+  const isEquityBased = pricingUnit === PricingUnit.EQUITY_BASED;
+
   return {
     _id: service._id.toString(),
     name: service.name,
@@ -13,19 +18,17 @@ export function toServiceResponse(
     images: service.images || [],
     price: service.price,
     discounted_price: service.discounted_price,
-    formatted_discounted_price: service.discounted_price
-      ? CurrencyUtil.formatNairaWithUnit(
-          service.discounted_price,
-          (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
-        )
+    pricing_unit: pricingUnit,
+    
+    // Format price or show "Equity-based"
+    formatted_price: isEquityBased
+      ? 'Equity-based'
+      : CurrencyUtil.formatNairaWithUnit(service.price || 0, pricingUnit),
+    
+    formatted_discounted_price: !isEquityBased && service.discounted_price
+      ? CurrencyUtil.formatNairaWithUnit(service.discounted_price, pricingUnit)
       : undefined,
-    pricing_unit:
-      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
-    formatted_price: CurrencyUtil.formatNairaWithUnit(
-      service.price,
-      (service.pricing_unit as PricingUnit) || PricingUnit.ONE_TIME_PAYMENT,
-    ),
-    // subtitle: service.subtitle,
+    
     short_description: service.short_description,
     long_description: service.long_description,
     createdAt: service.createdAt,
