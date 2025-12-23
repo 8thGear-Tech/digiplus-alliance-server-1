@@ -81,7 +81,13 @@ export class ServicesService {
       ) {
         throw error;
       }
-      throw new BadRequestException('Failed to create service with images');
+
+       console.error('Service creation error:', error);
+      // throw new BadRequestException('Failed to create service with images');
+
+      throw new BadRequestException(
+    `Failed to create service: ${error.message || 'Unknown error'}`
+  );
     }
   }
 
