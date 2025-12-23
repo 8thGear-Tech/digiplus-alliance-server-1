@@ -22,7 +22,7 @@ export class Service {
   images: string[]; // multiple pictures
 
   //changed by opeyemi
-  @Prop({ type: Number, min: 0 })
+@Prop({ required: true, type: Number, min: 0 })
   price: number;
 
   @Prop({ type: Number, min: 0 })
