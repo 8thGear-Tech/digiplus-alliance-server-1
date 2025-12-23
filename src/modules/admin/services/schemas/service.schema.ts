@@ -22,7 +22,7 @@ export class Service {
   images: string[]; // multiple pictures
 
   //changed by opeyemi
-  @Prop({ required: true, type: Number, min: 0 })
+  @Prop({ type: Number, min: 0 })
   price: number;
 
   @Prop({ type: Number, min: 0 })
@@ -37,7 +37,8 @@ export class Service {
       'one_time_payment',
       'per_day',
       'per_month',
-      'per_quarter'
+      'per_quarter',
+      'equity_based'
     ],
     default: 'one_time_payment',
   })
