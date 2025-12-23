@@ -37,6 +37,7 @@ export class Service {
       'one_time_payment',
       'per_day',
       'per_month',
+      'per_quarter'
     ],
     default: 'one_time_payment',
   })

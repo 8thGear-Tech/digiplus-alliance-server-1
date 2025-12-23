@@ -47,7 +47,8 @@ export class ServicesService {
         const uploadPromises = imageFiles.map(async (file, index) => {
           const serviceName = createServiceDto.name
             .toLowerCase()
-            .replace(/\s+/g, '-');
+            .replace(/[^a-z0-9]+/g, '-') // Replace any non-alphanumeric chars with dash
+            .replace(/^-+|-+$/g, ''); // Remove leading/trailing dashes
           const fileName = `${serviceName}-${Date.now()}-${index}`;
           const uploadResult = await this.uploadService.uploadImage(
             file,
@@ -82,12 +83,12 @@ export class ServicesService {
         throw error;
       }
 
-       console.error('Service creation error:', error);
+      console.error('Service creation error:', error);
       // throw new BadRequestException('Failed to create service with images');
 
       throw new BadRequestException(
-    `Failed to create service: ${error.message || 'Unknown error'}`
-  );
+        `Failed to create service: ${error.message || 'Unknown error'}`,
+      );
     }
   }
 
