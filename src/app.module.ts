@@ -74,7 +74,7 @@ const loadConfig = () => {
 
         console.log('NODE_ENV:', process.env.NODE_ENV);
         console.log('Resolved environment:', env);
-        console.log('Resolved Mongo URI:', uri);
+        // console.log('Resolved Mongo URI:', uri);
 
         if (!uri) {
           throw new Error(
