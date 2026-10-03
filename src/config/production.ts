@@ -1,7 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import * as dotenv from 'dotenv';
 dotenv.config();
-console.log('From Config', process.env.PRODUCTION_MONGODB_CONNECTION_URL);
 
 export default registerAs('production', () => ({
   mongodbConnectionUrl: process.env.PRODUCTION_MONGODB_CONNECTION_URL,
